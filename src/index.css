@@ -1,0 +1,54 @@
+@import 'tailwindcss';
+
+@theme {
+  --font-display: 'DM Sans', ui-sans-serif, system-ui, sans-serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, monospace;
+}
+
+html,
+body,
+#root {
+  min-height: 100%;
+}
+
+body {
+  margin: 0;
+  font-family: var(--font-display);
+  -webkit-font-smoothing: antialiased;
+}
+
+#root {
+  min-height: 100svh;
+}
+
+@layer utilities {
+  .font-display {
+    font-family: var(--font-display);
+  }
+  .font-mono-nums {
+    font-family: var(--font-mono);
+  }
+}
+
+/* Reçu et rapport journalier à l’impression */
+@media print {
+  body * {
+    visibility: hidden;
+  }
+  #print-journal,
+  #print-journal *,
+  #print-receipt,
+  #print-receipt *,
+  #print-analytique,
+  #print-analytique * {
+    visibility: visible;
+  }
+  #print-journal,
+  #print-receipt,
+  #print-analytique {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100%;
+  }
+}
