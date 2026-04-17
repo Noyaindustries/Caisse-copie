@@ -5,6 +5,7 @@ import { db } from '../db/db'
 import type { Product, ProductCategory, ProductWithStock } from '../db/types'
 import { EditProductModal } from '../components/EditProductModal'
 import { formatFCFA } from '../lib/money'
+import { productImageSrc } from '../lib/productImage'
 import { CATEGORY_TABS } from '../components/Sidebar'
 import {
   applyProductsCsvImport,
@@ -19,6 +20,7 @@ import { storeStockRowId } from '../lib/storeStockId'
 type Props = {
   canManageCatalog: boolean
   canEditPrices: boolean
+  density: 'compact' | 'confort'
   auditActor: AuditActor
   onAddClick: () => void
 }
@@ -26,6 +28,7 @@ type Props = {
 export function CatalogueView({
   canManageCatalog,
   canEditPrices,
+  density,
   auditActor,
   onAddClick,
 }: Props) {
@@ -212,6 +215,7 @@ export function CatalogueView({
               ref={fileRef}
               type="file"
               accept=".csv,text/csv"
+              aria-label="Sélectionner un fichier CSV produits"
               className="hidden"
               onChange={(ev) => void onCsvSelected(ev)}
             />
@@ -225,7 +229,7 @@ export function CatalogueView({
             <button
               type="button"
               onClick={onAddClick}
-              className="rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 px-5 py-2.5 text-sm font-semibold text-white shadow-lg shadow-emerald-600/25 transition hover:from-emerald-500 hover:to-teal-500"
+              className="rounded-xl bg-linear-to-r from-emerald-600 to-teal-600 px-5 py-2.5 text-sm font-semibold text-white shadow-lg shadow-emerald-600/25 transition hover:from-emerald-500 hover:to-teal-500"
             >
               + Nouvel article
             </button>
@@ -266,16 +270,40 @@ export function CatalogueView({
           <table className="w-full min-w-[860px] text-left text-sm">
             <thead>
               <tr className="border-b border-slate-200 bg-slate-50/90 text-[11px] font-semibold uppercase tracking-wider text-slate-500">
-                <th className="px-4 py-3 w-14">Visuel</th>
-                <th className="px-4 py-3">Produit</th>
-                <th className="px-4 py-3">Catégorie</th>
-                <th className="px-4 py-3 font-mono-nums">Code-barres</th>
-                <th className="px-4 py-3 text-right font-mono-nums">TVA</th>
-                <th className="px-4 py-3 text-right font-mono-nums">Prix TTC</th>
-                <th className="px-4 py-3 text-right">Stock</th>
-                <th className="px-4 py-3">État</th>
+                <th className={`w-14 px-4 ${density === 'compact' ? 'py-2.5' : 'py-3'}`}>
+                  Visuel
+                </th>
+                <th className={`px-4 ${density === 'compact' ? 'py-2.5' : 'py-3'}`}>
+                  Produit
+                </th>
+                <th className={`px-4 ${density === 'compact' ? 'py-2.5' : 'py-3'}`}>
+                  Catégorie
+                </th>
+                <th
+                  className={`px-4 font-mono-nums ${density === 'compact' ? 'py-2.5' : 'py-3'}`}
+                >
+                  Code-barres
+                </th>
+                <th
+                  className={`px-4 text-right font-mono-nums ${density === 'compact' ? 'py-2.5' : 'py-3'}`}
+                >
+                  TVA
+                </th>
+                <th
+                  className={`px-4 text-right font-mono-nums ${density === 'compact' ? 'py-2.5' : 'py-3'}`}
+                >
+                  Prix TTC
+                </th>
+                <th className={`px-4 text-right ${density === 'compact' ? 'py-2.5' : 'py-3'}`}>
+                  Stock
+                </th>
+                <th className={`px-4 ${density === 'compact' ? 'py-2.5' : 'py-3'}`}>
+                  État
+                </th>
                 {canManageCatalog ? (
-                  <th className="px-4 py-3 text-right">Actions</th>
+                  <th className={`px-4 text-right ${density === 'compact' ? 'py-2.5' : 'py-3'}`}>
+                    Actions
+                  </th>
                 ) : null}
               </tr>
             </thead>
@@ -287,35 +315,49 @@ export function CatalogueView({
                     p.archived ? 'opacity-70' : ''
                   }`}
                 >
-                  <td className="px-4 py-2">
-                    {p.imageDataUrl ? (
-                      <img
-                        src={p.imageDataUrl}
-                        alt=""
-                        className="h-10 w-10 rounded-lg border border-slate-200 object-cover"
-                      />
-                    ) : (
-                      <span className="flex h-10 w-10 items-center justify-center rounded-lg bg-slate-100 text-lg text-slate-400">
-                        ·
-                      </span>
-                    )}
+                  <td className={`px-4 ${density === 'compact' ? 'py-1.5' : 'py-2.5'}`}>
+                    <img
+                      src={productImageSrc(p)}
+                      alt={p.name}
+                      className={`rounded-lg border border-slate-200 object-cover ${
+                        density === 'compact' ? 'h-9 w-9' : 'h-10 w-10'
+                      }`}
+                    />
                   </td>
-                  <td className="px-4 py-3 font-medium text-slate-900">
+                  <td
+                    className={`px-4 font-medium text-slate-900 ${
+                      density === 'compact' ? 'py-2 text-sm' : 'py-3'
+                    }`}
+                  >
                     {p.name}
                   </td>
-                  <td className="px-4 py-3 text-slate-600">{p.category}</td>
-                  <td className="px-4 py-3 font-mono-nums text-slate-600">
+                  <td className={`px-4 text-slate-600 ${density === 'compact' ? 'py-2' : 'py-3'}`}>
+                    {p.category}
+                  </td>
+                  <td
+                    className={`px-4 font-mono-nums text-slate-600 ${
+                      density === 'compact' ? 'py-2' : 'py-3'
+                    }`}
+                  >
                     {p.barcode}
                   </td>
-                  <td className="px-4 py-3 text-right font-mono-nums text-slate-600">
+                  <td
+                    className={`px-4 text-right font-mono-nums text-slate-600 ${
+                      density === 'compact' ? 'py-2' : 'py-3'
+                    }`}
+                  >
                     {p.vatRatePct ?? 18} %
                   </td>
-                  <td className="px-4 py-3 text-right font-mono-nums font-medium text-emerald-700">
+                  <td
+                    className={`px-4 text-right font-mono-nums font-medium text-emerald-700 ${
+                      density === 'compact' ? 'py-2' : 'py-3'
+                    }`}
+                  >
                     {formatFCFA(p.priceTTC)}
                   </td>
-                  <td className="px-4 py-3 text-right">
+                  <td className={`px-4 text-right ${density === 'compact' ? 'py-2' : 'py-3'}`}>
                     <span
-                      className={`inline-flex min-w-[2.5rem] justify-end rounded-lg px-2 py-0.5 font-mono-nums text-xs font-semibold ${
+                      className={`inline-flex min-w-10 justify-end rounded-lg px-2 py-0.5 font-mono-nums text-xs font-semibold ${
                         p.stock <= 0
                           ? 'bg-slate-200 text-slate-700'
                           : p.stock <= p.lowStockThreshold
@@ -326,7 +368,7 @@ export function CatalogueView({
                       {p.stock}
                     </span>
                   </td>
-                  <td className="px-4 py-3">
+                  <td className={`px-4 ${density === 'compact' ? 'py-2' : 'py-3'}`}>
                     {p.archived ? (
                       <span className="rounded-full bg-slate-200 px-2 py-0.5 text-[10px] font-semibold uppercase text-slate-700">
                         Archivé
@@ -338,7 +380,7 @@ export function CatalogueView({
                     )}
                   </td>
                   {canManageCatalog ? (
-                    <td className="px-4 py-3 text-right">
+                    <td className={`px-4 text-right ${density === 'compact' ? 'py-2' : 'py-3'}`}>
                       <div className="flex flex-wrap justify-end gap-2">
                         <button
                           type="button"

@@ -86,6 +86,33 @@ export interface SaleLine {
   vatRatePct?: number
 }
 
+export type OnlineOrderStatus = 'pending' | 'approved' | 'rejected'
+
+export interface OnlineOrder {
+  id: string
+  createdAt: number
+  storeId: string
+  storeName?: string
+  customerName: string
+  customerPhone?: string
+  customerAddress?: string
+  paymentMethod: PaymentMethod
+  lines: SaleLine[]
+  subtotalHT: number
+  tva: number
+  totalTTC: number
+  netProductsTTC?: number
+  discountPct?: number
+  promoCode?: string
+  deliveryFeeTTC?: number
+  fulfillmentMode?: 'pickup' | 'delivery'
+  status: OnlineOrderStatus
+  reviewedAt?: number
+  reviewedByProfileId?: string
+  reviewedByDisplayName?: string
+  reviewNote?: string
+}
+
 export interface Sale {
   id: string
   createdAt: number

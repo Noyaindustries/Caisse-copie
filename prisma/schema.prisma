@@ -1,0 +1,38 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mongodb"
+  url      = env("DATABASE_URL")
+}
+
+model SyncBatch {
+  id         String     @id @default(auto()) @map("_id") @db.ObjectId
+  batchId    String     @unique
+  sentAt     DateTime
+  receivedAt DateTime   @default(now())
+  source     String?
+  raw        Json
+  status     String     @default("received")
+  error      String?
+  items      SyncItem[]
+}
+
+model SyncItem {
+  id          String    @id @default(auto()) @map("_id") @db.ObjectId
+  syncBatch   SyncBatch @relation(fields: [syncBatchId], references: [id], onDelete: Cascade)
+  syncBatchId String    @db.ObjectId
+  kind        String
+  createdAt   DateTime
+  payload     Json
+}
+
+model WebhookEvent {
+  id         String   @id @default(auto()) @map("_id") @db.ObjectId
+  source     String
+  eventType  String
+  externalId String?
+  receivedAt DateTime @default(now())
+  payload    Json
+}

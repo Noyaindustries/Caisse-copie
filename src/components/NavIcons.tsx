@@ -130,6 +130,26 @@ function IconBuilding() {
   )
 }
 
+function IconClipboardCheck() {
+  return (
+    <svg className={cls} viewBox="0 0 24 24" fill="none" aria-hidden>
+      <path
+        d="M9 4h6l1 2h3v14H5V6h3l1-2z"
+        stroke="currentColor"
+        strokeWidth="1.5"
+        strokeLinejoin="round"
+      />
+      <path
+        d="M9 12l2 2 4-4"
+        stroke="currentColor"
+        strokeWidth="1.7"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  )
+}
+
 function IconTrending() {
   return (
     <svg className={cls} viewBox="0 0 24 24" fill="none" aria-hidden>
@@ -156,6 +176,7 @@ const MAP: Record<NavViewId, ReactNode> = {
   dash: <IconChart />,
   catalogue: <IconGrid />,
   stocks: <IconPackage />,
+  onlineOrders: <IconClipboardCheck />,
   journal: <IconLockClose />,
   personnel: <IconUsers />,
   analytique: <IconTrending />,

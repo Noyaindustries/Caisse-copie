@@ -4,7 +4,7 @@
 export function OfflineBanner() {
   return (
     <div
-      className="flex items-center justify-center gap-2 border-b border-amber-500/30 bg-gradient-to-r from-amber-500/15 via-amber-400/10 to-amber-500/15 px-4 py-2 text-center text-xs font-medium text-amber-950"
+      className="premium-glass flex items-center justify-center gap-2 border-b border-amber-500/25 bg-linear-to-r from-amber-200/40 via-amber-100/45 to-amber-200/40 px-4 py-2 text-center text-xs font-medium text-amber-950"
       role="status"
     >
       <span

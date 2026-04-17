@@ -1,6 +1,9 @@
 import type { ProductWithStock } from '../db/types'
 import { formatFCFA } from '../lib/money'
+import { productImageSrc } from '../lib/productImage'
 import { CATEGORY_TABS, type CategoryTab } from './Sidebar'
+
+export type ProductGridDensity = 'compact' | 'confort'
 
 type Props = {
   products: ProductWithStock[]
@@ -8,6 +11,7 @@ type Props = {
   onCategoryChange: (tab: CategoryTab) => void
   search: string
   onAdd: (p: ProductWithStock) => void
+  density?: ProductGridDensity
 }
 
 function stockBadge(p: ProductWithStock): { label: string; className: string } | null {
@@ -18,22 +22,13 @@ function stockBadge(p: ProductWithStock): { label: string; className: string } |
   return null
 }
 
-function iconFor(category: string): string {
-  const m: Record<string, string> = {
-    Boissons: '🥤',
-    Alimentation: '🍚',
-    Hygiène: '🧼',
-    Autre: '🛍️',
-  }
-  return m[category] ?? '📦'
-}
-
 export function ProductGrid({
   products,
   category,
   onCategoryChange,
   search,
   onAdd,
+  density = 'compact',
 }: Props) {
   const q = search.trim().toLowerCase()
   const filtered = products.filter((p) => {
@@ -47,12 +42,6 @@ export function ProductGrid({
 
   return (
     <>
-      <p className="mb-3 text-sm leading-relaxed text-slate-600">
-        Parcourir le catalogue par <strong>catégorie</strong> ci-dessous. Les
-        articles correspondant à la <strong>recherche textuelle</strong> ou au{' '}
-        <strong>lecteur code-barres USB</strong> (champ vert en tête de page —
-        scan même après un clic ici) s’affichent aussi.
-      </p>
       <div className="mb-4 flex flex-wrap gap-2">
         {CATEGORY_TABS.map((tab) => (
           <button
@@ -69,32 +58,31 @@ export function ProductGrid({
           </button>
         ))}
       </div>
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
+      <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6">
         {filtered.map((p) => {
           const badge = stockBadge(p)
           const disabled = p.stock <= 0
+          const isCompact = density === 'compact'
           return (
             <button
               key={p.id}
               type="button"
               disabled={disabled}
               onClick={() => onAdd(p)}
-              className={`flex flex-col rounded-xl border border-slate-200 bg-white p-4 text-left shadow-sm transition hover:border-emerald-300 hover:shadow-md disabled:cursor-not-allowed disabled:opacity-50 ${
+              className={`mx-auto w-full max-w-46 sm:max-w-none flex flex-col border border-slate-200 bg-white text-left shadow-sm transition hover:border-emerald-300 hover:shadow-md disabled:cursor-not-allowed disabled:opacity-50 ${
+                isCompact ? 'rounded-md p-2' : 'rounded-lg p-2.5'
+              } ${
                 disabled ? '' : ''
               }`}
             >
-              <div className="mb-2 flex items-start justify-between gap-2">
-                {p.imageDataUrl ? (
-                  <img
-                    src={p.imageDataUrl}
-                    alt=""
-                    className="h-12 w-12 shrink-0 rounded-lg border border-slate-200 object-cover"
-                  />
-                ) : (
-                  <span className="text-3xl" aria-hidden>
-                    {iconFor(p.category)}
-                  </span>
-                )}
+              <div className="mb-1.5 flex items-start justify-between gap-1.5">
+                <img
+                  src={productImageSrc(p)}
+                  alt={p.name}
+                  className={`shrink-0 border border-slate-200 object-cover ${
+                    isCompact ? 'h-9 w-9 rounded-md' : 'h-11 w-11 rounded-lg'
+                  }`}
+                />
                 {badge ? (
                   <span
                     className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${badge.className}`}
@@ -104,14 +92,20 @@ export function ProductGrid({
                 ) : null}
               </div>
               <p
-                className={`font-medium text-slate-900 ${disabled ? 'text-slate-400' : ''}`}
+                className={`text-slate-900 ${isCompact ? 'text-[12px] font-semibold leading-tight' : 'text-[13px] font-medium'} ${
+                  disabled ? 'text-slate-400' : ''
+                }`}
               >
                 {p.name}
               </p>
-              <p className="mt-1 text-lg font-semibold text-emerald-600">
+              <p
+                className={`mt-0.5 font-semibold text-emerald-600 ${
+                  isCompact ? 'text-[13px]' : 'text-sm'
+                }`}
+              >
                 {formatFCFA(p.priceTTC)}
               </p>
-              <p className="mt-1 text-xs text-slate-500">
+              <p className={`mt-0.5 text-slate-500 ${isCompact ? 'text-[10px]' : 'text-[11px]'}`}>
                 {p.stock} en stock
               </p>
             </button>

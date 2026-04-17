@@ -5,6 +5,7 @@ export type NavViewId =
   | 'dash'
   | 'catalogue'
   | 'stocks'
+  | 'onlineOrders'
   | 'journal'
   | 'personnel'
   | 'analytique'
@@ -16,6 +17,7 @@ export const VIEW_LABELS: Record<NavViewId, string> = {
   dash: 'Tableau de bord',
   catalogue: 'Catalogue',
   stocks: 'Stocks',
+  onlineOrders: 'Commandes en ligne',
   journal: 'Rapport journalier',
   personnel: 'Personnel',
   analytique: 'Analytique',
@@ -29,6 +31,8 @@ export const VIEW_SUBTITLES: Record<NavViewId, string> = {
   catalogue: 'Articles, prix et codes-barres',
   stocks:
     'Décrémentation à la vente, seuils d’alerte, inventaire manuel',
+  onlineOrders:
+    'Validation des commandes web avant décrémentation stock et vente',
   journal: 'Synthèse du jour, paiements et reçus',
   personnel: 'Profils et rôles',
   analytique:
@@ -61,6 +65,7 @@ export const NAV_SECTIONS: readonly NavSection[] = [
     items: [
       { id: 'catalogue', label: 'Catalogue' },
       { id: 'stocks', label: 'Stocks', stockBadges: true },
+      { id: 'onlineOrders', label: 'Commandes en ligne' },
       { id: 'network', label: 'Multi-magasins' },
       { id: 'journal', label: 'Rapport journalier' },
     ],

@@ -8,8 +8,8 @@ import { CartPanel } from './components/CartPanel'
 import { CaisseHeader } from './components/CaisseHeader'
 import { OfflineBanner } from './components/OfflineBanner'
 import { ReceiptModal } from './components/ReceiptModal'
-import { ProductGrid } from './components/ProductGrid'
-import { Sidebar, type CategoryTab } from './components/Sidebar'
+import { ProductGrid, type ProductGridDensity } from './components/ProductGrid'
+import { type CategoryTab } from './components/Sidebar'
 import { ViewHeader } from './components/ViewHeader'
 import { useActiveStore } from './context/ActiveStoreContext'
 import {
@@ -23,6 +23,7 @@ import { CatalogueView } from './views/CatalogueView'
 import { JournalReportView } from './views/JournalReportView'
 import { DashboardView } from './views/DashboardView'
 import { MultiStoreView } from './views/MultiStoreView'
+import { OnlineOrdersValidationView } from './views/OnlineOrdersValidationView'
 import { PersonnelView } from './views/PersonnelView'
 import { StocksView } from './views/StocksView'
 import { db, ensureAllStoreStockRows } from './db/db'
@@ -33,7 +34,7 @@ import {
   validateCheckoutPayment,
   type CheckoutPaymentState,
 } from './lib/checkoutPayment'
-import { DEFAULT_VAT_RATE_PCT, totalsFromLinesTTC } from './lib/money'
+import { DEFAULT_VAT_RATE_PCT, formatFCFA, totalsFromLinesTTC } from './lib/money'
 import { appendAuditEvent } from './lib/auditLog'
 import { logCartCancellation } from './lib/refundApply'
 import { SESSION_ID } from './lib/session'
@@ -62,15 +63,17 @@ export function Shell({ staff, online, onLogout }: Props) {
   } = useActiveStore()
 
   const perms = useMemo(() => effectivePermissions(staff), [staff])
+  const navSections = useMemo(() => navSectionsForRole(staff.role), [staff.role])
   const allowedViews = useMemo(() => {
-    const sections = navSectionsForRole(staff.role)
-    return flattenedNavViewIds(sections)
-  }, [staff.role])
+    return flattenedNavViewIds(navSections)
+  }, [navSections])
 
   const [addProductOpen, setAddProductOpen] = useState(false)
   const [search, setSearch] = useState('')
   const [barcodeInput, setBarcodeInput] = useState('')
   const [category, setCategory] = useState<CategoryTab>('Tous')
+  const [productGridDensity, setProductGridDensity] =
+    useState<ProductGridDensity>('compact')
   const [cart, setCart] = useState<CartLine[]>([])
   const [discountPct, setDiscountPct] = useState(0)
   const [promoInput, setPromoInput] = useState('')
@@ -80,6 +83,7 @@ export function Shell({ staff, online, onLogout }: Props) {
   )
   const [checkoutBusy, setCheckoutBusy] = useState(false)
   const [activeView, setActiveView] = useState<NavViewId>('caisse')
+  const [isFloatingCartOpen, setIsFloatingCartOpen] = useState(false)
   const [receiptOpen, setReceiptOpen] = useState<{
     sale: Sale
     autoPrint: boolean
@@ -90,6 +94,12 @@ export function Shell({ staff, online, onLogout }: Props) {
   const barcodeFieldRef = useRef<HTMLInputElement>(null)
 
   const queueItems = useLiveQuery(() => db.syncQueue.toArray(), [], []) ?? []
+  const onlineOrdersPending =
+    useLiveQuery(
+      () => db.onlineOrders.where('status').equals('pending').count(),
+      [],
+      0,
+    ) ?? 0
 
   const refreshSyncMeta = useCallback(() => {
     setSyncMetaTick((n) => n + 1)
@@ -130,6 +140,18 @@ export function Shell({ staff, online, onLogout }: Props) {
     })
   }, [cart, discountPct])
 
+  useEffect(() => {
+    if (activeView !== 'caisse' && isFloatingCartOpen) {
+      setIsFloatingCartOpen(false)
+    }
+  }, [activeView, isFloatingCartOpen])
+
+  useEffect(() => {
+    if (cart.length === 0 && isFloatingCartOpen) {
+      setIsFloatingCartOpen(false)
+    }
+  }, [cart.length, isFloatingCartOpen])
+
   const patchCheckoutPayment = useCallback(
     (patch: Partial<CheckoutPaymentState>) => {
       setCheckoutPayment((prev) => ({ ...prev, ...patch }))
@@ -158,6 +180,14 @@ export function Shell({ staff, online, onLogout }: Props) {
   const ruptureCount = useMemo(
     () => displayProducts.filter((p) => p.stock <= 0).length,
     [displayProducts],
+  )
+  const cartItemCount = useMemo(
+    () => cart.reduce((sum, line) => sum + line.qty, 0),
+    [cart],
+  )
+  const cartTotalTTC = useMemo(
+    () => Math.round(totalsFromLinesTTC(cart, discountPct).totalTTC),
+    [cart, discountPct],
   )
 
   const syncLabel = useMemo(() => {
@@ -557,9 +587,9 @@ export function Shell({ staff, online, onLogout }: Props) {
   }, [onLogout])
 
   return (
-    <div className="flex min-h-svh min-w-0 flex-col bg-slate-100">
+    <div className="flex min-h-svh min-w-0 flex-col">
       {!online ? <OfflineBanner /> : null}
-      <div className="flex min-h-0 min-w-0 flex-1">
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col">
         {receiptOpen ? (
           <ReceiptModal
             sale={receiptOpen.sale}
@@ -574,29 +604,140 @@ export function Shell({ staff, online, onLogout }: Props) {
             onSave={handleSaveNewProduct}
           />
         ) : null}
-        <Sidebar
-          activeView={activeView}
-          onSelectView={setActiveView}
-          ruptureCount={ruptureCount}
-          lowStockCount={lowStockCount}
-          online={online}
-          syncLabel={syncLabel}
-          syncBusy={syncBusy}
-          onSyncNow={handleSyncNow}
-          stores={stores}
-          activeStoreId={activeStoreId}
-          onActiveStoreChange={setActiveStoreId}
-          canSwitchStore={canSwitchStore}
-          user={{
-            displayName: staff.displayName,
-            initials: staff.initials,
-            role: staff.role,
-          }}
-          onLogout={handleLogoutClick}
-        />
+        <div className="premium-dark-card border-b border-white/10 px-4 py-3 text-slate-100 lg:px-6">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div className="flex min-w-0 items-center gap-2">
+              <span className="rounded-lg bg-emerald-500/20 px-2 py-1 text-xs font-semibold text-emerald-200">
+                Espace interne
+              </span>
+              <span className="truncate text-sm font-medium text-slate-200">
+                {staff.displayName} ({staff.role})
+              </span>
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
+              {stores.length > 0 ? (
+                canSwitchStore && stores.length > 1 ? (
+                  <select
+                    value={activeStoreId}
+                    onChange={(e) => setActiveStoreId(e.target.value)}
+                    aria-label="Choisir le magasin"
+                    className="rounded-lg border border-white/10 bg-slate-900/60 px-2 py-1.5 text-xs text-slate-200 outline-none focus:ring-2 focus:ring-emerald-500/40"
+                  >
+                    {stores.map((s) => (
+                      <option key={s.id} value={s.id}>
+                        {s.name}
+                      </option>
+                    ))}
+                  </select>
+                ) : (
+                  <span className="rounded-lg bg-white/6 px-2 py-1.5 text-xs text-slate-300">
+                    {stores.find((s) => s.id === activeStoreId)?.name ?? '—'}
+                  </span>
+                )
+              ) : null}
+              <button
+                type="button"
+                disabled={!online || syncBusy}
+                onClick={handleSyncNow}
+                className="premium-btn-dark rounded-lg px-3 py-1.5 text-xs font-semibold disabled:cursor-not-allowed disabled:opacity-40"
+                title={syncLabel}
+              >
+                {syncBusy
+                  ? 'Synchronisation…'
+                  : online
+                    ? 'Sync'
+                    : 'Hors ligne'}
+              </button>
+              <button
+                type="button"
+                onClick={handleLogoutClick}
+                className="premium-btn-dark rounded-lg px-3 py-1.5 text-xs font-semibold"
+              >
+                Changer de profil
+              </button>
+            </div>
+          </div>
+          <div className="mt-3 flex items-center justify-between gap-2">
+            <nav className="premium-scrollbar flex min-w-0 items-center gap-2 overflow-x-auto pb-1">
+            {navSections.flatMap((section) => section.items).map((item) => {
+              const isActive = activeView === item.id
+              const badgeCount = item.badge === 'lowStock' ? lowStockCount : 0
+              const showStockBadges = 'stockBadges' in item && item.stockBadges
+              const showOnlineOrdersBadge =
+                item.id === 'onlineOrders' && onlineOrdersPending > 0
+              return (
+                <button
+                  key={item.id}
+                  type="button"
+                  onClick={() => setActiveView(item.id)}
+                  className={`inline-flex shrink-0 items-center gap-2 rounded-lg border px-3 py-1.5 text-xs font-semibold transition ${
+                    isActive
+                      ? 'border-emerald-300/40 bg-emerald-500/20 text-white'
+                      : 'border-white/12 bg-white/5 text-slate-300 hover:border-emerald-300/30 hover:text-white'
+                  }`}
+                >
+                  <span>{item.label}</span>
+                  {showStockBadges ? (
+                    <span className="flex shrink-0 gap-1">
+                      {ruptureCount > 0 ? (
+                        <span
+                          className="rounded-md bg-red-500 px-1.5 py-0.5 text-[10px] font-bold text-white"
+                          title="Rupture"
+                        >
+                          {ruptureCount}
+                        </span>
+                      ) : null}
+                      {lowStockCount > 0 ? (
+                        <span
+                          className="rounded-md bg-amber-500/90 px-1.5 py-0.5 text-[10px] font-bold text-slate-950"
+                          title="Sous le seuil"
+                        >
+                          {lowStockCount}
+                        </span>
+                      ) : null}
+                    </span>
+                  ) : showOnlineOrdersBadge ? (
+                    <span className="shrink-0 rounded-md bg-emerald-500/90 px-1.5 py-0.5 text-[10px] font-bold text-slate-950">
+                      {onlineOrdersPending}
+                    </span>
+                  ) : badgeCount > 0 ? (
+                    <span className="shrink-0 rounded-md bg-amber-500/90 px-1.5 py-0.5 text-[10px] font-bold text-slate-950">
+                      {badgeCount}
+                    </span>
+                  ) : null}
+                </button>
+              )
+            })}
+            </nav>
+            <div className="inline-flex shrink-0 overflow-hidden rounded-lg border border-white/12 bg-white/6 p-1">
+              <button
+                type="button"
+                onClick={() => setProductGridDensity('compact')}
+                className={`rounded-md px-2.5 py-1 text-xs font-semibold transition ${
+                  productGridDensity === 'compact'
+                    ? 'bg-emerald-500/25 text-white'
+                    : 'text-slate-300 hover:bg-white/10'
+                }`}
+              >
+                Compact
+              </button>
+              <button
+                type="button"
+                onClick={() => setProductGridDensity('confort')}
+                className={`rounded-md px-2.5 py-1 text-xs font-semibold transition ${
+                  productGridDensity === 'confort'
+                    ? 'bg-emerald-500/25 text-white'
+                    : 'text-slate-300 hover:bg-white/10'
+                }`}
+              >
+                Confort
+              </button>
+            </div>
+          </div>
+        </div>
         {activeView === 'caisse' ? (
-          <div className="flex min-w-0 flex-1 flex-col lg:flex-row">
-            <main className="min-w-0 flex-1 overflow-y-auto bg-slate-100/80 p-4 lg:p-6">
+          <div className="flex min-w-0 flex-1 flex-col xl:flex-row">
+            <main className="premium-scrollbar min-w-0 flex-1 overflow-y-auto bg-slate-100/70 p-4 pb-24 xl:p-6 xl:pb-6">
               <CaisseHeader
                 ref={barcodeFieldRef}
                 sessionId={SESSION_ID}
@@ -657,31 +798,34 @@ export function Shell({ staff, online, onLogout }: Props) {
                 onCategoryChange={setCategory}
                 search={search}
                 onAdd={handleAddFromGrid}
+                density={productGridDensity}
               />
             </main>
-            <CartPanel
-              lines={cart}
-              products={displayProducts}
-              discountPct={discountPct}
-              maxDiscountPct={perms.maxDiscountPct}
-              promoInput={promoInput}
-              onPromoInputChange={setPromoInput}
-              onApplyPromo={handleApplyPromo}
-              promoFeedback={promoFeedback}
-              payment={checkoutPayment}
-              onPaymentPatch={patchCheckoutPayment}
-              online={online}
-              onInc={handleInc}
-              onDec={handleDec}
-              onRemove={handleRemove}
-              onClear={handleClear}
-              onCancelTransaction={handleCancelCartTransaction}
-              onCheckout={handleCheckout}
-              checkoutBusy={checkoutBusy}
-            />
+            <div className="hidden xl:flex">
+              <CartPanel
+                lines={cart}
+                products={displayProducts}
+                discountPct={discountPct}
+                maxDiscountPct={perms.maxDiscountPct}
+                promoInput={promoInput}
+                onPromoInputChange={setPromoInput}
+                onApplyPromo={handleApplyPromo}
+                promoFeedback={promoFeedback}
+                payment={checkoutPayment}
+                onPaymentPatch={patchCheckoutPayment}
+                online={online}
+                onInc={handleInc}
+                onDec={handleDec}
+                onRemove={handleRemove}
+                onClear={handleClear}
+                onCancelTransaction={handleCancelCartTransaction}
+                onCheckout={handleCheckout}
+                checkoutBusy={checkoutBusy}
+              />
+            </div>
           </div>
         ) : (
-          <div className="flex min-w-0 flex-1 flex-col bg-gradient-to-b from-slate-100 via-slate-50 to-white">
+          <div className="flex min-w-0 flex-1 flex-col bg-linear-to-b from-slate-100 via-slate-50 to-white">
             <ViewHeader
               view={activeView}
               sessionId={SESSION_ID}
@@ -689,7 +833,7 @@ export function Shell({ staff, online, onLogout }: Props) {
                 <button
                   type="button"
                   onClick={() => setActiveView('caisse')}
-                  className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-800 shadow-sm transition hover:border-emerald-300 hover:bg-emerald-50/50"
+                  className="premium-btn-dark rounded-xl px-4 py-2 text-sm font-semibold"
                 >
                   Retour caisse
                 </button>
@@ -701,6 +845,7 @@ export function Shell({ staff, online, onLogout }: Props) {
                 <CatalogueView
                   canManageCatalog={perms.canManageCatalogFull}
                   canEditPrices={perms.canEditPrices}
+                  density={productGridDensity}
                   auditActor={{
                     profileId: staff.id,
                     displayName: staff.displayName,
@@ -713,6 +858,15 @@ export function Shell({ staff, online, onLogout }: Props) {
                   isAdmin={perms.canManageStocks}
                   auditActor={{
                     profileId: staff.id,
+                    displayName: staff.displayName,
+                  }}
+                />
+              ) : null}
+              {activeView === 'onlineOrders' ? (
+                <OnlineOrdersValidationView
+                  online={online}
+                  reviewer={{
+                    id: staff.id,
                     displayName: staff.displayName,
                   }}
                 />
@@ -749,6 +903,68 @@ export function Shell({ staff, online, onLogout }: Props) {
             </div>
           </div>
         )}
+        {activeView === 'caisse' ? (
+          <>
+            <button
+              type="button"
+              onClick={() => setIsFloatingCartOpen(true)}
+              className="fixed bottom-4 right-4 z-30 inline-flex items-center gap-2 rounded-full bg-emerald-600 px-4 py-2 text-sm font-semibold text-white shadow-xl shadow-emerald-700/30 transition hover:bg-emerald-500 xl:hidden"
+            >
+              <span>Panier</span>
+              <span className="rounded-full bg-white/20 px-2 py-0.5 text-xs">
+                {cartItemCount}
+              </span>
+              <span className="text-xs font-medium text-emerald-100">
+                {formatFCFA(cartTotalTTC)}
+              </span>
+            </button>
+            {isFloatingCartOpen ? (
+              <div className="fixed inset-0 z-40 xl:hidden">
+                <button
+                  type="button"
+                  aria-label="Fermer le panier"
+                  className="absolute inset-0 bg-slate-950/60 backdrop-blur-[1px]"
+                  onClick={() => setIsFloatingCartOpen(false)}
+                />
+                <div className="absolute inset-y-0 right-0 w-[min(92vw,24rem)]">
+                  <div className="flex h-full flex-col bg-white shadow-2xl">
+                    <div className="flex items-center justify-end border-b border-slate-200 px-3 py-2">
+                      <button
+                        type="button"
+                        onClick={() => setIsFloatingCartOpen(false)}
+                        className="rounded-md border border-slate-200 px-2 py-1 text-xs font-medium text-slate-700"
+                      >
+                        Fermer
+                      </button>
+                    </div>
+                    <div className="min-h-0 flex-1 overflow-y-auto">
+                      <CartPanel
+                        lines={cart}
+                        products={displayProducts}
+                        discountPct={discountPct}
+                        maxDiscountPct={perms.maxDiscountPct}
+                        promoInput={promoInput}
+                        onPromoInputChange={setPromoInput}
+                        onApplyPromo={handleApplyPromo}
+                        promoFeedback={promoFeedback}
+                        payment={checkoutPayment}
+                        onPaymentPatch={patchCheckoutPayment}
+                        online={online}
+                        onInc={handleInc}
+                        onDec={handleDec}
+                        onRemove={handleRemove}
+                        onClear={handleClear}
+                        onCancelTransaction={handleCancelCartTransaction}
+                        onCheckout={handleCheckout}
+                        checkoutBusy={checkoutBusy}
+                      />
+                    </div>
+                  </div>
+                </div>
+              </div>
+            ) : null}
+          </>
+        ) : null}
       </div>
     </div>
   )

@@ -3,6 +3,11 @@
 @theme {
   --font-display: 'DM Sans', ui-sans-serif, system-ui, sans-serif;
   --font-mono: 'JetBrains Mono', ui-monospace, monospace;
+  --color-premium-ink: #0b1220;
+  --color-premium-navy: #111c34;
+  --color-premium-gold: #d4af37;
+  --color-premium-gold-soft: #f1df9c;
+  --color-premium-emerald: #19c29a;
 }
 
 html,
@@ -15,6 +20,11 @@ body {
   margin: 0;
   font-family: var(--font-display);
   -webkit-font-smoothing: antialiased;
+  color: #0f172a;
+  background:
+    radial-gradient(1000px 380px at -10% -20%, #d9f8ef66, transparent 60%),
+    radial-gradient(900px 320px at 120% -30%, #f7e7b24d, transparent 58%),
+    linear-gradient(180deg, #f8fafc, #f1f5f9);
 }
 
 #root {
@@ -27,6 +37,108 @@ body {
   }
   .font-mono-nums {
     font-family: var(--font-mono);
+  }
+  .premium-glass {
+    border: 1px solid color-mix(in oklab, white 45%, transparent);
+    background: color-mix(in oklab, white 88%, transparent);
+    box-shadow:
+      0 16px 50px -28px color-mix(in oklab, #0f172a 40%, transparent),
+      inset 0 1px 0 color-mix(in oklab, white 80%, transparent);
+    -webkit-backdrop-filter: blur(14px);
+    backdrop-filter: blur(14px);
+  }
+  .premium-card {
+    border: 1px solid color-mix(in oklab, #cbd5e1 60%, transparent);
+    background: linear-gradient(
+      160deg,
+      color-mix(in oklab, white 98%, transparent),
+      color-mix(in oklab, #f8fafc 95%, transparent)
+    );
+    box-shadow: 0 14px 32px -24px color-mix(in oklab, #0f172a 45%, transparent);
+  }
+  .premium-dark-card {
+    border: 1px solid color-mix(in oklab, #334155 45%, transparent);
+    background:
+      radial-gradient(circle at top right, #24314f 0%, transparent 45%),
+      linear-gradient(160deg, #0f172a, #0b1326);
+    box-shadow:
+      0 20px 45px -30px color-mix(in oklab, black 70%, transparent),
+      inset 0 1px 0 color-mix(in oklab, #f8fafc 10%, transparent);
+  }
+  .premium-title {
+    letter-spacing: -0.02em;
+    color: #0f172a;
+    text-wrap: balance;
+  }
+  .premium-dark-title {
+    letter-spacing: -0.02em;
+    color: #f8fafc;
+    text-wrap: balance;
+  }
+  .premium-text {
+    color: #475569;
+  }
+  .premium-ring {
+    box-shadow:
+      0 0 0 1px color-mix(in oklab, #d4af37 35%, transparent),
+      0 20px 40px -30px color-mix(in oklab, #0f172a 60%, transparent);
+  }
+  .premium-btn {
+    border: 1px solid color-mix(in oklab, #d4af37 75%, transparent);
+    background: linear-gradient(135deg, #f7e8b1, #ebcc63);
+    color: #1e293b;
+    box-shadow: 0 12px 22px -18px color-mix(in oklab, #d4af37 70%, transparent);
+    transition:
+      transform 150ms ease,
+      filter 150ms ease,
+      box-shadow 150ms ease;
+  }
+  .premium-btn:hover {
+    filter: brightness(1.03);
+    transform: translateY(-1px);
+  }
+  .premium-btn:active {
+    transform: translateY(0);
+  }
+  .premium-btn-dark {
+    border: 1px solid color-mix(in oklab, #334155 65%, transparent);
+    background: color-mix(in oklab, #0f172a 90%, transparent);
+    color: #e2e8f0;
+    transition: background 150ms ease;
+  }
+  .premium-btn-dark:hover {
+    background: color-mix(in oklab, #111c34 90%, transparent);
+  }
+  .premium-input {
+    border: 1px solid color-mix(in oklab, #cbd5e1 70%, transparent);
+    background: color-mix(in oklab, white 96%, transparent);
+    color: #0f172a;
+    box-shadow: inset 0 1px 0 color-mix(in oklab, white 80%, transparent);
+  }
+  .premium-input::placeholder {
+    color: #94a3b8;
+  }
+  .premium-input:focus {
+    outline: none;
+    border-color: color-mix(in oklab, #19c29a 70%, #ffffff 30%);
+    box-shadow:
+      0 0 0 3px color-mix(in oklab, #19c29a 18%, transparent),
+      inset 0 1px 0 color-mix(in oklab, white 85%, transparent);
+  }
+  .premium-scrollbar {
+    scrollbar-width: thin;
+    scrollbar-color: color-mix(in oklab, #64748b 50%, transparent) transparent;
+  }
+  .premium-scrollbar::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+  .premium-scrollbar::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  .premium-scrollbar::-webkit-scrollbar-thumb {
+    background: color-mix(in oklab, #64748b 50%, transparent);
+    border-radius: 999px;
   }
 }
 

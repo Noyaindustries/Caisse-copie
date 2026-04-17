@@ -3,6 +3,7 @@ import { storeStockRowId } from '../lib/storeStockId'
 import type {
   AuditEvent,
   DayClosure,
+  OnlineOrder,
   Product,
   RefundRecord,
   Sale,
@@ -24,6 +25,7 @@ export class CaisseDB extends Dexie {
   dayClosures!: Table<DayClosure, string>
   refunds!: Table<RefundRecord, string>
   auditEvents!: Table<AuditEvent, string>
+  onlineOrders!: Table<OnlineOrder, string>
 
   constructor() {
     super('caisseci')
@@ -103,6 +105,18 @@ export class CaisseDB extends Dexie {
       /** Append-only : n’utiliser que `add` (voir `appendAuditEvent`). */
       auditEvents: 'id, createdAt, kind',
     })
+    this.version(6).stores({
+      products: 'id, barcode, category, archived',
+      sales: 'id, createdAt, synced, storeId',
+      syncQueue: '++id, createdAt',
+      stores: 'id, sortOrder',
+      storeStocks: 'id, storeId, productId, [storeId+productId]',
+      stockTransfers: 'id, createdAt, fromStoreId, toStoreId',
+      dayClosures: 'dateYmd',
+      refunds: 'id, saleId, createdAt',
+      auditEvents: 'id, createdAt, kind',
+      onlineOrders: 'id, createdAt, status, storeId',
+    })
   }
 }
 
@@ -138,20 +152,24 @@ export async function ensureAllStoreStockRows(): Promise<void> {
 
 export async function ensureSeed(): Promise<void> {
   await ensureStores()
-  const n = await db.products.count()
-  if (n === 0) {
-    await db.products.bulkPut(SEED_PRODUCTS)
-    const mainStocks: StoreStock[] = Object.entries(SEED_INITIAL_STOCK_MAIN).map(
-      ([productId, stock]) => ({
-        id: storeStockRowId(DEFAULT_STORE_ID, productId),
-        storeId: DEFAULT_STORE_ID,
-        productId,
-        stock,
-      }),
-    )
-    if (mainStocks.length > 0) {
-      await db.storeStocks.bulkPut(mainStocks)
-    }
+  await db.products.bulkPut(SEED_PRODUCTS)
+
+  const existingMainStocks = new Set(
+    (
+      await db.storeStocks.where('storeId').equals(DEFAULT_STORE_ID).toArray()
+    ).map((row) => row.productId),
+  )
+  const mainStocks: StoreStock[] = Object.entries(SEED_INITIAL_STOCK_MAIN)
+    .filter(([productId]) => !existingMainStocks.has(productId))
+    .map(([productId, stock]) => ({
+      id: storeStockRowId(DEFAULT_STORE_ID, productId),
+      storeId: DEFAULT_STORE_ID,
+      productId,
+      stock,
+    }))
+  if (mainStocks.length > 0) {
+    await db.storeStocks.bulkPut(mainStocks)
   }
+
   await ensureAllStoreStockRows()
 }
