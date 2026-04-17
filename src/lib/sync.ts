@@ -70,7 +70,9 @@ export async function flushSyncQueue(): Promise<SyncResult> {
 
   const cloudUrl = import.meta.env.VITE_CLOUD_SYNC_URL?.trim()
 
-  if (cloudUrl) {
+  const runtimeOnline = typeof navigator === 'undefined' ? true : navigator.onLine
+
+  if (cloudUrl && runtimeOnline) {
     try {
       const body = JSON.stringify({
         batchId: crypto.randomUUID(),
@@ -116,7 +118,7 @@ export async function flushSyncQueue(): Promise<SyncResult> {
     }
   }
 
-  /* Mode hors backend : file vidée localement (démo) */
+  /* Mode hors backend (ou hors ligne) : file vidée localement (démo) */
   let done = 0
   for (const item of pending) {
     await new Promise((r) => setTimeout(r, 100))

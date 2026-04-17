@@ -5,11 +5,15 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "dev:offline": "vite --mode offline",
     "dev:api": "tsx watch server/server.ts",
+    "dev:kiosk": "concurrently -k -n API,APP -c green,cyan \"npm:dev:api\" \"npm:dev:offline\"",
     "build": "tsc -b && vite build && tsc -p tsconfig.server.json",
+    "build:offline": "tsc -b && vite build --mode offline && tsc -p tsconfig.server.json",
     "lint": "eslint .",
     "preview": "vite preview",
     "start": "node server-dist/server.js",
+    "start:kiosk": "npm run build:offline && npm run start",
     "prisma:generate": "prisma generate",
     "prisma:push": "prisma db push"
   },
@@ -47,6 +51,7 @@
     "typescript": "~5.9.3",
     "typescript-eslint": "^8.57.0",
     "vite": "^8.0.1",
-    "vite-plugin-pwa": "^1.2.0"
+    "vite-plugin-pwa": "^1.2.0",
+    "concurrently": "^9.2.1"
   }
 }

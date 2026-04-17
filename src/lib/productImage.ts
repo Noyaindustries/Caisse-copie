@@ -7,6 +7,12 @@ type ProductImageLike = {
 const cache = new Map<string, string>()
 const remoteCache = new Map<string, string>()
 
+function canUseRemoteImages(): boolean {
+  if (import.meta.env.VITE_DISABLE_REMOTE_IMAGES === '1') return false
+  if (typeof navigator !== 'undefined' && !navigator.onLine) return false
+  return true
+}
+
 function curatedProductPhoto(name: string, category?: string): string | null {
   const n = name.toLowerCase()
 
@@ -111,6 +117,10 @@ function generatedProductImageDataUrl(
 
 export function productImageSrc(product: ProductImageLike): string {
   if (product.imageDataUrl) return product.imageDataUrl
+
+  if (!canUseRemoteImages()) {
+    return generatedProductImageDataUrl(product.name, product.category)
+  }
 
   const remoteKey = `${product.name}::${product.category ?? ''}`
   const remoteExisting = remoteCache.get(remoteKey)

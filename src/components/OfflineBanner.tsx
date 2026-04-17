@@ -14,9 +14,9 @@ export function OfflineBanner() {
       <span>
         <strong className="font-semibold">Hors ligne</strong>
         {' — '}
-        Caisse et stocks en local (IndexedDB). Espèces uniquement au panier ;
-        ventes et mouvements de stock restent en file pour le cloud au retour
-        du réseau.
+        Caisse et stocks en local (IndexedDB), images produits en fallback local.
+        Espèces uniquement au panier ; ventes et mouvements de stock restent en
+        file pour le cloud au retour du réseau.
       </span>
     </div>
   )
