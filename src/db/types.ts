@@ -1,15 +1,24 @@
-export type ProductCategory =
-  | 'Boissons'
-  | 'Alimentation'
-  | 'Hygiène'
-  | 'Autre'
+/** Libellé de catégorie (défaut + catégories ajoutées par l’utilisateur). */
+export type ProductCategory = string
 
-export const PRODUCT_CATEGORY_LIST: ProductCategory[] = [
+export const DEFAULT_PRODUCT_CATEGORIES = [
   'Boissons',
   'Alimentation',
   'Hygiène',
   'Autre',
+] as const
+
+/** Catégories proposées par défaut (la liste complète est en base : `productCategories`). */
+export const PRODUCT_CATEGORY_LIST: ProductCategory[] = [
+  ...DEFAULT_PRODUCT_CATEGORIES,
 ]
+
+/** Ligne de la table Dexie `productCategories` (ordre d’affichage). */
+export interface ProductCategoryRow {
+  id: string
+  name: string
+  sortOrder: number
+}
 
 /** Produit + stock sur un magasin donné (affichage caisse / listes). */
 export type ProductWithStock = Product & { stock: number }

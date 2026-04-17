@@ -1,5 +1,15 @@
 import { useLiveQuery } from 'dexie-react-hooks'
 import { useCallback, useMemo, useState } from 'react'
+import {
+  Bar,
+  BarChart,
+  CartesianGrid,
+  Cell,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+} from 'recharts'
 import { db } from '../db/db'
 import type { PaymentMethod } from '../db/types'
 import { downloadTextFile, toCsvSemicolon } from '../lib/analyticsExport'
@@ -15,11 +25,32 @@ import {
   peakHourBuckets,
   sumTotalTTC,
 } from '../lib/salesStats'
+import { Button } from '../ui/Button'
+import { Card, CardContent, CardHeader } from '../ui/Card'
+import { Kpi } from '../ui/Kpi'
+import { PageHeader } from '../ui/PageHeader'
+import { Tabs } from '../ui/Tabs'
+import { Table, TBody, Td, Th, THead, Tr } from '../ui/Table'
+import {
+  IconDownload,
+  IconFile,
+  IconPrinter,
+  IconSpreadsheet,
+} from '../ui/icons'
 
 type Period = 7 | 14 | 30 | 90
 
 function formatHour(h: number): string {
   return `${String(h).padStart(2, '0')}h–${String((h + 1) % 24).padStart(2, '0')}h`
+}
+
+const COLORS = {
+  ink: '#09090b',
+  inkMuted: '#52525b',
+  border: '#e4e4e7',
+  accent: '#059669',
+  accentSoft: '#d1fae5',
+  violet: '#7c3aed',
 }
 
 export function AnalytiqueView() {
@@ -36,18 +67,13 @@ export function AnalytiqueView() {
       const y = ymd.getFullYear()
       const m = String(ymd.getMonth() + 1).padStart(2, '0')
       const d = String(ymd.getDate()).padStart(2, '0')
-      const sYmd = `${y}-${m}-${d}`
-      return sYmd >= firstYmd
+      return `${y}-${m}-${d}` >= firstYmd
     })
   }, [sales, period])
 
   const buckets = useMemo(
     () => bucketSalesByLocalDay(sales, period),
     [sales, period],
-  )
-  const maxTotal = useMemo(
-    () => Math.max(1, ...buckets.map((b) => b.total)),
-    [buckets],
   )
   const caPeriod = useMemo(() => sumTotalTTC(rangeSales), [rangeSales])
   const tickets = rangeSales.length
@@ -64,15 +90,14 @@ export function AnalytiqueView() {
       breakdown.mixed || 1
 
   const peaks = useMemo(() => peakHourBuckets(rangeSales), [rangeSales])
+  const peakTop = useMemo(
+    () => [...peaks].sort((a, b) => b.totalTTC - a.totalTTC).slice(0, 5),
+    [peaks],
+  )
   const maxPeak = useMemo(
     () => Math.max(1, ...peaks.map((p) => p.totalTTC)),
     [peaks],
   )
-  const peakTop = useMemo(() => {
-    return [...peaks]
-      .sort((a, b) => b.totalTTC - a.totalTTC)
-      .slice(0, 5)
-  }, [peaks])
 
   const top = useMemo(
     () => topProductsWithMargins(rangeSales, products, 12),
@@ -84,6 +109,15 @@ export function AnalytiqueView() {
   )
 
   const periodLabel = `${period} jours`
+  const periodTabs = useMemo(
+    () => [
+      { id: '7' as const, label: '7 j' },
+      { id: '14' as const, label: '14 j' },
+      { id: '30' as const, label: '30 j' },
+      { id: '90' as const, label: '90 j' },
+    ],
+    [],
+  )
 
   const exportSummaryCsv = useCallback(() => {
     const rows: string[][] = [
@@ -93,29 +127,18 @@ export function AnalytiqueView() {
       ['Tickets', String(tickets)],
       ['Panier moyen TTC', String(tickets > 0 ? Math.round(caPeriod / tickets) : 0)],
       [],
-      ['Marge (sur CA avec revient connu)', ''],
-      ['CA total net (lignes)', String(marginTotals.revenueTTC)],
-      ['CA avec prix de revient', String(marginTotals.revenueWithCostTTC)],
-      ['Coût d’achat TTC', String(marginTotals.costTTC)],
+      ['Marge'],
+      ['CA net (lignes)', String(marginTotals.revenueTTC)],
+      ['CA avec revient', String(marginTotals.revenueWithCostTTC)],
+      ['Coût TTC', String(marginTotals.costTTC)],
       ['Marge TTC', String(marginTotals.marginOnKnownTTC)],
-      ['Marge % sur part connue', marginTotals.marginPctOnKnown != null ? `${marginTotals.marginPctOnKnown}` : '—'],
+      ['Marge %', marginTotals.marginPctOnKnown != null ? `${marginTotals.marginPctOnKnown}` : '—'],
       [],
       ['Paiements', 'Montant TTC'],
       ...payKeys.map((k) => [paymentMethodShortLabel(k), String(breakdown[k])]),
     ]
-    downloadTextFile(
-      `analytique-resume-${period}j.csv`,
-      toCsvSemicolon(rows),
-    )
-  }, [
-    period,
-    periodLabel,
-    caPeriod,
-    tickets,
-    marginTotals,
-    payKeys,
-    breakdown,
-  ])
+    downloadTextFile(`analytique-resume-${period}j.csv`, toCsvSemicolon(rows))
+  }, [period, periodLabel, caPeriod, tickets, marginTotals, payKeys, breakdown])
 
   const exportTopCsv = useCallback(() => {
     const rows: string[][] = [
@@ -144,10 +167,7 @@ export function AnalytiqueView() {
         String(p.totalTTC),
       ]),
     ]
-    downloadTextFile(
-      `analytique-heures-${period}j.csv`,
-      toCsvSemicolon(rows),
-    )
+    downloadTextFile(`analytique-heures-${period}j.csv`, toCsvSemicolon(rows))
   }, [peaks, period])
 
   const exportDailyCsv = useCallback(() => {
@@ -161,7 +181,6 @@ export function AnalytiqueView() {
     )
   }, [buckets, period])
 
-  /** Fichier unique « Excel » : CSV séparateur ; + BOM (ouvre dans Excel). */
   const exportExcelWorkbook = useCallback(() => {
     const rows: string[][] = [
       ['=== Résumé ==='],
@@ -198,339 +217,347 @@ export function AnalytiqueView() {
     )
   }, [buckets, peaks, top, period, periodLabel, caPeriod, tickets])
 
+  const dailyData = useMemo(
+    () =>
+      buckets.map((b) => ({
+        label: b.label,
+        ymd: b.ymd,
+        total: b.total,
+        tickets: b.count,
+      })),
+    [buckets],
+  )
+
+  const peakChartData = useMemo(
+    () =>
+      peaks.map((p) => ({
+        h: `${String(p.hour).padStart(2, '0')}h`,
+        hour: p.hour,
+        tickets: p.tickets,
+        total: p.totalTTC,
+      })),
+    [peaks],
+  )
+
   return (
-    <>
-      <div className="mb-6 space-y-4 print:hidden">
-        <div className="flex flex-wrap items-center gap-2 border-b border-slate-200 pb-4">
-          <span className="text-sm font-medium text-slate-600">Période :</span>
-          {([7, 14, 30, 90] as const).map((d) => (
-            <button
-              key={d}
-              type="button"
-              onClick={() => setPeriod(d)}
-              className={`rounded-full px-4 py-2 text-sm font-semibold transition ${
-                period === d
-                  ? 'bg-slate-900 text-white shadow-lg'
-                  : 'bg-white text-slate-600 ring-1 ring-slate-200 hover:bg-slate-50'
-              }`}
+    <div className="space-y-6 pb-6">
+      <PageHeader
+        eyebrow="Analytique"
+        title="Performance commerciale"
+        subtitle={`Période glissante de ${periodLabel} · CA net après remboursements`}
+        actions={
+          <div className="flex flex-wrap items-center gap-2 print:hidden">
+            <Tabs
+              variant="segmented"
+              items={periodTabs}
+              active={String(period) as '7' | '14' | '30' | '90'}
+              onChange={(id) => setPeriod(Number(id) as Period)}
+            />
+            <div className="ui-divider hidden h-6 w-px bg-zinc-200 sm:inline-block" />
+            <Button
+              size="sm"
+              variant="secondary"
+              iconLeft={<IconDownload />}
+              onClick={exportSummaryCsv}
             >
-              {d} jours
-            </button>
-          ))}
+              Résumé
+            </Button>
+            <Button
+              size="sm"
+              variant="secondary"
+              iconLeft={<IconFile />}
+              onClick={exportDailyCsv}
+            >
+              Ventes / jour
+            </Button>
+            <Button
+              size="sm"
+              variant="secondary"
+              iconLeft={<IconFile />}
+              onClick={exportPeaksCsv}
+            >
+              Heures
+            </Button>
+            <Button
+              size="sm"
+              variant="secondary"
+              iconLeft={<IconFile />}
+              onClick={exportTopCsv}
+            >
+              Top
+            </Button>
+            <Button
+              size="sm"
+              variant="secondary"
+              iconLeft={<IconSpreadsheet />}
+              onClick={exportExcelWorkbook}
+            >
+              Excel
+            </Button>
+            <Button
+              size="sm"
+              variant="primary"
+              iconLeft={<IconPrinter />}
+              onClick={() => window.print()}
+            >
+              PDF
+            </Button>
+          </div>
+        }
+      />
+
+      <div id="print-analytique" className="space-y-6">
+        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+          <Kpi
+            label="CA net période"
+            value={formatFCFA(caPeriod)}
+            hint={`${tickets} ticket${tickets > 1 ? 's' : ''}`}
+            tone="accent"
+          />
+          <Kpi
+            label="Panier moyen"
+            value={formatFCFA(tickets > 0 ? Math.round(caPeriod / tickets) : 0)}
+            tone="violet"
+          />
+          <Kpi
+            label="Marge TTC connue"
+            value={formatFCFA(marginTotals.marginOnKnownTTC)}
+            hint={
+              marginTotals.marginPctOnKnown != null
+                ? `Taux ${marginTotals.marginPctOnKnown} %`
+                : 'Renseignez le revient'
+            }
+            tone="amber"
+          />
+          <Kpi
+            label="Coût d’achat estimé"
+            value={formatFCFA(marginTotals.costTTC)}
+            hint="Sur articles avec revient"
+            tone="neutral"
+          />
         </div>
 
-        <div className="flex flex-wrap gap-2">
-          <span className="w-full text-xs font-semibold uppercase tracking-wide text-slate-400">
-            Exports
-          </span>
-          <button
-            type="button"
-            onClick={exportSummaryCsv}
-            className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-800 hover:bg-slate-50"
-          >
-            CSV résumé
-          </button>
-          <button
-            type="button"
-            onClick={exportDailyCsv}
-            className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-800 hover:bg-slate-50"
-          >
-            CSV ventes / jour
-          </button>
-          <button
-            type="button"
-            onClick={exportPeaksCsv}
-            className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-800 hover:bg-slate-50"
-          >
-            CSV heures
-          </button>
-          <button
-            type="button"
-            onClick={exportTopCsv}
-            className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-800 hover:bg-slate-50"
-          >
-            CSV top produits
-          </button>
-          <button
-            type="button"
-            onClick={exportExcelWorkbook}
-            className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs font-semibold text-emerald-900 hover:bg-emerald-100"
-          >
-            Excel (CSV ;)
-          </button>
-          <button
-            type="button"
-            onClick={() => window.print()}
-            className="rounded-lg border border-slate-800 bg-slate-900 px-3 py-2 text-xs font-semibold text-white hover:bg-slate-800"
-          >
-            PDF / Imprimer
-          </button>
-        </div>
-      </div>
-
-      <div id="print-analytique" className="space-y-8">
-      <header className="border-b border-slate-200 pb-4">
-        <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-emerald-600">
-          CaisseCI
-        </p>
-        <h1 className="font-display text-2xl font-bold text-slate-900">
-          Tableau de bord analytique
-        </h1>
-        <p className="mt-1 text-sm text-slate-600">
-          Période glissante : <strong>{periodLabel}</strong> · CA net après
-          remboursements
-        </p>
-      </header>
-
-      <div className="grid gap-4 lg:grid-cols-3">
-        <div className="rounded-2xl border border-slate-200/80 bg-white p-6 shadow-sm ring-1 ring-slate-100 lg:col-span-2">
-          <h2 className="font-display text-lg font-semibold text-slate-900">
-            Ventes par jour
-          </h2>
-          <p className="text-sm text-slate-500">
-            Agrégation journalière (calendrier local)
-          </p>
-          <div className="mt-6 flex h-56 items-end gap-1 sm:gap-2">
-            {buckets.map((b) => {
-              const h = Math.round((b.total / maxTotal) * 100)
-              return (
-                <div
-                  key={b.ymd}
-                  className="flex min-w-0 flex-1 flex-col items-center gap-2"
-                >
-                  <div className="flex h-48 w-full flex-col justify-end">
-                    <div
-                      className="w-full rounded-t-md bg-gradient-to-t from-slate-800 via-slate-600 to-emerald-500 shadow-inner"
-                      style={{
-                        height: `${Math.max(h, b.total > 0 ? 6 : 2)}%`,
-                        minHeight: b.total > 0 ? 6 : 2,
-                      }}
-                      title={`${formatFCFA(b.total)} · ${b.count} tickets`}
+        <div className="grid gap-4 xl:grid-cols-3">
+          <Card className="xl:col-span-2">
+            <CardHeader
+              title="Ventes par jour"
+              subtitle="Agrégation journalière (calendrier local)"
+            />
+            <CardContent>
+              <div className="h-[260px] w-full">
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={dailyData} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
+                    <CartesianGrid strokeDasharray="2 6" stroke={COLORS.border} vertical={false} />
+                    <XAxis
+                      dataKey="label"
+                      tick={{ fontSize: 9, fill: COLORS.inkMuted }}
+                      axisLine={false}
+                      tickLine={false}
+                      interval={Math.max(0, Math.floor(dailyData.length / 14))}
                     />
-                  </div>
-                  <span className="hidden w-full truncate text-center text-[9px] font-medium text-slate-500 sm:block">
-                    {b.label}
-                  </span>
-                </div>
-              )
-            })}
-          </div>
-        </div>
-
-        <div className="space-y-4">
-          <div className="rounded-2xl border border-emerald-200/60 bg-gradient-to-br from-emerald-600 to-teal-600 p-6 text-white shadow-lg shadow-emerald-600/20">
-            <p className="text-xs font-medium uppercase tracking-wider text-white/80">
-              CA période (net)
-            </p>
-            <p className="mt-2 font-mono-nums text-3xl font-bold">
-              {formatFCFA(caPeriod)}
-            </p>
-            <p className="mt-2 text-sm text-white/85">
-              {tickets} ticket{tickets > 1 ? 's' : ''}
-            </p>
-          </div>
-          <div className="rounded-2xl border border-slate-200/80 bg-white p-5 shadow-sm ring-1 ring-slate-100">
-            <h3 className="text-sm font-semibold text-slate-900">Paiements</h3>
-            <ul className="mt-3 space-y-3">
-              {payKeys.map((k) => {
-                const v = breakdown[k]
-                return (
-                  <li key={k}>
-                    <div className="flex justify-between text-xs">
-                      <span className="text-slate-600">
-                        {paymentMethodShortLabel(k)}
-                      </span>
-                      <span className="font-mono-nums font-semibold text-slate-900">
-                        {Math.round((v / sumPay) * 100)}%
-                      </span>
-                    </div>
-                    <div className="mt-1 h-1.5 overflow-hidden rounded-full bg-slate-100">
-                      <div
-                        className="h-full rounded-full bg-slate-800"
-                        style={{ width: `${(v / sumPay) * 100}%` }}
-                      />
-                    </div>
-                    <p className="mt-0.5 text-right font-mono-nums text-[10px] text-slate-500">
-                      {formatFCFA(v)}
-                    </p>
-                  </li>
-                )
-              })}
-            </ul>
-          </div>
-        </div>
-      </div>
-
-      <section className="rounded-2xl border border-slate-200/80 bg-white p-6 shadow-sm ring-1 ring-slate-100">
-        <h2 className="font-display text-lg font-semibold text-slate-900">
-          Heures de pointe
-        </h2>
-        <p className="text-sm text-slate-500">
-          Répartition par heure locale (début de créneau) — tickets et CA net
-        </p>
-        <div className="mt-6 flex h-52 items-end gap-0.5 sm:gap-1">
-          {peaks.map((p) => {
-            const h = Math.round((p.totalTTC / maxPeak) * 100)
-            return (
-              <div
-                key={p.hour}
-                className="flex min-w-0 flex-1 flex-col items-center gap-1"
-              >
-                <div className="flex h-44 w-full flex-col justify-end">
-                  <div
-                    className="w-full rounded-t bg-gradient-to-t from-violet-700 to-violet-400"
-                    style={{
-                      height: `${Math.max(h, p.tickets > 0 ? 4 : 1)}%`,
-                      minHeight: p.tickets > 0 ? 4 : 1,
-                    }}
-                    title={`${formatHour(p.hour)} : ${formatFCFA(p.totalTTC)} · ${p.tickets} tickets`}
-                  />
-                </div>
-                <span className="text-[8px] font-medium text-slate-500 sm:text-[9px]">
-                  {p.hour}h
-                </span>
+                    <YAxis
+                      tickFormatter={(v) =>
+                        v >= 1_000_000
+                          ? `${(v / 1_000_000).toFixed(1)}M`
+                          : v >= 1000
+                            ? `${Math.round(v / 1000)}k`
+                            : String(v)
+                      }
+                      tick={{ fontSize: 10, fill: COLORS.inkMuted }}
+                      axisLine={false}
+                      tickLine={false}
+                      width={42}
+                    />
+                    <Tooltip
+                      cursor={{ fill: '#fafafa' }}
+                      content={({ active, payload, label }) => {
+                        if (!active || !payload?.[0]) return null
+                        const p = payload[0].payload as { tickets: number }
+                        return (
+                          <div className="rounded-lg border border-zinc-200 bg-white px-3 py-2 text-[12px] shadow-[var(--shadow-pop)]">
+                            <p className="font-semibold text-zinc-700">{label}</p>
+                            <p className="font-mono-nums text-zinc-900">
+                              {formatFCFA(Number(payload[0].value ?? 0))}
+                            </p>
+                            <p className="text-[11px] text-zinc-500">
+                              {p.tickets} ticket{p.tickets > 1 ? 's' : ''}
+                            </p>
+                          </div>
+                        )
+                      }}
+                    />
+                    <Bar dataKey="total" radius={[3, 3, 0, 0]} fill={COLORS.ink} />
+                  </BarChart>
+                </ResponsiveContainer>
               </div>
-            )
-          })}
-        </div>
-        <div className="mt-4 rounded-xl bg-violet-50/80 p-4 text-sm">
-          <p className="font-semibold text-violet-950">Top 5 créneaux (CA net)</p>
-          <ol className="mt-2 list-decimal space-y-1 pl-5 text-violet-900">
-            {peakTop.map((p) => (
-              <li key={p.hour}>
-                {formatHour(p.hour)} — {formatFCFA(p.totalTTC)} (
-                {p.tickets} ticket{p.tickets > 1 ? 's' : ''})
-              </li>
-            ))}
-          </ol>
-        </div>
-      </section>
+            </CardContent>
+          </Card>
 
-      <section className="grid gap-4 lg:grid-cols-2">
-        <div className="rounded-2xl border border-slate-200/80 bg-white p-6 shadow-sm ring-1 ring-slate-100">
-          <h2 className="font-display text-lg font-semibold text-slate-900">
-            Marges (période)
-          </h2>
-          <p className="mt-1 text-sm text-slate-500">
-            Basé sur le <strong>prix de revient TTC</strong> renseigné en fiche
-            produit (catalogue). Hors articles sans revient : la marge n’est
-            calculée que sur la partie connue.
-          </p>
-          <dl className="mt-4 space-y-2 font-mono-nums text-sm">
-            <div className="flex justify-between border-b border-slate-100 py-2">
-              <dt className="text-slate-600">CA net (lignes vendues)</dt>
-              <dd className="font-semibold">{formatFCFA(marginTotals.revenueTTC)}</dd>
-            </div>
-            <div className="flex justify-between border-b border-slate-100 py-2">
-              <dt className="text-slate-600">CA avec revient connu</dt>
-              <dd>{formatFCFA(marginTotals.revenueWithCostTTC)}</dd>
-            </div>
-            <div className="flex justify-between border-b border-slate-100 py-2">
-              <dt className="text-slate-600">Coût d’achat TTC (estimé)</dt>
-              <dd>{formatFCFA(marginTotals.costTTC)}</dd>
-            </div>
-            <div className="flex justify-between py-2 text-base">
-              <dt className="font-medium text-slate-800">Marge TTC (part connue)</dt>
-              <dd className="font-bold text-emerald-700">
-                {formatFCFA(marginTotals.marginOnKnownTTC)}
-              </dd>
-            </div>
-            {marginTotals.marginPctOnKnown != null ? (
-              <p className="text-xs text-slate-500">
-                Taux de marge sur la part avec revient :{' '}
-                <strong>{marginTotals.marginPctOnKnown} %</strong>
-              </p>
-            ) : (
-              <p className="text-xs text-amber-800">
-                Aucun prix de revient sur les produits vendus : renseignez-le
-                dans le catalogue pour activer le calcul.
-              </p>
-            )}
-          </dl>
+          <Card>
+            <CardHeader title="Paiements" subtitle="Répartition TTC" />
+            <CardContent>
+              <ul className="space-y-3">
+                {payKeys.map((k) => {
+                  const v = breakdown[k]
+                  const pct = Math.round((v / sumPay) * 100)
+                  return (
+                    <li key={k}>
+                      <div className="flex items-center justify-between text-[12px]">
+                        <span className="font-medium text-zinc-700">
+                          {paymentMethodShortLabel(k)}
+                        </span>
+                        <span className="font-mono-nums font-semibold text-zinc-900">
+                          {pct} %
+                        </span>
+                      </div>
+                      <div className="mt-1 h-1.5 overflow-hidden rounded-full bg-zinc-100">
+                        <div
+                          className="h-full rounded-full bg-zinc-900"
+                          style={{ width: `${pct}%` }}
+                        />
+                      </div>
+                      <p className="mt-0.5 text-right font-mono-nums text-[10px] text-zinc-500">
+                        {formatFCFA(v)}
+                      </p>
+                    </li>
+                  )
+                })}
+              </ul>
+            </CardContent>
+          </Card>
         </div>
 
-        <div className="rounded-2xl border border-slate-200/80 bg-slate-50/50 p-6 ring-1 ring-slate-100">
-          <h3 className="text-sm font-semibold text-slate-900">Exports</h3>
-          <ul className="mt-3 list-disc space-y-2 pl-5 text-xs text-slate-600">
-            <li>
-              <strong>CSV</strong> : fichiers séparés (résumé, par jour, heures,
-              top produits).
-            </li>
-            <li>
-              <strong>Excel</strong> : fichier unique en CSV séparateur point-virgule
-              + encodage UTF-8 (ouvre correctement dans Excel).
-            </li>
-            <li>
-              <strong>PDF</strong> : utilisez « PDF / Imprimer » puis «
-              Enregistrer au format PDF » dans la boîte d’impression du
-              navigateur.
-            </li>
-          </ul>
-        </div>
-      </section>
+        <Card>
+          <CardHeader
+            title="Heures de pointe"
+            subtitle="CA net agrégé par tranche horaire (début de créneau)"
+          />
+          <CardContent>
+            <div className="h-[220px] w-full">
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={peakChartData} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
+                  <CartesianGrid strokeDasharray="2 6" stroke={COLORS.border} vertical={false} />
+                  <XAxis
+                    dataKey="h"
+                    tick={{ fontSize: 9, fill: COLORS.inkMuted }}
+                    axisLine={false}
+                    tickLine={false}
+                    interval={2}
+                  />
+                  <YAxis hide />
+                  <Tooltip
+                    cursor={{ fill: '#fafafa' }}
+                    content={({ active, payload }) => {
+                      if (!active || !payload?.[0]) return null
+                      const d = payload[0].payload as
+                        | { h: string; tickets: number; total: number }
+                        | undefined
+                      if (!d) return null
+                      return (
+                        <div className="rounded-lg border border-zinc-200 bg-white px-3 py-2 text-[12px] shadow-[var(--shadow-pop)]">
+                          <p className="font-semibold text-zinc-700">{d.h}</p>
+                          <p className="font-mono-nums text-zinc-900">
+                            {formatFCFA(d.total)}
+                          </p>
+                          <p className="text-[11px] text-zinc-500">
+                            {d.tickets} ticket{d.tickets > 1 ? 's' : ''}
+                          </p>
+                        </div>
+                      )
+                    }}
+                  />
+                  <Bar dataKey="total" radius={[3, 3, 0, 0]} maxBarSize={14}>
+                    {peakChartData.map((entry) => (
+                      <Cell
+                        key={entry.hour}
+                        fill={
+                          entry.total >= maxPeak * 0.8
+                            ? COLORS.violet
+                            : entry.total >= maxPeak * 0.4
+                              ? COLORS.accent
+                              : COLORS.accentSoft
+                        }
+                      />
+                    ))}
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+            {peakTop.length > 0 ? (
+              <div className="mt-3 rounded-lg bg-zinc-50 p-3 text-[12px]">
+                <p className="font-semibold text-zinc-800">Top 5 créneaux</p>
+                <ol className="mt-1.5 space-y-0.5 pl-5 text-zinc-700">
+                  {peakTop.map((p) => (
+                    <li key={p.hour} className="list-decimal">
+                      <span className="font-mono-nums">{formatHour(p.hour)}</span>
+                      {' · '}
+                      <span className="font-mono-nums font-semibold text-zinc-900">
+                        {formatFCFA(p.totalTTC)}
+                      </span>{' '}
+                      ({p.tickets} ticket{p.tickets > 1 ? 's' : ''})
+                    </li>
+                  ))}
+                </ol>
+              </div>
+            ) : null}
+          </CardContent>
+        </Card>
 
-      <section className="rounded-2xl border border-slate-200/80 bg-white p-6 shadow-sm ring-1 ring-slate-100">
-        <h2 className="font-display text-lg font-semibold text-slate-900">
-          Top produits & marges
-        </h2>
-        <p className="text-sm text-slate-500">
-          Quantités et CA nets après remboursements
-        </p>
-        <div className="mt-6 overflow-x-auto">
-          <table className="w-full min-w-[640px] text-sm">
-            <thead>
-              <tr className="border-b border-slate-200 text-left text-[11px] font-semibold uppercase tracking-wider text-slate-500">
-                <th className="pb-3 pr-4">#</th>
-                <th className="pb-3 pr-4">Article</th>
-                <th className="pb-3 pr-4 text-right">Qté</th>
-                <th className="pb-3 pr-4 text-right">CA TTC</th>
-                <th className="pb-3 pr-4 text-right">Coût</th>
-                <th className="pb-3 pr-4 text-right">Marge</th>
-                <th className="pb-3 text-right">Marge %</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100">
-              {top.length === 0 ? (
-                <tr>
-                  <td
-                    colSpan={7}
-                    className="py-10 text-center text-slate-500"
-                  >
-                    Pas encore de données sur cette période
-                  </td>
-                </tr>
-              ) : (
-                top.map((row, i) => (
-                  <tr key={row.name} className="hover:bg-slate-50/80">
-                    <td className="py-3 pr-4 font-mono-nums text-slate-400">
-                      {i + 1}
-                    </td>
-                    <td className="py-3 pr-4 font-medium text-slate-900">
-                      {row.name}
-                    </td>
-                    <td className="py-3 pr-4 text-right font-mono-nums text-slate-700">
-                      {row.qty}
-                    </td>
-                    <td className="py-3 pr-4 text-right font-mono-nums font-semibold text-emerald-700">
-                      {formatFCFA(row.revenueTTC)}
-                    </td>
-                    <td className="py-3 pr-4 text-right font-mono-nums text-slate-600">
-                      {row.costTTC != null ? formatFCFA(row.costTTC) : '—'}
-                    </td>
-                    <td className="py-3 pr-4 text-right font-mono-nums text-slate-800">
-                      {row.marginTTC != null ? formatFCFA(row.marginTTC) : '—'}
-                    </td>
-                    <td className="py-3 text-right font-mono-nums text-slate-600">
-                      {row.marginPct != null ? `${row.marginPct} %` : '—'}
-                    </td>
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
-        </div>
-      </section>
+        <Card>
+          <CardHeader
+            title="Top articles & marges"
+            subtitle="Quantités et CA nets après remboursements"
+          />
+          <CardContent>
+            <Table minWidth={620}>
+              <THead>
+                <Tr hover={false}>
+                  <Th hideBelow="sm">#</Th>
+                  <Th>Article</Th>
+                  <Th align="right">Qté</Th>
+                  <Th align="right">CA TTC</Th>
+                  <Th align="right" hideBelow="md">Coût</Th>
+                  <Th align="right">Marge</Th>
+                  <Th align="right" hideBelow="md">Marge %</Th>
+                </Tr>
+              </THead>
+              <TBody>
+                {top.length === 0 ? (
+                  <Tr hover={false}>
+                    <Td colSpan={7} align="center" className="py-10 text-zinc-500">
+                      Pas encore de données sur cette période
+                    </Td>
+                  </Tr>
+                ) : (
+                  top.map((row, i) => (
+                    <Tr key={row.name}>
+                      <Td hideBelow="sm" mono className="text-zinc-400">
+                        {i + 1}
+                      </Td>
+                      <Td className="font-medium text-zinc-900">{row.name}</Td>
+                      <Td align="right" mono>
+                        {row.qty}
+                      </Td>
+                      <Td align="right" mono className="font-semibold">
+                        {formatFCFA(row.revenueTTC)}
+                      </Td>
+                      <Td align="right" hideBelow="md" mono>
+                        {row.costTTC != null ? formatFCFA(row.costTTC) : '—'}
+                      </Td>
+                      <Td align="right" mono>
+                        {row.marginTTC != null ? formatFCFA(row.marginTTC) : '—'}
+                      </Td>
+                      <Td align="right" hideBelow="md" mono>
+                        {row.marginPct != null ? `${row.marginPct} %` : '—'}
+                      </Td>
+                    </Tr>
+                  ))
+                )}
+              </TBody>
+            </Table>
+          </CardContent>
+        </Card>
       </div>
-    </>
+    </div>
   )
 }

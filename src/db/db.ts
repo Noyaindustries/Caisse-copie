@@ -5,6 +5,7 @@ import type {
   DayClosure,
   OnlineOrder,
   Product,
+  ProductCategoryRow,
   RefundRecord,
   Sale,
   StockTransfer,
@@ -12,6 +13,7 @@ import type {
   StoreStock,
   SyncQueueItem,
 } from './types'
+import { DEFAULT_PRODUCT_CATEGORIES } from './types'
 import { SEED_INITIAL_STOCK_MAIN, SEED_PRODUCTS } from './seed'
 import { DEFAULT_STORE_ID, SEED_STORES } from './seedStores'
 
@@ -26,6 +28,7 @@ export class CaisseDB extends Dexie {
   refunds!: Table<RefundRecord, string>
   auditEvents!: Table<AuditEvent, string>
   onlineOrders!: Table<OnlineOrder, string>
+  productCategories!: Table<ProductCategoryRow, string>
 
   constructor() {
     super('caisseci')
@@ -117,10 +120,114 @@ export class CaisseDB extends Dexie {
       auditEvents: 'id, createdAt, kind',
       onlineOrders: 'id, createdAt, status, storeId',
     })
+    this.version(7)
+      .stores({
+        products: 'id, barcode, category, archived',
+        sales: 'id, createdAt, synced, storeId',
+        syncQueue: '++id, createdAt',
+        stores: 'id, sortOrder',
+        storeStocks: 'id, storeId, productId, [storeId+productId]',
+        stockTransfers: 'id, createdAt, fromStoreId, toStoreId',
+        dayClosures: 'dateYmd',
+        refunds: 'id, saleId, createdAt',
+        auditEvents: 'id, createdAt, kind',
+        onlineOrders: 'id, createdAt, status, storeId',
+        productCategories: 'id, sortOrder',
+      })
+      .upgrade(async (tx) => {
+        const catTable = tx.table('productCategories')
+        let rows = (await catTable.toArray()) as ProductCategoryRow[]
+        if (rows.length === 0) {
+          let i = 0
+          for (const name of DEFAULT_PRODUCT_CATEGORIES) {
+            await catTable.add({
+              id: crypto.randomUUID(),
+              name,
+              sortOrder: i++,
+            })
+          }
+          rows = (await catTable.toArray()) as ProductCategoryRow[]
+        }
+        const seen = new Set(rows.map((r) => r.name.toLowerCase()))
+        let sortOrder =
+          rows.reduce((m, r) => Math.max(m, r.sortOrder), -1) + 1
+        const products = (await tx.table('products').toArray()) as Product[]
+        for (const p of products) {
+          const c =
+            typeof p.category === 'string'
+              ? p.category.replace(/\s+/g, ' ').trim()
+              : ''
+          if (!c) continue
+          const key = c.toLowerCase()
+          if (seen.has(key)) continue
+          await catTable.add({
+            id: crypto.randomUUID(),
+            name: c,
+            sortOrder: sortOrder++,
+          })
+          seen.add(key)
+        }
+      })
   }
 }
 
 export const db = new CaisseDB()
+
+/** Ajoute une catégorie si le libellé (insensible à la casse) est nouveau. */
+export async function addProductCategoryLabel(raw: string): Promise<string> {
+  const name = raw.replace(/\s+/g, ' ').trim()
+  if (!name) {
+    throw new Error('Nom de catégorie vide.')
+  }
+  if (name.toLowerCase() === 'tous') {
+    throw new Error('Le nom « Tous » est réservé pour les filtres.')
+  }
+  const dup = await db.productCategories
+    .filter((r) => r.name.toLowerCase() === name.toLowerCase())
+    .first()
+  if (dup) {
+    return dup.name
+  }
+  const rows = await db.productCategories.toArray()
+  const maxOrder = rows.reduce((m, r) => Math.max(m, r.sortOrder), -1)
+  await db.productCategories.add({
+    id: crypto.randomUUID(),
+    name,
+    sortOrder: maxOrder + 1,
+  })
+  return name
+}
+
+/** Enregistre en index les catégories présentes sur les produits (import CSV, etc.). */
+export async function syncProductCategoriesFromProducts(): Promise<void> {
+  const [rows, products] = await Promise.all([
+    db.productCategories.toArray(),
+    db.products.toArray(),
+  ])
+  const byLower = new Map(rows.map((r) => [r.name.toLowerCase(), r]))
+  let maxOrder = rows.reduce((m, r) => Math.max(m, r.sortOrder), -1)
+  const toAdd: ProductCategoryRow[] = []
+  for (const p of products) {
+    const label =
+      typeof p.category === 'string'
+        ? p.category.replace(/\s+/g, ' ').trim()
+        : ''
+    if (!label) continue
+    const key = label.toLowerCase()
+    if (byLower.has(key)) continue
+    maxOrder += 1
+    const row: ProductCategoryRow = {
+      id: crypto.randomUUID(),
+      name: label,
+      sortOrder: maxOrder,
+    }
+    byLower.set(key, row)
+    toAdd.push(row)
+  }
+  if (toAdd.length > 0) {
+    await db.productCategories.bulkAdd(toAdd)
+  }
+}
 
 async function ensureStores(): Promise<void> {
   if ((await db.stores.count()) === 0) {
@@ -172,4 +279,5 @@ export async function ensureSeed(): Promise<void> {
   }
 
   await ensureAllStoreStockRows()
+  await syncProductCategoriesFromProducts()
 }

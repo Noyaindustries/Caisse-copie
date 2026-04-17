@@ -15,6 +15,7 @@ import {
   totalsFromLinesTTC,
 } from '../lib/money'
 import { productImageSrc } from '../lib/productImage'
+import { ProductImage } from '../components/ProductImage'
 import { storeStockRowId } from '../lib/storeStockId'
 
 type Props = {
@@ -87,6 +88,11 @@ export function LuxuryStorefrontView({
   const productsSectionRef = useRef<HTMLElement | null>(null)
   const cartPanelRef = useRef<HTMLElement | null>(null)
   const checkoutFormRef = useRef<HTMLDivElement | null>(null)
+  const contactRef = useRef<HTMLElement | null>(null)
+  const [contactName, setContactName] = useState('')
+  const [contactEmail, setContactEmail] = useState('')
+  const [contactMessage, setContactMessage] = useState('')
+  const [contactSent, setContactSent] = useState(false)
   const cartBadgeRef = useRef<HTMLSpanElement | null>(null)
   const pulseTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const flyTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -335,6 +341,29 @@ export function LuxuryStorefrontView({
     setIsCartOpen(true)
   }, [])
 
+  const scrollToContact = useCallback(() => {
+    contactRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+  }, [])
+
+  const submitContact = useCallback(
+    (e: React.FormEvent) => {
+      e.preventDefault()
+      if (!contactName.trim() || !contactMessage.trim()) return
+      const subject = encodeURIComponent(
+        `Contact boutique — ${contactName.trim()}`,
+      )
+      const body = encodeURIComponent(
+        `${contactMessage.trim()}\n\n— ${contactName.trim()}${
+          contactEmail.trim() ? ` (${contactEmail.trim()})` : ''
+        }`,
+      )
+      window.location.href = `mailto:support@caisseci.local?subject=${subject}&body=${body}`
+      setContactSent(true)
+      window.setTimeout(() => setContactSent(false), 4000)
+    },
+    [contactName, contactEmail, contactMessage],
+  )
+
   useEffect(() => {
     return () => {
       if (pulseTimeoutRef.current) {
@@ -530,7 +559,7 @@ export function LuxuryStorefrontView({
               </button>
               <button
                 type="button"
-                onClick={scrollToCheckoutForm}
+                onClick={scrollToContact}
                 className="shrink-0 rounded-lg border border-white/15 px-2.5 py-1 text-[11px] font-semibold text-slate-100 transition hover:border-amber-200/45 hover:text-amber-100"
               >
                 Contact
@@ -660,14 +689,13 @@ export function LuxuryStorefrontView({
                   className="rounded-2xl border border-amber-200/15 bg-linear-to-r from-slate-950/90 to-slate-900/70 px-2.5 py-2 shadow-lg shadow-black/20"
                 >
                   <div className="flex items-center gap-2">
-                    <img
-                      src={productImageSrc(
+                    <ProductImage
+                      product={
                         productById.get(line.productId) ?? {
                           id: line.productId,
                           name: line.name,
-                        },
-                      )}
-                      alt={line.name}
+                        }
+                      }
                       className="h-9 w-9 rounded-xl border border-white/15 object-cover"
                     />
                     <div className="min-w-0">
@@ -892,9 +920,8 @@ export function LuxuryStorefrontView({
                       className="overflow-hidden rounded-xl border border-white/10 bg-slate-950/70"
                     >
                       <div className="relative">
-                        <img
-                          src={productImageSrc(product)}
-                          alt={product.name}
+                        <ProductImage
+                          product={product}
                           className="h-24 w-full object-cover"
                         />
                         <span className="absolute left-1.5 top-1.5 rounded-full bg-black/65 px-2 py-0.5 text-[10px] font-semibold text-amber-100">
@@ -982,9 +1009,8 @@ export function LuxuryStorefrontView({
                             }`}
                           >
                             <div className="relative">
-                              <img
-                                src={productImageSrc(product)}
-                                alt={product.name}
+                              <ProductImage
+                                product={product}
                                 className={`w-full object-cover transition duration-300 group-hover:scale-[1.06] ${
                                   cardDensity === 'compact'
                                     ? 'h-24 sm:h-28'
@@ -1079,6 +1105,288 @@ export function LuxuryStorefrontView({
               </p>
             ) : null}
           </section>
+
+          <section
+            ref={contactRef}
+            id="contact"
+            className="premium-dark-card premium-ring mt-6 scroll-mt-24 rounded-3xl border border-amber-200/20 bg-linear-to-br from-slate-950 via-slate-900 to-amber-950/40 p-5 sm:p-7"
+          >
+            <div className="grid gap-6 lg:grid-cols-[1.1fr_1fr]">
+              <div>
+                <p className="text-[10px] font-bold uppercase tracking-[0.28em] text-amber-200/80">
+                  Restons en contact
+                </p>
+                <h2 className="premium-dark-title mt-2 font-display text-2xl font-semibold sm:text-3xl">
+                  Une question ? Une commande spéciale ?
+                </h2>
+                <p className="mt-3 max-w-md text-sm leading-relaxed text-slate-300">
+                  Notre équipe vous répond du lundi au samedi. Pour les
+                  livraisons groupées, événements ou demandes professionnelles,
+                  contactez-nous directement.
+                </p>
+
+                <ul className="mt-6 grid gap-3 sm:grid-cols-2">
+                  <li>
+                    <a
+                      href="tel:+22507000000"
+                      className="flex items-start gap-3 rounded-2xl border border-white/10 bg-slate-950/60 p-3 transition hover:border-amber-200/40 hover:bg-slate-900/70"
+                    >
+                      <span
+                        aria-hidden
+                        className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-amber-200/10 text-amber-200"
+                      >
+                        <svg
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          stroke="currentColor"
+                          strokeWidth="2"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          className="h-4 w-4"
+                        >
+                          <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92Z" />
+                        </svg>
+                      </span>
+                      <span className="min-w-0">
+                        <span className="block text-[10px] font-semibold uppercase tracking-wider text-slate-400">
+                          Téléphone
+                        </span>
+                        <span className="block font-mono-nums text-sm font-semibold text-slate-100">
+                          +225 07 00 00 00 00
+                        </span>
+                        <span className="block text-[11px] text-slate-400">
+                          Appel direct
+                        </span>
+                      </span>
+                    </a>
+                  </li>
+                  <li>
+                    <a
+                      href="https://wa.me/22507000000"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="flex items-start gap-3 rounded-2xl border border-white/10 bg-slate-950/60 p-3 transition hover:border-emerald-300/40 hover:bg-slate-900/70"
+                    >
+                      <span
+                        aria-hidden
+                        className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-emerald-400/10 text-emerald-300"
+                      >
+                        <svg
+                          viewBox="0 0 24 24"
+                          fill="currentColor"
+                          className="h-4 w-4"
+                        >
+                          <path d="M20.52 3.48A11.86 11.86 0 0 0 12.04 0C5.46 0 .12 5.34.12 11.92c0 2.1.55 4.15 1.6 5.96L0 24l6.3-1.66a11.9 11.9 0 0 0 5.74 1.46h.01c6.58 0 11.92-5.34 11.92-11.92 0-3.18-1.24-6.18-3.45-8.4ZM12.04 21.78h-.01a9.86 9.86 0 0 1-5.03-1.38l-.36-.21-3.74.98 1-3.65-.24-.37a9.85 9.85 0 0 1-1.51-5.23c0-5.45 4.43-9.88 9.89-9.88a9.83 9.83 0 0 1 7 2.9 9.82 9.82 0 0 1 2.9 7c0 5.45-4.44 9.88-9.9 9.88Zm5.42-7.4c-.3-.15-1.76-.87-2.03-.97-.27-.1-.47-.15-.67.15-.2.3-.77.97-.94 1.17-.17.2-.35.22-.65.07-.3-.15-1.26-.46-2.4-1.49-.9-.8-1.5-1.78-1.67-2.08-.17-.3-.02-.46.13-.61.13-.13.3-.35.45-.52.15-.17.2-.3.3-.5.1-.2.05-.37-.02-.52-.07-.15-.67-1.62-.92-2.22-.24-.58-.49-.5-.67-.5h-.57c-.2 0-.52.07-.79.37-.27.3-1.03 1-1.03 2.45 0 1.45 1.06 2.85 1.21 3.05.15.2 2.08 3.18 5.04 4.46.7.3 1.25.48 1.68.62.7.22 1.34.19 1.84.12.56-.08 1.76-.72 2.01-1.42.25-.7.25-1.3.17-1.42-.07-.12-.27-.2-.57-.35Z" />
+                        </svg>
+                      </span>
+                      <span className="min-w-0">
+                        <span className="block text-[10px] font-semibold uppercase tracking-wider text-slate-400">
+                          WhatsApp
+                        </span>
+                        <span className="block font-mono-nums text-sm font-semibold text-slate-100">
+                          +225 07 00 00 00 00
+                        </span>
+                        <span className="block text-[11px] text-emerald-300/90">
+                          Message instantané
+                        </span>
+                      </span>
+                    </a>
+                  </li>
+                  <li>
+                    <a
+                      href="mailto:support@caisseci.local"
+                      className="flex items-start gap-3 rounded-2xl border border-white/10 bg-slate-950/60 p-3 transition hover:border-amber-200/40 hover:bg-slate-900/70"
+                    >
+                      <span
+                        aria-hidden
+                        className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-amber-200/10 text-amber-200"
+                      >
+                        <svg
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          stroke="currentColor"
+                          strokeWidth="2"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          className="h-4 w-4"
+                        >
+                          <rect x="3" y="5" width="18" height="14" rx="2" />
+                          <path d="m3 7 9 6 9-6" />
+                        </svg>
+                      </span>
+                      <span className="min-w-0">
+                        <span className="block text-[10px] font-semibold uppercase tracking-wider text-slate-400">
+                          Email
+                        </span>
+                        <span className="block truncate text-sm font-semibold text-slate-100">
+                          support@caisseci.local
+                        </span>
+                        <span className="block text-[11px] text-slate-400">
+                          Réponse sous 24 h
+                        </span>
+                      </span>
+                    </a>
+                  </li>
+                  <li>
+                    <div className="flex items-start gap-3 rounded-2xl border border-white/10 bg-slate-950/60 p-3">
+                      <span
+                        aria-hidden
+                        className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-amber-200/10 text-amber-200"
+                      >
+                        <svg
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          stroke="currentColor"
+                          strokeWidth="2"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          className="h-4 w-4"
+                        >
+                          <path d="M21 10c0 7-9 13-9 13S3 17 3 10a9 9 0 0 1 18 0z" />
+                          <circle cx="12" cy="10" r="3" />
+                        </svg>
+                      </span>
+                      <span className="min-w-0">
+                        <span className="block text-[10px] font-semibold uppercase tracking-wider text-slate-400">
+                          Adresse
+                        </span>
+                        <span className="block text-sm font-semibold text-slate-100">
+                          Cocody, Abidjan
+                        </span>
+                        <a
+                          href="https://maps.google.com/?q=Cocody+Abidjan"
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-[11px] text-amber-200 underline decoration-dotted underline-offset-2 hover:text-amber-100"
+                        >
+                          Voir l'itinéraire
+                        </a>
+                      </span>
+                    </div>
+                  </li>
+                </ul>
+
+                <div className="mt-5 rounded-2xl border border-white/10 bg-slate-950/50 p-4">
+                  <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">
+                    Horaires d'ouverture
+                  </p>
+                  <ul className="mt-2 space-y-1 text-sm">
+                    <li className="flex items-center justify-between gap-3 text-slate-200">
+                      <span>Lundi — Vendredi</span>
+                      <span className="font-mono-nums text-amber-100">
+                        8h00 — 20h00
+                      </span>
+                    </li>
+                    <li className="flex items-center justify-between gap-3 text-slate-200">
+                      <span>Samedi</span>
+                      <span className="font-mono-nums text-amber-100">
+                        9h00 — 21h00
+                      </span>
+                    </li>
+                    <li className="flex items-center justify-between gap-3 text-slate-400">
+                      <span>Dimanche</span>
+                      <span className="font-mono-nums">Fermé</span>
+                    </li>
+                  </ul>
+                </div>
+              </div>
+
+              {/* Formulaire */}
+              <form
+                onSubmit={submitContact}
+                className="rounded-3xl border border-amber-200/15 bg-slate-950/60 p-4 sm:p-5"
+              >
+                <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-amber-200/80">
+                  Écrivez-nous
+                </p>
+                <h3 className="premium-dark-title mt-1 text-lg font-semibold">
+                  Message rapide
+                </h3>
+                <p className="mt-1 text-xs text-slate-400">
+                  Votre client mail s'ouvrira pré-rempli.
+                </p>
+
+                <div className="mt-4 space-y-3">
+                  <label className="block">
+                    <span className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">
+                      Nom *
+                    </span>
+                    <input
+                      type="text"
+                      value={contactName}
+                      onChange={(e) => setContactName(e.target.value)}
+                      placeholder="Votre nom"
+                      required
+                      className="premium-input mt-1 w-full rounded-xl bg-slate-900/70 px-3 py-2 text-sm text-slate-100"
+                    />
+                  </label>
+                  <label className="block">
+                    <span className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">
+                      Email
+                    </span>
+                    <input
+                      type="email"
+                      value={contactEmail}
+                      onChange={(e) => setContactEmail(e.target.value)}
+                      placeholder="vous@domaine.com"
+                      className="premium-input mt-1 w-full rounded-xl bg-slate-900/70 px-3 py-2 text-sm text-slate-100"
+                    />
+                  </label>
+                  <label className="block">
+                    <span className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">
+                      Message *
+                    </span>
+                    <textarea
+                      value={contactMessage}
+                      onChange={(e) => setContactMessage(e.target.value)}
+                      placeholder="Votre demande, commande spéciale, événement…"
+                      rows={4}
+                      required
+                      className="premium-input mt-1 w-full resize-none rounded-xl bg-slate-900/70 px-3 py-2 text-sm text-slate-100"
+                    />
+                  </label>
+                </div>
+
+                <button
+                  type="submit"
+                  disabled={!contactName.trim() || !contactMessage.trim()}
+                  className="premium-btn mt-4 inline-flex w-full items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold disabled:cursor-not-allowed disabled:bg-slate-700 disabled:text-slate-400"
+                >
+                  Envoyer le message
+                  <svg
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    className="h-4 w-4"
+                  >
+                    <path d="m22 2-11 11" />
+                    <path d="M22 2 15 22l-4-9-9-4 20-7Z" />
+                  </svg>
+                </button>
+                {contactSent ? (
+                  <p
+                    role="status"
+                    className="mt-3 rounded-xl border border-emerald-300/30 bg-emerald-400/10 px-3 py-2 text-xs text-emerald-200"
+                  >
+                    Votre client mail s'est ouvert. Si rien ne s'affiche,
+                    écrivez directement à{' '}
+                    <span className="font-semibold">
+                      support@caisseci.local
+                    </span>
+                    .
+                  </p>
+                ) : null}
+
+                <p className="mt-3 text-[11px] text-slate-500">
+                  En soumettant, vous acceptez d'être recontacté à propos de
+                  votre demande.
+                </p>
+              </form>
+            </div>
+          </section>
         </main>
 
         <footer className="premium-dark-card premium-ring mt-6 rounded-3xl border border-white/10 bg-slate-950/75 p-5">
@@ -1121,6 +1429,13 @@ export function LuxuryStorefrontView({
                 >
                   Commander
                 </button>
+                <button
+                  type="button"
+                  onClick={scrollToContact}
+                  className="rounded-lg border border-amber-200/35 bg-amber-200/10 px-2 py-1 text-[11px] font-semibold text-amber-100 transition hover:bg-amber-200/20"
+                >
+                  Contact
+                </button>
               </div>
             </div>
 
@@ -1128,10 +1443,20 @@ export function LuxuryStorefrontView({
               <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-300">
                 Contact & Horaires
               </p>
-              <p className="mt-2 text-sm text-slate-300">+225 07 00 00 00 00</p>
-              <p className="text-sm text-slate-300">support@caisseci.local</p>
+              <a
+                href="tel:+22507000000"
+                className="mt-2 block text-sm text-slate-200 hover:text-amber-100"
+              >
+                +225 07 00 00 00 00
+              </a>
+              <a
+                href="mailto:support@caisseci.local"
+                className="block text-sm text-slate-200 hover:text-amber-100"
+              >
+                support@caisseci.local
+              </a>
               <p className="mt-1 text-xs text-slate-400">
-                Lun-Sam: 8h00 - 20h00
+                Lun-Ven 8h-20h · Sam 9h-21h
               </p>
             </div>
 

@@ -1,12 +1,17 @@
 import type { ProductWithStock } from '../db/types'
 import { formatFCFA } from '../lib/money'
-import { productImageSrc } from '../lib/productImage'
-import { CATEGORY_TABS, type CategoryTab } from './Sidebar'
+import { Badge } from '../ui/Badge'
+import { ProductImage } from './ProductImage'
+import { cn } from '../ui/cn'
+import { EmptyState } from '../ui/EmptyState'
+import { IconSearch } from '../ui/icons'
+import type { CategoryTab } from './Sidebar'
 
 export type ProductGridDensity = 'compact' | 'confort'
 
 type Props = {
   products: ProductWithStock[]
+  categoryTabs: CategoryTab[]
   category: CategoryTab
   onCategoryChange: (tab: CategoryTab) => void
   search: string
@@ -14,16 +19,15 @@ type Props = {
   density?: ProductGridDensity
 }
 
-function stockBadge(p: ProductWithStock): { label: string; className: string } | null {
-  if (p.stock <= 0)
-    return { label: 'Rupture', className: 'bg-slate-200 text-slate-600' }
-  if (p.stock <= p.lowStockThreshold)
-    return { label: 'Faible', className: 'bg-amber-100 text-amber-900' }
-  return null
+function stockState(p: ProductWithStock): 'rupture' | 'faible' | 'ok' {
+  if (p.stock <= 0) return 'rupture'
+  if (p.stock <= p.lowStockThreshold) return 'faible'
+  return 'ok'
 }
 
 export function ProductGrid({
   products,
+  categoryTabs,
   category,
   onCategoryChange,
   search,
@@ -34,89 +38,102 @@ export function ProductGrid({
   const filtered = products.filter((p) => {
     if (category !== 'Tous' && p.category !== category) return false
     if (!q) return true
-    return (
-      p.name.toLowerCase().includes(q) ||
-      p.barcode.includes(q)
-    )
+    return p.name.toLowerCase().includes(q) || p.barcode.includes(q)
   })
+
+  const isCompact = density === 'compact'
 
   return (
     <>
-      <div className="mb-4 flex flex-wrap gap-2">
-        {CATEGORY_TABS.map((tab) => (
-          <button
-            key={tab}
-            type="button"
-            onClick={() => onCategoryChange(tab)}
-            className={`rounded-full px-4 py-1.5 text-sm font-medium transition ${
-              tab === category
-                ? 'bg-emerald-600 text-white'
-                : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-            }`}
-          >
-            {tab}
-          </button>
-        ))}
-      </div>
-      <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6">
-        {filtered.map((p) => {
-          const badge = stockBadge(p)
-          const disabled = p.stock <= 0
-          const isCompact = density === 'compact'
+      <div className="mb-4 ui-scroll -mx-1 flex gap-1.5 overflow-x-auto px-1 pb-1">
+        {categoryTabs.map((tab) => {
+          const on = tab === category
           return (
             <button
-              key={p.id}
+              key={tab}
               type="button"
-              disabled={disabled}
-              onClick={() => onAdd(p)}
-              className={`mx-auto w-full max-w-46 sm:max-w-none flex flex-col border border-slate-200 bg-white text-left shadow-sm transition hover:border-emerald-300 hover:shadow-md disabled:cursor-not-allowed disabled:opacity-50 ${
-                isCompact ? 'rounded-md p-2' : 'rounded-lg p-2.5'
-              } ${
-                disabled ? '' : ''
-              }`}
+              onClick={() => onCategoryChange(tab)}
+              className={cn(
+                'shrink-0 rounded-full border px-3 py-1.5 text-[12px] font-semibold transition',
+                on
+                  ? 'border-zinc-900 bg-zinc-900 text-white'
+                  : 'border-zinc-200 bg-white text-zinc-600 hover:border-zinc-300 hover:text-zinc-900',
+              )}
             >
-              <div className="mb-1.5 flex items-start justify-between gap-1.5">
-                <img
-                  src={productImageSrc(p)}
-                  alt={p.name}
-                  className={`shrink-0 border border-slate-200 object-cover ${
-                    isCompact ? 'h-9 w-9 rounded-md' : 'h-11 w-11 rounded-lg'
-                  }`}
-                />
-                {badge ? (
-                  <span
-                    className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${badge.className}`}
-                  >
-                    {badge.label}
-                  </span>
-                ) : null}
-              </div>
-              <p
-                className={`text-slate-900 ${isCompact ? 'text-[12px] font-semibold leading-tight' : 'text-[13px] font-medium'} ${
-                  disabled ? 'text-slate-400' : ''
-                }`}
-              >
-                {p.name}
-              </p>
-              <p
-                className={`mt-0.5 font-semibold text-emerald-600 ${
-                  isCompact ? 'text-[13px]' : 'text-sm'
-                }`}
-              >
-                {formatFCFA(p.priceTTC)}
-              </p>
-              <p className={`mt-0.5 text-slate-500 ${isCompact ? 'text-[10px]' : 'text-[11px]'}`}>
-                {p.stock} en stock
-              </p>
+              {tab}
             </button>
           )
         })}
       </div>
+
       {filtered.length === 0 ? (
-        <p className="mt-8 text-center text-sm text-slate-500">
-          Aucun produit ne correspond à votre recherche.
-        </p>
-      ) : null}
+        <EmptyState
+          icon={<IconSearch />}
+          title="Aucun article"
+          description="Affinez la recherche ou changez de catégorie."
+        />
+      ) : (
+        <div
+          className={cn(
+            'grid gap-2',
+            isCompact
+              ? 'grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-5 2xl:grid-cols-7'
+              : 'grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-4 2xl:grid-cols-5',
+          )}
+        >
+          {filtered.map((p) => {
+            const state = stockState(p)
+            const disabled = state === 'rupture'
+            return (
+              <button
+                key={p.id}
+                type="button"
+                disabled={disabled}
+                onClick={() => onAdd(p)}
+                className={cn(
+                  'ui-card-hover group flex flex-col rounded-xl border border-zinc-200 bg-white text-left transition disabled:cursor-not-allowed disabled:opacity-50',
+                  isCompact ? 'p-2.5' : 'p-3',
+                )}
+              >
+                <div className="relative mb-2 flex items-start justify-between gap-1.5">
+                  <ProductImage
+                    product={p}
+                    className={cn(
+                      'shrink-0 rounded-lg border border-zinc-200 object-cover',
+                      isCompact ? 'h-12 w-12' : 'h-14 w-14',
+                    )}
+                  />
+                  {state === 'rupture' ? (
+                    <Badge tone="neutral">Rupture</Badge>
+                  ) : state === 'faible' ? (
+                    <Badge tone="warning">Faible</Badge>
+                  ) : null}
+                </div>
+                <p
+                  className={cn(
+                    'line-clamp-2 font-medium leading-tight text-zinc-900',
+                    isCompact ? 'text-[12px]' : 'text-[13px]',
+                    disabled && 'text-zinc-400',
+                  )}
+                >
+                  {p.name}
+                </p>
+                <p
+                  className={cn(
+                    'mt-1 font-mono-nums font-semibold text-zinc-900',
+                    isCompact ? 'text-[13px]' : 'text-[14px]',
+                  )}
+                >
+                  {formatFCFA(p.priceTTC)}
+                </p>
+                <p className="mt-0.5 text-[10px] uppercase tracking-wide text-zinc-400">
+                  {p.stock} en stock
+                </p>
+              </button>
+            )
+          })}
+        </div>
+      )}
     </>
   )
 }

@@ -9,8 +9,8 @@ import { CaisseHeader } from './components/CaisseHeader'
 import { OfflineBanner } from './components/OfflineBanner'
 import { ReceiptModal } from './components/ReceiptModal'
 import { ProductGrid, type ProductGridDensity } from './components/ProductGrid'
-import { type CategoryTab } from './components/Sidebar'
-import { ViewHeader } from './components/ViewHeader'
+import { MobileNavDrawer, Sidebar, type CategoryTab } from './components/Sidebar'
+import { Topbar } from './components/Topbar'
 import { useActiveStore } from './context/ActiveStoreContext'
 import {
   flattenedNavViewIds,
@@ -26,7 +26,11 @@ import { MultiStoreView } from './views/MultiStoreView'
 import { OnlineOrdersValidationView } from './views/OnlineOrdersValidationView'
 import { PersonnelView } from './views/PersonnelView'
 import { StocksView } from './views/StocksView'
-import { db, ensureAllStoreStockRows } from './db/db'
+import {
+  db,
+  ensureAllStoreStockRows,
+  syncProductCategoriesFromProducts,
+} from './db/db'
 import type { CartLine, Product, ProductWithStock, Sale } from './db/types'
 import {
   confirmCheckoutSummary,
@@ -45,12 +49,18 @@ import {
   getLastSyncTimestamp,
 } from './lib/syncMeta'
 import { flushSyncQueue } from './lib/sync'
+import { Tabs } from './ui/Tabs'
+import { Button } from './ui/Button'
+import { useToast } from './ui/Toast'
+import { IconArrowRight, IconReceipt, IconShield } from './ui/icons'
 
 type Props = {
   staff: StaffProfile
   online: boolean
   onLogout: () => void
 }
+
+const SIDEBAR_KEY = 'caisseci-sidebar-collapsed'
 
 export function Shell({ staff, online, onLogout }: Props) {
   const {
@@ -62,11 +72,29 @@ export function Shell({ staff, online, onLogout }: Props) {
     canSwitchStore,
   } = useActiveStore()
 
+  const toast = useToast()
+
   const perms = useMemo(() => effectivePermissions(staff), [staff])
   const navSections = useMemo(() => navSectionsForRole(staff.role), [staff.role])
   const allowedViews = useMemo(() => {
     return flattenedNavViewIds(navSections)
   }, [navSections])
+
+  const [sidebarCollapsed, setSidebarCollapsed] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem(SIDEBAR_KEY) === '1'
+    } catch {
+      return false
+    }
+  })
+  const [mobileNavOpen, setMobileNavOpen] = useState(false)
+  useEffect(() => {
+    try {
+      localStorage.setItem(SIDEBAR_KEY, sidebarCollapsed ? '1' : '0')
+    } catch {
+      /* ignore */
+    }
+  }, [sidebarCollapsed])
 
   const [addProductOpen, setAddProductOpen] = useState(false)
   const [search, setSearch] = useState('')
@@ -94,6 +122,23 @@ export function Shell({ staff, online, onLogout }: Props) {
   const barcodeFieldRef = useRef<HTMLInputElement>(null)
 
   const queueItems = useLiveQuery(() => db.syncQueue.toArray(), [], []) ?? []
+  const productCategoryRows =
+    useLiveQuery(
+      () => db.productCategories.orderBy('sortOrder').toArray(),
+      [],
+      [],
+    ) ?? []
+  const categoryTabs = useMemo<CategoryTab[]>(() => {
+    return ['Tous', ...productCategoryRows.map((r) => r.name)]
+  }, [productCategoryRows])
+
+  useEffect(() => {
+    if (categoryTabs.length === 0) return
+    if (!categoryTabs.includes(category)) {
+      setCategory('Tous')
+    }
+  }, [categoryTabs, category])
+
   const onlineOrdersPending =
     useLiveQuery(
       () => db.onlineOrders.where('status').equals('pending').count(),
@@ -210,14 +255,15 @@ export function Shell({ staff, online, onLogout }: Props) {
       const r = await flushSyncQueue()
       if (r.mode === 'cloud' || r.mode === 'local') {
         refreshSyncMeta()
+        toast.success('Synchronisation terminée')
       }
       if (r.mode === 'failed' && r.error) {
-        window.alert(r.error)
+        toast.error('Synchronisation échouée', r.error)
       }
     } finally {
       setSyncBusy(false)
     }
-  }, [online, refreshSyncMeta])
+  }, [online, refreshSyncMeta, toast])
 
   const refocusBarcodeField = useCallback(() => {
     requestAnimationFrame(() => barcodeFieldRef.current?.focus())
@@ -337,12 +383,16 @@ export function Shell({ staff, online, onLogout }: Props) {
           discountPct,
         },
       })
+      toast.info('Transaction annulée', 'Consignée dans le journal d’audit')
     } catch (e) {
-      window.alert(e instanceof Error ? e.message : String(e))
+      toast.error(
+        'Échec de l’annulation',
+        e instanceof Error ? e.message : String(e),
+      )
       return
     }
     handleClear()
-  }, [cart, discountPct, staff.displayName, staff.id, handleClear])
+  }, [cart, discountPct, staff.displayName, staff.id, handleClear, toast])
 
   const handleApplyPromo = useCallback(() => {
     const c = promoInput.trim().toUpperCase()
@@ -448,6 +498,7 @@ export function Shell({ staff, online, onLogout }: Props) {
         productId: product.id,
         stock: initialStock,
       })
+      await syncProductCategoriesFromProducts()
     },
     [activeStoreId],
   )
@@ -455,8 +506,9 @@ export function Shell({ staff, online, onLogout }: Props) {
   const handleCheckout = useCallback(async () => {
     if (cart.length === 0) return
     if (discountPct > perms.maxDiscountPct) {
-      window.alert(
-        `Remise non autorisée (max. ${perms.maxDiscountPct} % pour ce profil).`,
+      toast.error(
+        'Remise non autorisée',
+        `Plafond de ${perms.maxDiscountPct} % pour ce profil.`,
       )
       return
     }
@@ -465,7 +517,7 @@ export function Shell({ staff, online, onLogout }: Props) {
     const totalR = Math.round(totals.totalTTC)
     const payCheck = validateCheckoutPayment(checkoutPayment, totalR, online)
     if (!payCheck.ok) {
-      window.alert(payCheck.message)
+      toast.error('Paiement incomplet', payCheck.message)
       return
     }
     if (
@@ -556,6 +608,10 @@ export function Shell({ staff, online, onLogout }: Props) {
       setPromoFeedback(null)
       setBarcodeInput('')
       setCheckoutPayment(defaultCheckoutPayment())
+      toast.success(
+        'Vente enregistrée',
+        `${formatFCFA(totals.totalTTC)} encaissés`,
+      )
 
       if (online) {
         const r = await flushSyncQueue()
@@ -565,7 +621,7 @@ export function Shell({ staff, online, onLogout }: Props) {
       }
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e)
-      window.alert(msg)
+      toast.error('Encaissement impossible', msg)
     } finally {
       setCheckoutBusy(false)
     }
@@ -579,6 +635,7 @@ export function Shell({ staff, online, onLogout }: Props) {
     refreshSyncMeta,
     activeStoreId,
     activeStore?.name,
+    toast,
   ])
 
   const handleLogoutClick = useCallback(() => {
@@ -586,158 +643,97 @@ export function Shell({ staff, online, onLogout }: Props) {
     onLogout()
   }, [onLogout])
 
+  const isCaisse = activeView === 'caisse'
+  const densityTabs = useMemo(
+    () => [
+      { id: 'compact' as const, label: 'Compact' },
+      { id: 'confort' as const, label: 'Confort' },
+    ],
+    [],
+  )
+
   return (
-    <div className="flex min-h-svh min-w-0 flex-col">
-      {!online ? <OfflineBanner /> : null}
-      <div className="flex min-h-0 min-w-0 flex-1 flex-col">
-        {receiptOpen ? (
-          <ReceiptModal
-            sale={receiptOpen.sale}
-            autoPrint={receiptOpen.autoPrint}
-            onClose={() => setReceiptOpen(null)}
-          />
-        ) : null}
-        {addProductOpen ? (
-          <AddProductModal
-            activeStoreLabel={activeStore?.name ?? 'Magasin'}
-            onClose={() => setAddProductOpen(false)}
-            onSave={handleSaveNewProduct}
-          />
-        ) : null}
-        <div className="premium-dark-card border-b border-white/10 px-4 py-3 text-slate-100 lg:px-6">
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <div className="flex min-w-0 items-center gap-2">
-              <span className="rounded-lg bg-emerald-500/20 px-2 py-1 text-xs font-semibold text-emerald-200">
-                Espace interne
-              </span>
-              <span className="truncate text-sm font-medium text-slate-200">
-                {staff.displayName} ({staff.role})
-              </span>
-            </div>
-            <div className="flex flex-wrap items-center gap-2">
-              {stores.length > 0 ? (
-                canSwitchStore && stores.length > 1 ? (
-                  <select
-                    value={activeStoreId}
-                    onChange={(e) => setActiveStoreId(e.target.value)}
-                    aria-label="Choisir le magasin"
-                    className="rounded-lg border border-white/10 bg-slate-900/60 px-2 py-1.5 text-xs text-slate-200 outline-none focus:ring-2 focus:ring-emerald-500/40"
-                  >
-                    {stores.map((s) => (
-                      <option key={s.id} value={s.id}>
-                        {s.name}
-                      </option>
-                    ))}
-                  </select>
-                ) : (
-                  <span className="rounded-lg bg-white/6 px-2 py-1.5 text-xs text-slate-300">
-                    {stores.find((s) => s.id === activeStoreId)?.name ?? '—'}
-                  </span>
-                )
-              ) : null}
-              <button
-                type="button"
-                disabled={!online || syncBusy}
-                onClick={handleSyncNow}
-                className="premium-btn-dark rounded-lg px-3 py-1.5 text-xs font-semibold disabled:cursor-not-allowed disabled:opacity-40"
-                title={syncLabel}
-              >
-                {syncBusy
-                  ? 'Synchronisation…'
-                  : online
-                    ? 'Sync'
-                    : 'Hors ligne'}
-              </button>
-              <button
-                type="button"
-                onClick={handleLogoutClick}
-                className="premium-btn-dark rounded-lg px-3 py-1.5 text-xs font-semibold"
-              >
-                Changer de profil
-              </button>
-            </div>
-          </div>
-          <div className="mt-3 flex items-center justify-between gap-2">
-            <nav className="premium-scrollbar flex min-w-0 items-center gap-2 overflow-x-auto pb-1">
-            {navSections.flatMap((section) => section.items).map((item) => {
-              const isActive = activeView === item.id
-              const badgeCount = item.badge === 'lowStock' ? lowStockCount : 0
-              const showStockBadges = 'stockBadges' in item && item.stockBadges
-              const showOnlineOrdersBadge =
-                item.id === 'onlineOrders' && onlineOrdersPending > 0
-              return (
-                <button
-                  key={item.id}
-                  type="button"
-                  onClick={() => setActiveView(item.id)}
-                  className={`inline-flex shrink-0 items-center gap-2 rounded-lg border px-3 py-1.5 text-xs font-semibold transition ${
-                    isActive
-                      ? 'border-emerald-300/40 bg-emerald-500/20 text-white'
-                      : 'border-white/12 bg-white/5 text-slate-300 hover:border-emerald-300/30 hover:text-white'
-                  }`}
-                >
-                  <span>{item.label}</span>
-                  {showStockBadges ? (
-                    <span className="flex shrink-0 gap-1">
-                      {ruptureCount > 0 ? (
-                        <span
-                          className="rounded-md bg-red-500 px-1.5 py-0.5 text-[10px] font-bold text-white"
-                          title="Rupture"
-                        >
-                          {ruptureCount}
-                        </span>
-                      ) : null}
-                      {lowStockCount > 0 ? (
-                        <span
-                          className="rounded-md bg-amber-500/90 px-1.5 py-0.5 text-[10px] font-bold text-slate-950"
-                          title="Sous le seuil"
-                        >
-                          {lowStockCount}
-                        </span>
-                      ) : null}
-                    </span>
-                  ) : showOnlineOrdersBadge ? (
-                    <span className="shrink-0 rounded-md bg-emerald-500/90 px-1.5 py-0.5 text-[10px] font-bold text-slate-950">
-                      {onlineOrdersPending}
-                    </span>
-                  ) : badgeCount > 0 ? (
-                    <span className="shrink-0 rounded-md bg-amber-500/90 px-1.5 py-0.5 text-[10px] font-bold text-slate-950">
-                      {badgeCount}
-                    </span>
-                  ) : null}
-                </button>
-              )
-            })}
-            </nav>
-            <div className="inline-flex shrink-0 overflow-hidden rounded-lg border border-white/12 bg-white/6 p-1">
-              <button
-                type="button"
-                onClick={() => setProductGridDensity('compact')}
-                className={`rounded-md px-2.5 py-1 text-xs font-semibold transition ${
-                  productGridDensity === 'compact'
-                    ? 'bg-emerald-500/25 text-white'
-                    : 'text-slate-300 hover:bg-white/10'
-                }`}
-              >
-                Compact
-              </button>
-              <button
-                type="button"
-                onClick={() => setProductGridDensity('confort')}
-                className={`rounded-md px-2.5 py-1 text-xs font-semibold transition ${
-                  productGridDensity === 'confort'
-                    ? 'bg-emerald-500/25 text-white'
-                    : 'text-slate-300 hover:bg-white/10'
-                }`}
-              >
-                Confort
-              </button>
-            </div>
-          </div>
-        </div>
-        {activeView === 'caisse' ? (
+    <div className="flex min-h-svh w-full max-w-full overflow-x-clip bg-zinc-50">
+      {receiptOpen ? (
+        <ReceiptModal
+          sale={receiptOpen.sale}
+          autoPrint={receiptOpen.autoPrint}
+          onClose={() => setReceiptOpen(null)}
+        />
+      ) : null}
+      {addProductOpen ? (
+        <AddProductModal
+          activeStoreLabel={activeStore?.name ?? 'Magasin'}
+          onClose={() => setAddProductOpen(false)}
+          onSave={handleSaveNewProduct}
+        />
+      ) : null}
+
+      <Sidebar
+        activeView={activeView}
+        onSelectView={setActiveView}
+        ruptureCount={ruptureCount}
+        lowStockCount={lowStockCount}
+        onlineOrdersPending={onlineOrdersPending}
+        stores={stores}
+        activeStoreId={activeStoreId}
+        onActiveStoreChange={setActiveStoreId}
+        canSwitchStore={canSwitchStore}
+        user={{
+          displayName: staff.displayName,
+          initials: staff.initials,
+          role: staff.role,
+        }}
+        onLogout={handleLogoutClick}
+        collapsed={sidebarCollapsed}
+        onToggleCollapsed={() => setSidebarCollapsed((v) => !v)}
+      />
+
+      <MobileNavDrawer
+        open={mobileNavOpen}
+        onClose={() => setMobileNavOpen(false)}
+        activeView={activeView}
+        onSelectView={setActiveView}
+        ruptureCount={ruptureCount}
+        lowStockCount={lowStockCount}
+        onlineOrdersPending={onlineOrdersPending}
+        stores={stores}
+        activeStoreId={activeStoreId}
+        onActiveStoreChange={setActiveStoreId}
+        canSwitchStore={canSwitchStore}
+        user={{
+          displayName: staff.displayName,
+          initials: staff.initials,
+          role: staff.role,
+        }}
+        onLogout={handleLogoutClick}
+      />
+
+      <div className="flex min-w-0 flex-1 flex-col">
+        <Topbar
+          view={activeView}
+          online={online}
+          syncLabel={syncLabel}
+          syncBusy={syncBusy}
+          onSyncNow={handleSyncNow}
+          onOpenMobileMenu={() => setMobileNavOpen(true)}
+          rightSlot={
+            isCaisse ? (
+              <Tabs
+                variant="segmented"
+                items={densityTabs}
+                active={productGridDensity}
+                onChange={setProductGridDensity}
+                className="hidden sm:inline-flex"
+              />
+            ) : null
+          }
+        />
+        {!online ? <OfflineBanner /> : null}
+
+        {isCaisse ? (
           <div className="flex min-w-0 flex-1 flex-col xl:flex-row">
-            <main className="premium-scrollbar min-w-0 flex-1 overflow-y-auto bg-slate-100/70 p-4 pb-24 xl:p-6 xl:pb-6">
+            <main className="ui-scroll min-w-0 flex-1 overflow-y-auto p-3 pb-24 sm:p-4 xl:p-6 xl:pb-6">
               <CaisseHeader
                 ref={barcodeFieldRef}
                 sessionId={SESSION_ID}
@@ -752,48 +748,40 @@ export function Shell({ staff, online, onLogout }: Props) {
                     : undefined
                 }
               />
-              {activeStore ? (
-                <p className="mb-3 text-xs font-medium text-slate-600">
-                  Point de vente :{' '}
-                  <span className="text-slate-900">{activeStore.name}</span>
-                  {stores.length > 1 && !canSwitchStore ? (
-                    <span className="text-slate-400">
-                      {' '}
-                      (changement réservé aux profils autorisés)
-                    </span>
-                  ) : null}
-                </p>
-              ) : null}
               {ruptureCount > 0 ? (
                 <div
                   className={`mb-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border px-4 py-3 text-sm ${
                     perms.canManageStocks
-                      ? 'border-red-200 bg-red-50/90 text-red-950'
-                      : 'border-amber-200 bg-amber-50/90 text-amber-950'
+                      ? 'border-rose-200 bg-rose-50 text-rose-900'
+                      : 'border-amber-200 bg-amber-50 text-amber-900'
                   }`}
                   role="alert"
                 >
-                  <span>
-                    <strong>{ruptureCount}</strong> article
-                    {ruptureCount > 1 ? 's' : ''} en{' '}
-                    <strong>rupture de stock</strong>
-                    {!perms.canManageStocks
-                      ? ' — prévenir un responsable pour réapprovisionnement.'
-                      : ''}
+                  <span className="inline-flex items-center gap-2">
+                    <IconShield className="h-4 w-4" />
+                    <span>
+                      <strong>{ruptureCount}</strong> article
+                      {ruptureCount > 1 ? 's' : ''} en{' '}
+                      <strong>rupture de stock</strong>
+                      {!perms.canManageStocks
+                        ? ' — prévenir un responsable.'
+                        : ''}
+                    </span>
                   </span>
                   {perms.canManageStocks ? (
-                    <button
-                      type="button"
+                    <Button
+                      size="sm"
+                      variant="primary"
                       onClick={() => setActiveView('stocks')}
-                      className="shrink-0 rounded-lg bg-red-700 px-3 py-1.5 text-xs font-semibold text-white hover:bg-red-800"
                     >
                       Gérer les stocks
-                    </button>
+                    </Button>
                   ) : null}
                 </div>
               ) : null}
               <ProductGrid
                 products={displayProducts}
+                categoryTabs={categoryTabs}
                 category={category}
                 onCategoryChange={setCategory}
                 search={search}
@@ -825,140 +813,151 @@ export function Shell({ staff, online, onLogout }: Props) {
             </div>
           </div>
         ) : (
-          <div className="flex min-w-0 flex-1 flex-col bg-linear-to-b from-slate-100 via-slate-50 to-white">
-            <ViewHeader
-              view={activeView}
-              sessionId={SESSION_ID}
-              rightSlot={
-                <button
-                  type="button"
-                  onClick={() => setActiveView('caisse')}
-                  className="premium-btn-dark rounded-xl px-4 py-2 text-sm font-semibold"
-                >
-                  Retour caisse
-                </button>
-              }
-            />
-            <div className="flex-1 overflow-y-auto px-4 pb-10 pt-2 lg:px-8 lg:pt-0">
-              {activeView === 'dash' ? <DashboardView /> : null}
-              {activeView === 'catalogue' ? (
-                <CatalogueView
-                  canManageCatalog={perms.canManageCatalogFull}
-                  canEditPrices={perms.canEditPrices}
-                  density={productGridDensity}
-                  auditActor={{
-                    profileId: staff.id,
-                    displayName: staff.displayName,
-                  }}
-                  onAddClick={() => setAddProductOpen(true)}
-                />
-              ) : null}
-              {activeView === 'stocks' ? (
-                <StocksView
-                  isAdmin={perms.canManageStocks}
-                  auditActor={{
-                    profileId: staff.id,
-                    displayName: staff.displayName,
-                  }}
-                />
-              ) : null}
-              {activeView === 'onlineOrders' ? (
-                <OnlineOrdersValidationView
-                  online={online}
-                  reviewer={{
-                    id: staff.id,
-                    displayName: staff.displayName,
-                  }}
-                />
-              ) : null}
-              {activeView === 'journal' ? (
-                <JournalReportView
-                  canDailyClosure={perms.canDailyClosure}
-                  canProcessRefunds={perms.canProcessRefunds}
-                  currentProfile={{
-                    id: staff.id,
-                    displayName: staff.displayName,
-                  }}
-                  onViewReceipt={(sale) =>
-                    setReceiptOpen({ sale, autoPrint: false })
-                  }
-                />
-              ) : null}
-              {activeView === 'personnel' ? (
-                <PersonnelView currentProfileId={staff.id} />
-              ) : null}
-              {activeView === 'analytique' ? <AnalytiqueView /> : null}
-              {activeView === 'integrations' ? <IntegrationsView /> : null}
-              {activeView === 'network' ? (
-                <MultiStoreView
-                  canConfigureStores={perms.canConfigureStoresAdmin}
-                  canCreateTransfers={perms.canManageStocks}
-                  profileId={staff.id}
-                  auditActor={{
-                    profileId: staff.id,
-                    displayName: staff.displayName,
-                  }}
-                />
-              ) : null}
-            </div>
+          <div className="ui-scroll flex-1 overflow-y-auto px-3 pb-10 pt-3 sm:px-4 sm:pt-4 lg:px-8">
+            {activeView === 'dash' ? <DashboardView /> : null}
+            {activeView === 'catalogue' ? (
+              <CatalogueView
+                canManageCatalog={perms.canManageCatalogFull}
+                canEditPrices={perms.canEditPrices}
+                density={productGridDensity}
+                auditActor={{
+                  profileId: staff.id,
+                  displayName: staff.displayName,
+                }}
+                onAddClick={() => setAddProductOpen(true)}
+              />
+            ) : null}
+            {activeView === 'stocks' ? (
+              <StocksView
+                isAdmin={perms.canManageStocks}
+                auditActor={{
+                  profileId: staff.id,
+                  displayName: staff.displayName,
+                }}
+              />
+            ) : null}
+            {activeView === 'onlineOrders' ? (
+              <OnlineOrdersValidationView
+                online={online}
+                reviewer={{
+                  id: staff.id,
+                  displayName: staff.displayName,
+                }}
+              />
+            ) : null}
+            {activeView === 'journal' ? (
+              <JournalReportView
+                canDailyClosure={perms.canDailyClosure}
+                canProcessRefunds={perms.canProcessRefunds}
+                currentProfile={{
+                  id: staff.id,
+                  displayName: staff.displayName,
+                }}
+                onViewReceipt={(sale) =>
+                  setReceiptOpen({ sale, autoPrint: false })
+                }
+              />
+            ) : null}
+            {activeView === 'personnel' ? (
+              <PersonnelView currentProfileId={staff.id} />
+            ) : null}
+            {activeView === 'analytique' ? <AnalytiqueView /> : null}
+            {activeView === 'integrations' ? <IntegrationsView /> : null}
+            {activeView === 'network' ? (
+              <MultiStoreView
+                canConfigureStores={perms.canConfigureStoresAdmin}
+                canCreateTransfers={perms.canManageStocks}
+                profileId={staff.id}
+                auditActor={{
+                  profileId: staff.id,
+                  displayName: staff.displayName,
+                }}
+              />
+            ) : null}
           </div>
         )}
-        {activeView === 'caisse' ? (
+
+        {isCaisse ? (
           <>
-            <button
-              type="button"
-              onClick={() => setIsFloatingCartOpen(true)}
-              className="fixed bottom-4 right-4 z-30 inline-flex items-center gap-2 rounded-full bg-emerald-600 px-4 py-2 text-sm font-semibold text-white shadow-xl shadow-emerald-700/30 transition hover:bg-emerald-500 xl:hidden"
-            >
-              <span>Panier</span>
-              <span className="rounded-full bg-white/20 px-2 py-0.5 text-xs">
-                {cartItemCount}
-              </span>
-              <span className="text-xs font-medium text-emerald-100">
-                {formatFCFA(cartTotalTTC)}
-              </span>
-            </button>
+            {/* Barre flottante panier (mobile / tablette) */}
+            {!isFloatingCartOpen && cartItemCount > 0 ? (
+              <button
+                type="button"
+                onClick={() => setIsFloatingCartOpen(true)}
+                className="fixed inset-x-3 bottom-3 z-30 flex items-center justify-between gap-3 rounded-2xl bg-zinc-900 px-4 py-3 text-left text-white shadow-[0_12px_32px_-8px_rgba(9,9,11,0.45)] transition hover:bg-zinc-800 xl:hidden"
+              >
+                <span className="flex items-center gap-3">
+                  <span className="relative flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-white/10">
+                    <IconReceipt className="h-4 w-4" />
+                    <span className="absolute -right-1 -top-1 flex h-5 min-w-5 items-center justify-center rounded-full border-2 border-zinc-900 bg-emerald-500 px-1 text-[10px] font-bold text-white">
+                      {cartItemCount}
+                    </span>
+                  </span>
+                  <span className="flex flex-col">
+                    <span className="text-[11px] uppercase tracking-wider text-white/60">
+                      Panier
+                    </span>
+                    <span className="font-mono-nums text-[15px] font-bold">
+                      {formatFCFA(cartTotalTTC)}
+                    </span>
+                  </span>
+                </span>
+                <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-500 px-3 py-1.5 text-[12px] font-semibold text-white">
+                  Encaisser
+                  <IconArrowRight className="h-3.5 w-3.5" />
+                </span>
+              </button>
+            ) : null}
+
+            {/* FAB minimal quand panier vide */}
+            {!isFloatingCartOpen && cartItemCount === 0 ? (
+              <button
+                type="button"
+                onClick={() => setIsFloatingCartOpen(true)}
+                className="fixed bottom-3 right-3 z-30 flex h-12 w-12 items-center justify-center rounded-full bg-zinc-900 text-white shadow-[0_12px_32px_-8px_rgba(9,9,11,0.45)] transition hover:bg-zinc-800 xl:hidden"
+                aria-label="Ouvrir le panier"
+              >
+                <IconReceipt className="h-5 w-5" />
+              </button>
+            ) : null}
+
+            {/* Drawer panier (mobile = full-width, tablette = max-w-md) */}
             {isFloatingCartOpen ? (
-              <div className="fixed inset-0 z-40 xl:hidden">
+              <div
+                className="fixed inset-0 z-40 xl:hidden"
+                role="dialog"
+                aria-modal="true"
+                aria-label="Panier"
+              >
                 <button
                   type="button"
                   aria-label="Fermer le panier"
-                  className="absolute inset-0 bg-slate-950/60 backdrop-blur-[1px]"
+                  className="absolute inset-0 animate-ui-fade-in bg-zinc-950/50 backdrop-blur-[2px]"
                   onClick={() => setIsFloatingCartOpen(false)}
                 />
-                <div className="absolute inset-y-0 right-0 w-[min(92vw,24rem)]">
-                  <div className="flex h-full flex-col bg-white shadow-2xl">
-                    <div className="flex items-center justify-end border-b border-slate-200 px-3 py-2">
-                      <button
-                        type="button"
-                        onClick={() => setIsFloatingCartOpen(false)}
-                        className="rounded-md border border-slate-200 px-2 py-1 text-xs font-medium text-slate-700"
-                      >
-                        Fermer
-                      </button>
-                    </div>
-                    <div className="min-h-0 flex-1 overflow-y-auto">
-                      <CartPanel
-                        lines={cart}
-                        products={displayProducts}
-                        discountPct={discountPct}
-                        maxDiscountPct={perms.maxDiscountPct}
-                        promoInput={promoInput}
-                        onPromoInputChange={setPromoInput}
-                        onApplyPromo={handleApplyPromo}
-                        promoFeedback={promoFeedback}
-                        payment={checkoutPayment}
-                        onPaymentPatch={patchCheckoutPayment}
-                        online={online}
-                        onInc={handleInc}
-                        onDec={handleDec}
-                        onRemove={handleRemove}
-                        onClear={handleClear}
-                        onCancelTransaction={handleCancelCartTransaction}
-                        onCheckout={handleCheckout}
-                        checkoutBusy={checkoutBusy}
-                      />
-                    </div>
+                <div className="absolute inset-y-0 right-0 w-full animate-ui-slide-up sm:w-[min(420px,92vw)]">
+                  <div className="flex h-full flex-col border-l border-zinc-200 bg-white shadow-[var(--shadow-overlay)]">
+                    <CartPanel
+                      lines={cart}
+                      products={displayProducts}
+                      discountPct={discountPct}
+                      maxDiscountPct={perms.maxDiscountPct}
+                      promoInput={promoInput}
+                      onPromoInputChange={setPromoInput}
+                      onApplyPromo={handleApplyPromo}
+                      promoFeedback={promoFeedback}
+                      payment={checkoutPayment}
+                      onPaymentPatch={patchCheckoutPayment}
+                      online={online}
+                      onInc={handleInc}
+                      onDec={handleDec}
+                      onRemove={handleRemove}
+                      onClear={handleClear}
+                      onCancelTransaction={handleCancelCartTransaction}
+                      onCheckout={handleCheckout}
+                      checkoutBusy={checkoutBusy}
+                      onClose={() => setIsFloatingCartOpen(false)}
+                    />
                   </div>
                 </div>
               </div>

@@ -54,13 +54,13 @@ export default function App() {
     <ActiveStoreProvider canSwitchStore={canSwitchStore}>
       {!staff ? (
         showStaffLogin ? (
-          <div className="flex min-h-svh flex-col">
+          <div className="flex min-h-svh flex-col bg-zinc-50">
             {!online ? <OfflineBanner /> : null}
             <div className="mx-auto w-full max-w-5xl px-4 pt-6">
               <button
                 type="button"
                 onClick={() => setShowStaffLogin(false)}
-                className="premium-btn-dark rounded-lg px-3 py-2 text-sm font-medium"
+                className="ui-btn ui-btn-secondary"
               >
                 ← Retour boutique en ligne
               </button>
@@ -77,24 +77,17 @@ export default function App() {
           />
         )
       ) : !seedReady ? (
-        <div className="flex min-h-svh flex-col">
+        <div className="flex min-h-svh flex-col bg-zinc-50">
           {!online ? <OfflineBanner /> : null}
-          <div className="flex flex-1 flex-col items-center justify-center gap-4 text-slate-600">
-            <div className="relative">
-              <span className="absolute inset-0 rounded-full border-2 border-emerald-300/60" />
-              <img
-                src="/branding/greenfever-logo.png"
-                alt="Logo de chargement"
-                className="h-16 w-16 rounded-full border-2 border-amber-200/55 object-cover ring-2 ring-emerald-200/35 animate-[spin_3.2s_linear_infinite]"
-              />
-            </div>
-            <p className="premium-title text-lg font-semibold">
+          <div className="flex flex-1 flex-col items-center justify-center gap-4">
+            <div className="h-12 w-12 animate-spin rounded-full border-2 border-zinc-200 border-t-zinc-900" />
+            <p className="text-sm font-semibold text-zinc-700">
               Chargement de la caisse…
             </p>
             <button
               type="button"
               onClick={handleLogout}
-              className="premium-btn-dark rounded-lg px-3 py-2 text-sm font-medium"
+              className="ui-btn ui-btn-ghost"
             >
               Changer de profil
             </button>

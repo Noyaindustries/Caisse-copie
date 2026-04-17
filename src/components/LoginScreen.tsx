@@ -6,6 +6,9 @@ import {
   subscribeStaffProfiles,
 } from '../auth/profiles'
 import type { StaffAuthMethod, StaffProfile } from '../auth/types'
+import { Button } from '../ui/Button'
+import { Field, Input } from '../ui/Input'
+import { IconArrowLeft, IconArrowRight, IconShield } from '../ui/icons'
 
 type Props = {
   onSuccess: (profile: StaffProfile, authMethod: StaffAuthMethod) => void
@@ -56,99 +59,129 @@ export function LoginScreen({ onSuccess }: Props) {
     onSuccess(selected, authMethod)
   }
 
-  const loginHint = selected?.password
-    ? 'Saisissez le PIN ou le mot de passe du profil.'
-    : 'Saisissez le PIN du profil sélectionné.'
-
   return (
-    <div className="flex min-h-0 flex-1 items-center justify-center px-4 py-10">
-      <div className="w-full max-w-2xl">
-        <section className="premium-dark-card premium-ring rounded-3xl border border-amber-200/25 bg-linear-to-b from-slate-950 to-slate-900 p-6 text-slate-100 shadow-2xl shadow-black/25">
-          <div className="mb-6 flex items-center justify-between gap-3">
-            <div className="flex items-center gap-3">
-              <img
-                src="/branding/greenfever-logo.png"
-                alt="Logo Greenfever"
-                className="h-12 w-12 rounded-full border border-amber-200/45 object-cover"
-              />
-              <div>
-                <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-amber-100/80">
-                  The Greenfever
-                </p>
-                <h1 className="text-xl font-semibold text-white">
-                  Connexion gestion
-                </h1>
-              </div>
+    <div className="grid min-h-svh grid-cols-1 lg:grid-cols-2">
+      {/* Left visual */}
+      <div className="relative hidden overflow-hidden bg-zinc-900 lg:block">
+        <div className="absolute inset-0 opacity-[0.06]">
+          <div className="absolute -left-1/4 top-1/4 h-[600px] w-[600px] rounded-full bg-emerald-400 blur-3xl" />
+          <div className="absolute -right-1/4 bottom-1/4 h-[600px] w-[600px] rounded-full bg-violet-400 blur-3xl" />
+        </div>
+        <div className="relative flex h-full flex-col justify-between p-12 text-zinc-100">
+          <div className="flex items-center gap-3">
+            <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-white text-[14px] font-bold text-zinc-900">
+              C
             </div>
-            <span className="rounded-full border border-emerald-300/25 bg-emerald-500/15 px-3 py-1 text-[11px] font-semibold text-emerald-100">
+            <span className="text-[14px] font-semibold tracking-tight">
+              CaisseCI
+            </span>
+          </div>
+          <div>
+            <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-emerald-400/90">
+              Espace interne
+            </p>
+            <h2 className="mt-3 text-3xl font-semibold tracking-tight text-white">
+              Le point de vente,
+              <br />
+              entièrement local et sécurisé.
+            </h2>
+            <p className="mt-4 max-w-md text-[14px] leading-relaxed text-zinc-400">
+              Caisse, stocks, paiements, rapport quotidien et synchronisation
+              cloud — fonctionne hors ligne.
+            </p>
+          </div>
+          <p className="text-[11px] text-zinc-500">
+            © {new Date().getFullYear()} · Démo locale · Vos données restent sur
+            cet appareil
+          </p>
+        </div>
+      </div>
+
+      {/* Right form */}
+      <div className="flex min-h-svh items-center justify-center bg-zinc-50 p-6">
+        <div className="w-full max-w-md">
+          <div className="mb-6">
+            <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-3 py-1 text-[11px] font-semibold text-emerald-700">
+              <IconShield className="h-3 w-3" />
               Session sécurisée
             </span>
+            <h1 className="mt-3 text-[24px] font-semibold tracking-tight text-zinc-900">
+              Connexion
+            </h1>
+            <p className="mt-1 text-[13px] text-zinc-500">
+              {selected
+                ? `Saisissez votre PIN${selected.password ? ' ou mot de passe' : ''}.`
+                : 'Sélectionnez votre profil pour continuer.'}
+            </p>
           </div>
 
           {!selected ? (
-            <div className="space-y-3">
-              <p className="text-sm text-slate-300">
-                Sélectionnez un profil pour ouvrir l’espace interne.
-              </p>
+            <div className="space-y-2">
               {profiles.map((p) => (
                 <button
                   key={p.id}
                   type="button"
                   onClick={() => handleSelect(p)}
-                  className="flex w-full items-center gap-3 rounded-2xl border border-white/12 bg-slate-950/65 p-3.5 text-left transition hover:border-amber-200/40 hover:bg-slate-900/90"
+                  className="ui-card-hover group flex w-full items-center gap-3 rounded-xl border border-zinc-200 bg-white p-3 text-left"
                 >
-                  <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-white/15 bg-slate-800 text-sm font-semibold text-slate-100">
+                  <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-zinc-100 text-[12px] font-bold text-zinc-700 group-hover:bg-zinc-900 group-hover:text-white">
                     {p.initials}
                   </span>
                   <span className="min-w-0 flex-1">
-                    <span className="block truncate text-sm font-semibold text-white">
+                    <span className="block truncate text-[14px] font-semibold text-zinc-900">
                       {p.displayName}
                     </span>
-                    <span className="text-xs text-slate-400">
+                    <span className="text-[11px] text-zinc-500">
                       {roleLabel(p.role)}
                     </span>
                   </span>
-                  <span className="text-amber-100/80" aria-hidden>
-                    →
-                  </span>
+                  <IconArrowRight className="h-4 w-4 text-zinc-400 transition group-hover:translate-x-0.5 group-hover:text-zinc-900" />
                 </button>
               ))}
-              <p className="pt-2 text-xs text-slate-400">
-                Démo : caissier <code className="rounded bg-slate-800 px-1">1234</code>{' '}
-                / <code className="rounded bg-slate-800 px-1">caisse</code> · gérant{' '}
-                <code className="rounded bg-slate-800 px-1">4321</code> · admin{' '}
-                <code className="rounded bg-slate-800 px-1">5678</code>
+
+              <p className="mt-4 rounded-lg bg-zinc-100 p-3 text-[11px] text-zinc-600">
+                <strong className="font-semibold text-zinc-800">Démo :</strong>{' '}
+                caissier <code className="ui-kbd">1234</code>{' '}
+                <code className="ui-kbd">caisse</code> · gérant{' '}
+                <code className="ui-kbd">4321</code> · admin{' '}
+                <code className="ui-kbd">5678</code>
               </p>
             </div>
           ) : (
             <form
               onSubmit={handleSubmit}
-              className="rounded-2xl border border-white/12 bg-slate-950/65 p-5"
+              className="space-y-4 rounded-xl border border-zinc-200 bg-white p-5"
             >
-              <div className="mb-4 flex items-center justify-between gap-3">
-                <div>
-                  <p className="text-xs uppercase tracking-wide text-slate-400">
-                    Profil sélectionné
-                  </p>
-                  <p className="text-sm font-semibold text-white">
-                    {selected.displayName}
-                  </p>
-                  <p className="text-xs text-slate-400">{roleLabel(selected.role)}</p>
+              <div className="flex items-center justify-between gap-3">
+                <div className="flex items-center gap-3">
+                  <span className="flex h-10 w-10 items-center justify-center rounded-full bg-zinc-900 text-[12px] font-bold text-white">
+                    {selected.initials}
+                  </span>
+                  <div>
+                    <p className="text-[14px] font-semibold text-zinc-900">
+                      {selected.displayName}
+                    </p>
+                    <p className="text-[11px] text-zinc-500">
+                      {roleLabel(selected.role)}
+                    </p>
+                  </div>
                 </div>
-                <button
-                  type="button"
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  iconLeft={<IconArrowLeft />}
                   onClick={handleBack}
-                  className="rounded-lg border border-slate-700 px-2.5 py-1 text-xs text-slate-300 hover:border-slate-500 hover:text-white"
                 >
-                  Autre profil
-                </button>
+                  Autre
+                </Button>
               </div>
 
-              <label className="block">
-                <span className="text-xs font-semibold uppercase tracking-wide text-slate-400">
-                  PIN ou mot de passe
-                </span>
-                <input
+              <Field
+                label="PIN ou mot de passe"
+                error={error ?? undefined}
+                required
+              >
+                <Input
                   type="password"
                   autoComplete="current-password"
                   value={secret}
@@ -156,27 +189,19 @@ export function LoginScreen({ onSuccess }: Props) {
                     setSecret(e.target.value)
                     setError(null)
                   }}
-                  className="premium-input mt-1.5 w-full rounded-xl bg-slate-900/70 px-4 py-3 font-mono text-lg tracking-wide text-slate-100"
                   placeholder="••••"
                   autoFocus
+                  className="font-mono-nums text-base tracking-wider"
+                  invalid={!!error}
                 />
-              </label>
-              <p className="mt-2 text-xs text-slate-400">{loginHint}</p>
-              {error ? (
-                <p className="mt-2 text-sm text-red-400" role="alert">
-                  {error}
-                </p>
-              ) : null}
-              <button
-                type="submit"
-                className="premium-btn mt-5 w-full rounded-xl py-3 text-sm font-semibold"
-              >
+              </Field>
+
+              <Button type="submit" variant="primary" fullWidth size="lg">
                 Ouvrir l’espace gestion
-              </button>
+              </Button>
             </form>
           )}
-        </section>
-
+        </div>
       </div>
     </div>
   )

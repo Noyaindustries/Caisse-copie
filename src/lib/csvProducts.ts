@@ -1,11 +1,12 @@
-import { db, ensureAllStoreStockRows } from '../db/db'
+import { db, ensureAllStoreStockRows, syncProductCategoriesFromProducts } from '../db/db'
 import { DEFAULT_STORE_ID } from '../db/seedStores'
 import type { Product, ProductCategory } from '../db/types'
 import { PRODUCT_CATEGORY_LIST } from '../db/types'
 import { storeStockRowId } from './storeStockId'
 
 export const CSV_TEMPLATE = `nom;prix_ttc;prix_revient_ttc;code_barres;categorie;stock;seuil;tva_pct;archive;image_url
-Exemple article;1000;600;1234567890123;Boissons;0;5;18;;`
+Exemple boisson;1000;600;1234567890123;Boissons;0;5;18;;
+Autre exemple;500;;9876543210987;Epicerie fine;2;3;18;;`
 
 function splitCsvLine(line: string, delimiter: string): string[] {
   const out: string[] = []
@@ -97,9 +98,10 @@ export type CsvImportSummary = {
 }
 
 function parseCategory(raw: string): ProductCategory | null {
-  const t = raw.trim()
-  if (PRODUCT_CATEGORY_LIST.includes(t as ProductCategory)) {
-    return t as ProductCategory
+  const t = raw.trim().replace(/\s+/g, ' ')
+  if (!t) return null
+  if (PRODUCT_CATEGORY_LIST.includes(t)) {
+    return t
   }
   const n = normHeader(t).replace(/_/g, '')
   const map: Record<string, ProductCategory> = {
@@ -109,7 +111,8 @@ function parseCategory(raw: string): ProductCategory | null {
     hygienie: 'Hygiène',
     autre: 'Autre',
   }
-  return map[n] ?? null
+  if (map[n]) return map[n]
+  return t
 }
 
 function parseBoolArchive(raw: string | undefined): boolean {
@@ -335,6 +338,7 @@ export async function applyProductsCsvImport(
   })
 
   await ensureAllStoreStockRows()
+  await syncProductCategoriesFromProducts()
   return { created, updated, errors }
 }
 

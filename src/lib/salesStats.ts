@@ -24,6 +24,15 @@ export function filterSalesToday(sales: Sale[], now = Date.now()): Sale[] {
   return filterSalesOnLocalDay(sales, localYmd(new Date(now)))
 }
 
+/** Ventes rattachées au magasin (les tickets sans `storeId` restent visibles partout). */
+export function filterSalesForStore(sales: Sale[], storeId: string): Sale[] {
+  return sales.filter((s) => !s.storeId || s.storeId === storeId)
+}
+
+export function filterSalesSince(sales: Sale[], sinceMs: number): Sale[] {
+  return sales.filter((s) => s.createdAt >= sinceMs)
+}
+
 /** CA TTC net après remboursements. */
 export function sumTotalTTC(sales: Sale[]): number {
   return sales.reduce((s, x) => s + saleNetTTC(x), 0)

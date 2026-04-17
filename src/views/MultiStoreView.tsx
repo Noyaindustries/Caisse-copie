@@ -5,13 +5,21 @@ import type { StockTransfer, Store } from '../db/types'
 import type { AuditActor } from '../lib/auditLog'
 import { appendAuditEvent } from '../lib/auditLog'
 import { storeStockRowId } from '../lib/storeStockId'
+import { Badge } from '../ui/Badge'
+import { Button } from '../ui/Button'
+import { Card, CardContent } from '../ui/Card'
+import { EmptyState } from '../ui/EmptyState'
+import { Field, Input, Select } from '../ui/Input'
+import { PageHeader, SectionHeader } from '../ui/PageHeader'
+import { Tabs } from '../ui/Tabs'
+import { Table, TBody, Td, Th, THead, Tr } from '../ui/Table'
+import { useToast } from '../ui/Toast'
+import { IconNetwork, IconPlus, IconStore, IconTruck } from '../ui/icons'
 
 type Tab = 'consolidated' | 'transfers' | 'stores'
 
 type Props = {
-  /** Onglet création / liste magasins. */
   canConfigureStores: boolean
-  /** Formulaire de transfert de stock. */
   canCreateTransfers: boolean
   profileId: string
   auditActor: AuditActor
@@ -23,6 +31,7 @@ export function MultiStoreView({
   profileId,
   auditActor,
 }: Props) {
+  const toast = useToast()
   const [tab, setTab] = useState<Tab>('consolidated')
   const stores =
     useLiveQuery(() => db.stores.orderBy('sortOrder').toArray(), [], []) ?? []
@@ -55,7 +64,6 @@ export function MultiStoreView({
   const [tQty, setTQty] = useState('')
   const [tNote, setTNote] = useState('')
   const [tBusy, setTBusy] = useState(false)
-  const [tMsg, setTMsg] = useState<string | null>(null)
 
   const [newStoreName, setNewStoreName] = useState('')
   const [newStoreCode, setNewStoreCode] = useState('')
@@ -73,24 +81,23 @@ export function MultiStoreView({
   )
 
   const doTransfer = useCallback(async () => {
-    setTMsg(null)
     if (!fromId || !toId || fromId === toId) {
-      window.alert('Choisissez deux magasins distincts.')
+      toast.error('Magasins invalides', 'Choisissez deux magasins distincts.')
       return
     }
     const code = tBarcode.trim()
     const qty = Number.parseInt(tQty.replace(/\s/g, ''), 10)
     if (!code) {
-      window.alert('Code-barres requis.')
+      toast.error('Code-barres requis')
       return
     }
     if (!Number.isFinite(qty) || qty <= 0) {
-      window.alert('Quantité invalide.')
+      toast.error('Quantité invalide')
       return
     }
     const prod = await db.products.where('barcode').equals(code).first()
     if (!prod) {
-      window.alert('Article introuvable.')
+      toast.error('Article introuvable')
       return
     }
     const transferId = crypto.randomUUID()
@@ -152,37 +159,33 @@ export function MultiStoreView({
           createdByProfileId: profileId,
         },
       })
-      setTMsg(`Transfert enregistré : ${qty} × ${prod.name} vers ${toName}`)
+      toast.success(
+        'Transfert enregistré',
+        `${qty} × ${prod.name} → ${toName}`,
+      )
       setTBarcode('')
       setTQty('')
       setTNote('')
     } catch (e) {
-      window.alert(e instanceof Error ? e.message : String(e))
+      toast.error(
+        'Transfert échoué',
+        e instanceof Error ? e.message : String(e),
+      )
     } finally {
       setTBusy(false)
     }
-  }, [
-    fromId,
-    toId,
-    tBarcode,
-    tQty,
-    tNote,
-    profileId,
-    storeById,
-    auditActor,
-  ])
+  }, [fromId, toId, tBarcode, tQty, tNote, profileId, storeById, auditActor, toast])
 
   const addStore = useCallback(async () => {
     const name = newStoreName.trim()
     const sc = newStoreCode.trim().toUpperCase().slice(0, 6)
     if (!name || !sc) {
-      window.alert('Nom et code court requis.')
+      toast.error('Nom et code requis')
       return
     }
     setStoreBusy(true)
     try {
-      const maxSort =
-        stores.reduce((m, s) => Math.max(m, s.sortOrder), -1) + 1
+      const maxSort = stores.reduce((m, s) => Math.max(m, s.sortOrder), -1) + 1
       const s: Store = {
         id: crypto.randomUUID(),
         name,
@@ -193,275 +196,266 @@ export function MultiStoreView({
       await ensureAllStoreStockRows()
       setNewStoreName('')
       setNewStoreCode('')
+      toast.success('Magasin ajouté', name)
     } finally {
       setStoreBusy(false)
     }
-  }, [newStoreName, newStoreCode, stores])
+  }, [newStoreName, newStoreCode, stores, toast])
 
-  const tabBtn = (id: Tab, label: string) => (
-    <button
-      key={id}
-      type="button"
-      onClick={() => setTab(id)}
-      className={`rounded-full px-4 py-2 text-xs font-semibold transition ${
-        tab === id
-          ? 'bg-slate-900 text-white'
-          : 'bg-white text-slate-600 ring-1 ring-slate-200 hover:bg-slate-50'
-      }`}
-    >
-      {label}
-    </button>
-  )
+  const tabs = useMemo(() => {
+    const arr: Array<{ id: Tab; label: string }> = [
+      { id: 'consolidated', label: 'Vue consolidée' },
+      { id: 'transfers', label: 'Transferts' },
+    ]
+    if (canConfigureStores) arr.push({ id: 'stores', label: 'Magasins' })
+    return arr
+  }, [canConfigureStores])
 
   return (
-    <div className="space-y-8">
-      <div className="flex flex-wrap gap-2">
-        {tabBtn('consolidated', 'Vue consolidée')}
-        {tabBtn('transfers', 'Transferts')}
-        {canConfigureStores ? tabBtn('stores', 'Magasins') : null}
-      </div>
+    <div className="space-y-5 pb-6">
+      <PageHeader
+        eyebrow="Réseau"
+        title="Multi-magasins"
+        subtitle="Stocks par site, transferts internes et configuration"
+      />
+
+      <Tabs items={tabs} active={tab} onChange={setTab} />
 
       {tab === 'consolidated' ? (
-        <div className="overflow-hidden rounded-2xl border border-slate-200/80 bg-white shadow-sm ring-1 ring-slate-100">
-          <p className="border-b border-slate-100 bg-slate-50 px-4 py-3 text-sm text-slate-700">
-            Stocks par article et par point de vente, avec total réseau (vue
-            gérant).
-          </p>
-          <div className="overflow-x-auto">
-            <table className="w-full min-w-[640px] text-left text-sm">
-              <thead>
-                <tr className="border-b border-slate-200 bg-slate-50/90 text-[11px] font-semibold uppercase tracking-wider text-slate-500">
-                  <th className="sticky left-0 z-10 bg-slate-50 px-4 py-3">
-                    Article
-                  </th>
-                  {stores.map((s) => (
-                    <th
-                      key={s.id}
-                      className="px-3 py-3 text-right font-mono-nums"
-                    >
-                      {s.shortCode}
-                    </th>
-                  ))}
-                  <th className="px-4 py-3 text-right font-mono-nums">Total</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100">
-                {sortedProducts.map((p) => {
-                  const row = stockMatrix.get(p.id)
-                  let total = 0
-                  return (
-                    <tr key={p.id} className="hover:bg-slate-50/60">
-                      <td className="sticky left-0 z-10 bg-white px-4 py-2 font-medium text-slate-900">
-                        {p.name}
-                        <span className="block text-[10px] font-normal text-slate-500">
-                          {p.barcode}
-                        </span>
-                      </td>
-                      {stores.map((s) => {
-                        const q = row?.get(s.id) ?? 0
-                        total += q
-                        return (
-                          <td
-                            key={s.id}
-                            className="px-3 py-2 text-right font-mono-nums text-slate-700"
-                          >
-                            {q}
-                          </td>
-                        )
-                      })}
-                      <td className="px-4 py-2 text-right font-mono-nums font-semibold text-emerald-800">
-                        {total}
-                      </td>
-                    </tr>
-                  )
-                })}
-              </tbody>
-            </table>
-          </div>
-          {sortedProducts.length === 0 ? (
-            <p className="py-10 text-center text-sm text-slate-500">
-              Aucun produit.
-            </p>
-          ) : null}
-        </div>
+        sortedProducts.length === 0 ? (
+          <EmptyState title="Aucun produit" />
+        ) : (
+          <Table minWidth={Math.max(560, 220 + stores.length * 80 + 80)}>
+            <THead>
+              <Tr hover={false}>
+                <Th sticky>Article</Th>
+                {stores.map((s) => (
+                  <Th key={s.id} align="right">
+                    {s.shortCode}
+                  </Th>
+                ))}
+                <Th align="right">Total</Th>
+              </Tr>
+            </THead>
+            <TBody>
+              {sortedProducts.map((p) => {
+                const row = stockMatrix.get(p.id)
+                let total = 0
+                return (
+                  <Tr key={p.id}>
+                    <Td sticky className="font-medium text-zinc-900">
+                      {p.name}
+                      <span className="block font-mono-nums text-[10px] text-zinc-400">
+                        {p.barcode}
+                      </span>
+                    </Td>
+                    {stores.map((s) => {
+                      const q = row?.get(s.id) ?? 0
+                      total += q
+                      return (
+                        <Td key={s.id} align="right" mono className="text-zinc-700">
+                          {q}
+                        </Td>
+                      )
+                    })}
+                    <Td align="right" mono className="font-bold text-zinc-900">
+                      {total}
+                    </Td>
+                  </Tr>
+                )
+              })}
+            </TBody>
+          </Table>
+        )
       ) : null}
 
       {tab === 'transfers' ? (
-        <div className="space-y-6 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
-          <p className="text-sm text-slate-600">
-            Transfert interne : le stock est retiré du magasin source et ajouté
-            au magasin destination. Réservé aux comptes autorisés.
-          </p>
-          {!canCreateTransfers ? (
-            <p className="text-sm text-amber-800">
-              Vous pouvez consulter l’historique ; la création de transferts est
-              réservée aux profils autorisés (gérant, administrateur).
-            </p>
-          ) : null}
+        <div className="space-y-5">
           {canCreateTransfers ? (
-            <div className="grid gap-4 md:grid-cols-2">
-              <label className="block text-xs font-medium text-slate-600">
-                Magasin expéditeur
-                <select
-                  value={fromId}
-                  onChange={(e) => setFromId(e.target.value)}
-                  className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm"
-                >
-                  <option value="">—</option>
-                  {stores.map((s) => (
-                    <option key={s.id} value={s.id}>
-                      {s.name}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label className="block text-xs font-medium text-slate-600">
-                Magasin destinataire
-                <select
-                  value={toId}
-                  onChange={(e) => setToId(e.target.value)}
-                  className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm"
-                >
-                  <option value="">—</option>
-                  {stores.map((s) => (
-                    <option key={s.id} value={s.id}>
-                      {s.name}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label className="block text-xs font-medium text-slate-600">
-                Code-barres
-                <input
-                  value={tBarcode}
-                  onChange={(e) => setTBarcode(e.target.value)}
-                  className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 font-mono-nums text-sm"
-                />
-              </label>
-              <label className="block text-xs font-medium text-slate-600">
-                Quantité
-                <input
-                  inputMode="numeric"
-                  value={tQty}
-                  onChange={(e) => setTQty(e.target.value)}
-                  className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 font-mono-nums text-sm"
-                />
-              </label>
-              <label className="col-span-full block text-xs font-medium text-slate-600">
-                Note (optionnel)
-                <input
-                  value={tNote}
-                  onChange={(e) => setTNote(e.target.value)}
-                  className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm"
-                />
-              </label>
-              <div className="col-span-full">
-                <button
-                  type="button"
-                  disabled={tBusy}
-                  onClick={() => void doTransfer()}
-                  className="rounded-xl bg-emerald-600 px-5 py-2.5 text-sm font-semibold text-white hover:bg-emerald-700 disabled:opacity-50"
-                >
-                  {tBusy ? 'Traitement…' : 'Valider le transfert'}
-                </button>
-                {tMsg ? (
-                  <p className="mt-2 text-sm text-emerald-800" role="status">
-                    {tMsg}
-                  </p>
-                ) : null}
-              </div>
-            </div>
-          ) : null}
-
-          <div>
-            <h3 className="text-sm font-semibold text-slate-900">
-              Historique récent
-            </h3>
-            <ul className="mt-3 max-h-64 space-y-2 overflow-y-auto text-xs text-slate-600">
-              {transfers.length === 0 ? (
-                <li>Aucun transfert enregistré.</li>
-              ) : (
-                transfers.slice(0, 40).map((tr) => {
-                  const p = products.find((x) => x.id === tr.productId)
-                  const from = storeById.get(tr.fromStoreId)?.name ?? tr.fromStoreId
-                  const to = storeById.get(tr.toStoreId)?.name ?? tr.toStoreId
-                  return (
-                    <li
-                      key={tr.id}
-                      className="rounded-lg border border-slate-100 bg-slate-50/80 px-3 py-2"
+            <Card>
+              <CardContent>
+                <div className="mb-3 flex items-center gap-2">
+                  <IconTruck className="h-4 w-4 text-zinc-500" />
+                  <h2 className="text-[14px] font-semibold text-zinc-900">
+                    Nouveau transfert
+                  </h2>
+                </div>
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <Field label="Magasin expéditeur" required>
+                    <Select
+                      value={fromId}
+                      onChange={(e) => setFromId(e.target.value)}
                     >
-                      <span className="font-mono-nums text-slate-800">
-                        {new Date(tr.createdAt).toLocaleString('fr-FR')}
-                      </span>
-                      {' · '}
-                      {tr.qty} × {p?.name ?? tr.productId}{' '}
-                      <span className="text-slate-500">
-                        {from} → {to}
-                      </span>
-                      {tr.note ? (
-                        <span className="block text-slate-500">{tr.note}</span>
-                      ) : null}
-                    </li>
-                  )
-                })
-              )}
-            </ul>
-          </div>
+                      <option value="">—</option>
+                      {stores.map((s) => (
+                        <option key={s.id} value={s.id}>
+                          {s.name}
+                        </option>
+                      ))}
+                    </Select>
+                  </Field>
+                  <Field label="Magasin destinataire" required>
+                    <Select
+                      value={toId}
+                      onChange={(e) => setToId(e.target.value)}
+                    >
+                      <option value="">—</option>
+                      {stores.map((s) => (
+                        <option key={s.id} value={s.id}>
+                          {s.name}
+                        </option>
+                      ))}
+                    </Select>
+                  </Field>
+                  <Field label="Code-barres" required>
+                    <Input
+                      value={tBarcode}
+                      onChange={(e) => setTBarcode(e.target.value)}
+                      className="font-mono-nums"
+                    />
+                  </Field>
+                  <Field label="Quantité" required>
+                    <Input
+                      inputMode="numeric"
+                      value={tQty}
+                      onChange={(e) => setTQty(e.target.value)}
+                      className="font-mono-nums"
+                    />
+                  </Field>
+                  <Field label="Note (optionnel)" className="sm:col-span-2">
+                    <Input
+                      value={tNote}
+                      onChange={(e) => setTNote(e.target.value)}
+                    />
+                  </Field>
+                </div>
+                <div className="mt-4">
+                  <Button
+                    variant="accent"
+                    loading={tBusy}
+                    onClick={() => void doTransfer()}
+                  >
+                    Valider le transfert
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+          ) : (
+            <Card>
+              <CardContent>
+                <p className="text-[13px] text-zinc-600">
+                  Vous pouvez consulter l’historique. Création réservée aux
+                  profils gérant ou administrateur.
+                </p>
+              </CardContent>
+            </Card>
+          )}
+
+          <SectionHeader title="Historique récent" />
+          {transfers.length === 0 ? (
+            <EmptyState
+              title="Aucun transfert"
+              description="Les mouvements apparaîtront ici."
+              variant="flat"
+            />
+          ) : (
+            <Card>
+              <CardContent className="!p-0">
+                <ul className="divide-y divide-zinc-100">
+                  {transfers.slice(0, 40).map((tr) => {
+                    const p = products.find((x) => x.id === tr.productId)
+                    const from = storeById.get(tr.fromStoreId)?.name ?? tr.fromStoreId
+                    const to = storeById.get(tr.toStoreId)?.name ?? tr.toStoreId
+                    return (
+                      <li
+                        key={tr.id}
+                        className="flex flex-wrap items-center justify-between gap-2 px-4 py-2.5 text-[13px]"
+                      >
+                        <div className="min-w-0">
+                          <p className="truncate font-medium text-zinc-900">
+                            {tr.qty} × {p?.name ?? tr.productId}
+                          </p>
+                          <p className="text-[11px] text-zinc-500">
+                            {from} → {to}
+                            {tr.note ? ` · ${tr.note}` : ''}
+                          </p>
+                        </div>
+                        <span className="font-mono-nums text-[11px] text-zinc-500">
+                          {new Date(tr.createdAt).toLocaleString('fr-FR')}
+                        </span>
+                      </li>
+                    )
+                  })}
+                </ul>
+              </CardContent>
+            </Card>
+          )}
         </div>
       ) : null}
 
       {tab === 'stores' && canConfigureStores ? (
-        <div className="space-y-6 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
-          <h3 className="text-sm font-semibold text-slate-900">
-            Points de vente
-          </h3>
-          <ul className="space-y-2 text-sm">
+        <div className="space-y-5">
+          <SectionHeader title="Points de vente" />
+          <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
             {stores.map((s) => (
-              <li
-                key={s.id}
-                className="flex items-center justify-between rounded-xl border border-slate-100 px-4 py-3"
-              >
-                <span>
-                  <strong className="text-slate-900">{s.name}</strong>
-                  <span className="ml-2 rounded bg-slate-100 px-2 py-0.5 text-xs font-mono text-slate-600">
-                    {s.shortCode}
-                  </span>
-                </span>
-              </li>
+              <Card key={s.id}>
+                <CardContent className="flex items-center justify-between gap-3">
+                  <div className="flex min-w-0 items-center gap-3">
+                    <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-zinc-100 text-zinc-500">
+                      <IconStore className="h-4 w-4" />
+                    </span>
+                    <div className="min-w-0">
+                      <p className="truncate text-[13px] font-semibold text-zinc-900">
+                        {s.name}
+                      </p>
+                      <p className="font-mono-nums text-[11px] text-zinc-500">
+                        {s.shortCode}
+                      </p>
+                    </div>
+                  </div>
+                  <Badge tone="neutral">Actif</Badge>
+                </CardContent>
+              </Card>
             ))}
-          </ul>
-          <div className="border-t border-slate-100 pt-4">
-            <p className="text-xs font-medium text-slate-600">
-              Ajouter un magasin (stocks initialisés à 0 pour tous les articles)
-            </p>
-            <div className="mt-3 flex flex-col gap-3 sm:flex-row sm:items-end">
-              <label className="flex-1 text-xs text-slate-600">
-                Nom
-                <input
-                  value={newStoreName}
-                  onChange={(e) => setNewStoreName(e.target.value)}
-                  className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm"
-                />
-              </label>
-              <label className="w-full sm:w-28 text-xs text-slate-600">
-                Code
-                <input
-                  value={newStoreCode}
-                  onChange={(e) => setNewStoreCode(e.target.value)}
-                  maxLength={6}
-                  className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm uppercase"
-                />
-              </label>
-              <button
-                type="button"
-                disabled={storeBusy}
-                onClick={() => void addStore()}
-                className="rounded-xl bg-slate-900 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-800 disabled:opacity-50"
-              >
-                Ajouter
-              </button>
-            </div>
           </div>
+
+          <Card>
+            <CardContent>
+              <div className="mb-3 flex items-center gap-2">
+                <IconNetwork className="h-4 w-4 text-zinc-500" />
+                <h2 className="text-[14px] font-semibold text-zinc-900">
+                  Ajouter un magasin
+                </h2>
+              </div>
+              <p className="mb-3 text-[12px] text-zinc-500">
+                Stocks initialisés à 0 pour tous les articles.
+              </p>
+              <div className="grid gap-2 sm:grid-cols-[1fr_auto_auto] sm:items-end">
+                <Field label="Nom" required>
+                  <Input
+                    value={newStoreName}
+                    onChange={(e) => setNewStoreName(e.target.value)}
+                  />
+                </Field>
+                <Field label="Code" required className="sm:w-32">
+                  <Input
+                    value={newStoreCode}
+                    onChange={(e) => setNewStoreCode(e.target.value)}
+                    maxLength={6}
+                    className="uppercase"
+                  />
+                </Field>
+                <Button
+                  variant="accent"
+                  iconLeft={<IconPlus />}
+                  loading={storeBusy}
+                  onClick={() => void addStore()}
+                >
+                  Ajouter
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
         </div>
       ) : null}
     </div>

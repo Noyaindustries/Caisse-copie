@@ -5,6 +5,19 @@ import type { OnlineOrder, Sale } from '../db/types'
 import { formatFCFA } from '../lib/money'
 import { storeStockRowId } from '../lib/storeStockId'
 import { flushSyncQueue } from '../lib/sync'
+import { Badge } from '../ui/Badge'
+import { Button } from '../ui/Button'
+import { Card, CardContent } from '../ui/Card'
+import { EmptyState } from '../ui/EmptyState'
+import { PageHeader } from '../ui/PageHeader'
+import { SectionHeader } from '../ui/PageHeader'
+import { useToast } from '../ui/Toast'
+import {
+  IconCheck,
+  IconClose,
+  IconOnlineOrders,
+  IconTruck,
+} from '../ui/icons'
 
 type Props = {
   online: boolean
@@ -32,6 +45,7 @@ function paymentLabel(method: OnlineOrder['paymentMethod']): string {
 }
 
 export function OnlineOrdersValidationView({ online, reviewer }: Props) {
+  const toast = useToast()
   const orders = useLiveQuery(
     () => db.onlineOrders.orderBy('createdAt').reverse().toArray(),
     [],
@@ -55,13 +69,7 @@ export function OnlineOrdersValidationView({ online, reviewer }: Props) {
       try {
         await db.transaction(
           'rw',
-          [
-            db.onlineOrders,
-            db.products,
-            db.storeStocks,
-            db.sales,
-            db.syncQueue,
-          ],
+          [db.onlineOrders, db.products, db.storeStocks, db.sales, db.syncQueue],
           async () => {
             const fresh = await db.onlineOrders.get(order.id)
             if (!fresh || fresh.status !== 'pending') return
@@ -70,7 +78,7 @@ export function OnlineOrdersValidationView({ online, reviewer }: Props) {
               const product = await db.products.get(line.productId)
               if (!product || product.archived) {
                 throw new Error(
-                  `Produit indisponible: « ${line.name} ». Validation interrompue.`,
+                  `Produit indisponible: « ${line.name} ».`,
                 )
               }
               const stockId = storeStockRowId(fresh.storeId, line.productId)
@@ -141,21 +149,24 @@ export function OnlineOrdersValidationView({ online, reviewer }: Props) {
         if (online) {
           await flushSyncQueue()
         }
+        toast.success('Commande validée', order.customerName)
+      } catch (e) {
+        toast.error(
+          'Validation impossible',
+          e instanceof Error ? e.message : String(e),
+        )
       } finally {
         setBusyOrderId(null)
       }
     },
-    [busyOrderId, online, reviewer.displayName, reviewer.id],
+    [busyOrderId, online, reviewer.displayName, reviewer.id, toast],
   )
 
   const rejectOrder = useCallback(
     async (order: OnlineOrder) => {
       if (busyOrderId) return
       const reason =
-        window.prompt(
-          'Motif de rejet (optionnel, visible dans l’historique):',
-          '',
-        ) ?? ''
+        window.prompt('Motif de rejet (optionnel) :', '') ?? ''
       setBusyOrderId(order.id)
       try {
         const fresh = await db.onlineOrders.get(order.id)
@@ -168,154 +179,156 @@ export function OnlineOrdersValidationView({ online, reviewer }: Props) {
           reviewedByDisplayName: reviewer.displayName,
           reviewNote: reason.trim() || undefined,
         })
+        toast.info('Commande rejetée', order.customerName)
       } finally {
         setBusyOrderId(null)
       }
     },
-    [busyOrderId, reviewer.displayName, reviewer.id],
+    [busyOrderId, reviewer.displayName, reviewer.id, toast],
   )
 
   return (
-    <div className="premium-scrollbar space-y-6 py-4">
-      <section className="premium-glass rounded-2xl p-5 shadow-sm">
-        <p className="text-xs font-semibold uppercase tracking-[0.2em] text-emerald-700">
-          Validation commandes en ligne
-        </p>
-        <h2 className="premium-title mt-2 text-xl font-semibold">
-          {pending.length} commande(s) en attente
-        </h2>
-        <p className="premium-text mt-1 text-sm">
-          Les commandes web doivent être validées par un gérant ou un admin
-          avant impact stock et remontée de vente.
-        </p>
-      </section>
+    <div className="space-y-5 pb-6">
+      <PageHeader
+        eyebrow="Commandes en ligne"
+        title={`${pending.length} commande${pending.length > 1 ? 's' : ''} en attente`}
+        subtitle="Validation gérant ou admin avant impact stock et remontée de vente"
+      />
 
-      <section className="space-y-3">
-        {pending.length === 0 ? (
-          <div className="premium-card rounded-2xl border border-dashed border-slate-300 p-6 text-sm text-slate-500">
-            Aucune commande en attente pour le moment.
-          </div>
-        ) : null}
+      <SectionHeader title="À valider" />
+      {pending.length === 0 ? (
+        <EmptyState
+          icon={<IconOnlineOrders />}
+          title="Aucune commande en attente"
+          description="Les nouvelles commandes web apparaîtront ici."
+        />
+      ) : (
+        <div className="grid gap-3 lg:grid-cols-2">
+          {pending.map((order) => {
+            const busy = busyOrderId === order.id
+            return (
+              <Card key={order.id} hover>
+                <CardContent className="space-y-3">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="ui-eyebrow">
+                        Réf. {order.id.slice(0, 8).toUpperCase()}
+                      </p>
+                      <h3 className="mt-0.5 truncate text-[14px] font-semibold text-zinc-900">
+                        {order.customerName}
+                      </h3>
+                      <p className="mt-0.5 text-[11px] text-zinc-500">
+                        {formatDateTime(order.createdAt)} ·{' '}
+                        {order.storeName ?? 'Magasin'}
+                      </p>
+                    </div>
+                    <div className="text-right">
+                      <p className="font-mono-nums text-[15px] font-bold text-zinc-900">
+                        {formatFCFA(order.totalTTC)}
+                      </p>
+                      <p className="text-[11px] text-zinc-500">
+                        {paymentLabel(order.paymentMethod)}
+                      </p>
+                    </div>
+                  </div>
 
-        {pending.map((order) => (
-          <article
-            key={order.id}
-            className="premium-card rounded-2xl border border-amber-200 bg-amber-50/40 p-5 shadow-sm"
-          >
-            <div className="flex flex-wrap items-start justify-between gap-3">
-              <div>
-                <p className="text-xs font-semibold uppercase tracking-[0.16em] text-amber-700">
-                  Référence {order.id.slice(0, 8).toUpperCase()}
-                </p>
-                <h3 className="premium-title mt-1 text-lg font-semibold">
-                  {order.customerName}
-                </h3>
-                <p className="mt-1 text-xs text-slate-600">
-                  {formatDateTime(order.createdAt)} · {order.storeName ?? 'Magasin'}
-                </p>
-              </div>
-              <div className="text-right">
-                <p className="text-xs text-slate-500">Total commande</p>
-                <p className="text-lg font-semibold text-amber-800">
-                  {formatFCFA(order.totalTTC)}
-                </p>
-                <p className="text-xs text-slate-600">
-                  {paymentLabel(order.paymentMethod)}
-                </p>
-              </div>
-            </div>
+                  <div className="rounded-lg bg-zinc-50 px-3 py-2 text-[12px] text-zinc-700">
+                    <p>
+                      <span className="text-zinc-500">Tél :</span>{' '}
+                      {order.customerPhone || 'non renseigné'}
+                    </p>
+                    <p>
+                      <span className="text-zinc-500">Adresse :</span>{' '}
+                      {order.customerAddress || 'non renseignée'}
+                    </p>
+                    <p className="mt-1 flex items-center gap-1.5 text-[11px] text-zinc-500">
+                      <IconTruck className="h-3 w-3" />
+                      {order.fulfillmentMode === 'delivery'
+                        ? 'Livraison'
+                        : 'Retrait boutique'}
+                      {order.discountPct ? (
+                        <>
+                          {' · '}Promo {order.promoCode ?? ''} ({order.discountPct} %)
+                        </>
+                      ) : null}
+                      {order.deliveryFeeTTC ? (
+                        <> · Livraison {formatFCFA(order.deliveryFeeTTC)}</>
+                      ) : null}
+                    </p>
+                  </div>
 
-            <div className="premium-glass mt-4 rounded-xl border border-white/70 p-3">
-              <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-                Détails client
-              </p>
-              <p className="mt-1 text-sm text-slate-700">
-                {order.customerPhone || 'Téléphone non renseigné'}
-              </p>
-              <p className="text-sm text-slate-600">
-                {order.customerAddress || 'Adresse non renseignée'}
-              </p>
-              <div className="mt-1 space-y-0.5 text-xs text-slate-500">
-                <p>
-                  Mode: {order.fulfillmentMode === 'delivery' ? 'Livraison' : 'Retrait boutique'}
-                </p>
-                {order.discountPct ? (
-                  <p>Promo: {order.promoCode ?? 'Code'} ({order.discountPct}%)</p>
-                ) : null}
-                {order.deliveryFeeTTC ? (
-                  <p>Frais livraison: {formatFCFA(order.deliveryFeeTTC)}</p>
-                ) : null}
-              </div>
-            </div>
+                  <ul className="divide-y divide-zinc-100 rounded-lg border border-zinc-200">
+                    {order.lines.map((line) => (
+                      <li
+                        key={`${order.id}-${line.productId}`}
+                        className="flex items-center justify-between px-3 py-1.5 text-[12px]"
+                      >
+                        <span className="truncate text-zinc-700">
+                          {line.name}
+                        </span>
+                        <span className="ml-2 font-mono-nums font-medium text-zinc-900">
+                          {line.qty} × {formatFCFA(line.unitPriceTTC)}
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
 
-            <div className="mt-3 space-y-2">
-              {order.lines.map((line) => (
-                <div
-                  key={`${order.id}-${line.productId}`}
-                  className="premium-card flex items-center justify-between rounded-lg px-3 py-2 text-sm"
-                >
-                  <span className="text-slate-700">{line.name}</span>
-                  <span className="font-medium text-slate-900">
-                    {line.qty} × {formatFCFA(line.unitPriceTTC)}
-                  </span>
-                </div>
-              ))}
-            </div>
-
-            <div className="mt-4 flex flex-wrap gap-2">
-              <button
-                type="button"
-                onClick={() => void approveOrder(order)}
-                disabled={busyOrderId === order.id}
-                className="premium-btn rounded-lg px-3 py-2 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-60"
-              >
-                Valider la commande
-              </button>
-              <button
-                type="button"
-                onClick={() => void rejectOrder(order)}
-                disabled={busyOrderId === order.id}
-                className="premium-btn-dark rounded-lg border border-red-300 bg-white/10 px-3 py-2 text-sm font-semibold text-red-200 hover:bg-red-500/10 disabled:cursor-not-allowed disabled:opacity-60"
-              >
-                Rejeter
-              </button>
-            </div>
-          </article>
-        ))}
-      </section>
-
-      <section className="premium-glass rounded-2xl p-5 shadow-sm">
-        <h3 className="text-sm font-semibold uppercase tracking-[0.16em] text-slate-600">
-          Historique récent
-        </h3>
-        <div className="mt-3 space-y-2">
-          {reviewed.length === 0 ? (
-            <p className="text-sm text-slate-500">
-              Aucun historique de validation pour le moment.
-            </p>
-          ) : (
-            reviewed.map((order) => (
-              <div
-                key={order.id}
-                className="premium-card flex flex-wrap items-center justify-between rounded-lg px-3 py-2 text-sm"
-              >
-                <span className="font-medium text-slate-800">
-                  {order.id.slice(0, 8).toUpperCase()} · {order.customerName}
-                </span>
-                <span
-                  className={`rounded-full px-2 py-0.5 text-xs font-semibold ${
-                    order.status === 'approved'
-                      ? 'bg-emerald-100 text-emerald-700'
-                      : 'bg-red-100 text-red-700'
-                  }`}
-                >
-                  {order.status === 'approved' ? 'Validée' : 'Rejetée'}
-                </span>
-              </div>
-            ))
-          )}
+                  <div className="flex flex-wrap gap-2">
+                    <Button
+                      variant="accent"
+                      iconLeft={<IconCheck />}
+                      loading={busy}
+                      onClick={() => void approveOrder(order)}
+                    >
+                      Valider
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      iconLeft={<IconClose />}
+                      disabled={busy}
+                      onClick={() => void rejectOrder(order)}
+                    >
+                      Rejeter
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
+            )
+          })}
         </div>
-      </section>
+      )}
+
+      <SectionHeader title="Historique récent" />
+      {reviewed.length === 0 ? (
+        <EmptyState
+          title="Aucun historique"
+          description="Les commandes traitées apparaîtront ici."
+          variant="flat"
+        />
+      ) : (
+        <Card>
+          <CardContent className="!p-0">
+            <ul className="divide-y divide-zinc-100">
+              {reviewed.map((order) => (
+                <li
+                  key={order.id}
+                  className="flex flex-wrap items-center justify-between gap-2 px-4 py-2.5 text-[13px]"
+                >
+                  <span className="min-w-0 truncate font-medium text-zinc-800">
+                    <span className="font-mono-nums text-zinc-500">
+                      {order.id.slice(0, 8).toUpperCase()}
+                    </span>{' '}
+                    · {order.customerName}
+                  </span>
+                  <Badge tone={order.status === 'approved' ? 'success' : 'danger'}>
+                    {order.status === 'approved' ? 'Validée' : 'Rejetée'}
+                  </Badge>
+                </li>
+              ))}
+            </ul>
+          </CardContent>
+        </Card>
+      )}
     </div>
   )
 }
