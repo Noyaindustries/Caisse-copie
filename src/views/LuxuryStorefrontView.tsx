@@ -16,6 +16,7 @@ import {
 } from '../lib/money'
 import { productImageSrc } from '../lib/productImage'
 import { ProductImage } from '../components/ProductImage'
+import { ProductDetailModal } from '../components/ProductDetailModal'
 import { storeStockRowId } from '../lib/storeStockId'
 
 type Props = {
@@ -85,6 +86,9 @@ export function LuxuryStorefrontView({
   const [cartBadgePulse, setCartBadgePulse] = useState(false)
   const [isCartOpen, setIsCartOpen] = useState(false)
   const [flyToCart, setFlyToCart] = useState<FlyToCartAnim | null>(null)
+  const [detailProduct, setDetailProduct] = useState<ProductWithStock | null>(
+    null,
+  )
   const productsSectionRef = useRef<HTMLElement | null>(null)
   const cartPanelRef = useRef<HTMLElement | null>(null)
   const checkoutFormRef = useRef<HTMLDivElement | null>(null)
@@ -94,6 +98,7 @@ export function LuxuryStorefrontView({
   const [contactMessage, setContactMessage] = useState('')
   const [contactSent, setContactSent] = useState(false)
   const cartBadgeRef = useRef<HTMLSpanElement | null>(null)
+  const prevItemCountRef = useRef(0)
   const pulseTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const flyTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
@@ -385,6 +390,14 @@ export function LuxuryStorefrontView({
       document.removeEventListener('keydown', onEscape)
     }
   }, [isCartOpen])
+
+  useEffect(() => {
+    const prev = prevItemCountRef.current
+    if (prev > 0 && itemCount === 0 && isCartOpen) {
+      setIsCartOpen(false)
+    }
+    prevItemCountRef.current = itemCount
+  }, [itemCount, isCartOpen])
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
@@ -917,9 +930,14 @@ export function LuxuryStorefrontView({
                   return (
                     <article
                       key={product.id}
-                      className="overflow-hidden rounded-xl border border-white/10 bg-slate-950/70"
+                      className="overflow-hidden rounded-xl border border-white/10 bg-slate-950/70 transition hover:border-amber-200/40"
                     >
-                      <div className="relative">
+                      <button
+                        type="button"
+                        onClick={() => setDetailProduct(product)}
+                        className="relative block w-full"
+                        aria-label={`Voir le détail : ${product.name}`}
+                      >
                         <ProductImage
                           product={product}
                           className="h-24 w-full object-cover"
@@ -936,15 +954,19 @@ export function LuxuryStorefrontView({
                         >
                           {soldOut ? 'Rupture' : `${product.stock}`}
                         </span>
-                      </div>
-                      <div className="space-y-1 p-2">
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setDetailProduct(product)}
+                        className="block w-full space-y-1 p-2 text-left"
+                      >
                         <p className="line-clamp-2 text-[10px] font-semibold text-slate-100">
                           {product.name}
                         </p>
                         <p className="text-[9px] text-emerald-200/90">
                           {orderedQty} commande(s)
                         </p>
-                      </div>
+                      </button>
                       <div className="flex items-center justify-between border-t border-white/10 px-2 py-1.5">
                         <p className="text-[9px] text-slate-400">Panier: {qty}</p>
                         <button
@@ -1008,7 +1030,12 @@ export function LuxuryStorefrontView({
                               cardDensity === 'compact' ? 'rounded-lg' : 'rounded-xl'
                             }`}
                           >
-                            <div className="relative">
+                            <button
+                              type="button"
+                              onClick={() => setDetailProduct(product)}
+                              className="relative block w-full cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-300"
+                              aria-label={`Voir le détail : ${product.name}`}
+                            >
                               <ProductImage
                                 product={product}
                                 className={`w-full object-cover transition duration-300 group-hover:scale-[1.06] ${
@@ -1034,10 +1061,12 @@ export function LuxuryStorefrontView({
                                     : product.priceTTC,
                                 )}
                               </p>
-                            </div>
+                            </button>
 
-                            <div
-                              className={`space-y-1 ${
+                            <button
+                              type="button"
+                              onClick={() => setDetailProduct(product)}
+                              className={`block w-full cursor-pointer text-left space-y-1 ${
                                 cardDensity === 'compact' ? 'p-1.5' : 'p-2'
                               }`}
                             >
@@ -1059,7 +1088,7 @@ export function LuxuryStorefrontView({
                               >
                                 {product.category}
                               </p>
-                            </div>
+                            </button>
 
                             <div
                               className={`flex items-center justify-between border-t border-white/10 ${
@@ -1519,6 +1548,18 @@ export function LuxuryStorefrontView({
           }}
         />
       ) : null}
+
+      <ProductDetailModal
+        product={detailProduct}
+        cartQty={detailProduct ? lineQty(detailProduct.id) : 0}
+        allProducts={featuredProducts}
+        variant="storefront"
+        onClose={() => setDetailProduct(null)}
+        onAdd={(p, q) => {
+          for (let i = 0; i < q; i++) handleAdd(p)
+        }}
+        onSelect={(p) => setDetailProduct(p)}
+      />
     </div>
   )
 }

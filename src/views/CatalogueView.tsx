@@ -7,6 +7,7 @@ import type { Product, ProductWithStock } from '../db/types'
 import { EditProductModal } from '../components/EditProductModal'
 import { formatFCFA } from '../lib/money'
 import { ProductImage } from '../components/ProductImage'
+import { ProductDetailModal } from '../components/ProductDetailModal'
 import {
   applyProductsCsvImport,
   downloadCsvTemplate,
@@ -30,6 +31,7 @@ import {
   IconArchive,
   IconDownload,
   IconEdit,
+  IconEye,
   IconPlus,
   IconRefund,
   IconSearch,
@@ -78,6 +80,8 @@ export function CatalogueView({
   const [q, setQ] = useState('')
   const [cat, setCat] = useState<CategoryTab>('Tous')
   const [editing, setEditing] = useState<Product | null>(null)
+  const [detailProduct, setDetailProduct] =
+    useState<ProductWithStock | null>(null)
   const [showArchived, setShowArchived] = useState(false)
   const [newCategoryName, setNewCategoryName] = useState('')
   const [categoryAddBusy, setCategoryAddBusy] = useState(false)
@@ -363,7 +367,7 @@ export function CatalogueView({
                   <Th align="right">Prix TTC</Th>
                   <Th align="right">Stock</Th>
                   <Th hideBelow="lg">État</Th>
-                  {canManageCatalog ? <Th align="right">Actions</Th> : null}
+                  <Th align="right">Actions</Th>
                 </Tr>
               </THead>
               <TBody>
@@ -414,39 +418,50 @@ export function CatalogueView({
                           <Badge tone="success">Actif</Badge>
                         )}
                       </Td>
-                      {canManageCatalog ? (
-                        <Td align="right">
-                          <div className="flex flex-wrap justify-end gap-1.5">
-                            <Button
-                              size="sm"
-                              variant="secondary"
-                              iconLeft={<IconEdit />}
-                              onClick={() => setEditing(p)}
-                            >
-                              Modifier
-                            </Button>
-                            {p.archived ? (
+                      <Td align="right">
+                        <div className="flex flex-wrap justify-end gap-1.5">
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            iconLeft={<IconEye />}
+                            onClick={() => setDetailProduct(p)}
+                            aria-label="Voir les détails"
+                          >
+                            <span className="hidden xl:inline">Détails</span>
+                          </Button>
+                          {canManageCatalog ? (
+                            <>
                               <Button
                                 size="sm"
-                                variant="ghost"
-                                iconLeft={<IconRefund />}
-                                onClick={() => void handleRestore(p)}
+                                variant="secondary"
+                                iconLeft={<IconEdit />}
+                                onClick={() => setEditing(p)}
                               >
-                                Réactiver
+                                Modifier
                               </Button>
-                            ) : (
-                              <Button
-                                size="sm"
-                                variant="ghost"
-                                iconLeft={<IconArchive />}
-                                onClick={() => void handleArchive(p)}
-                              >
-                                Archiver
-                              </Button>
-                            )}
-                          </div>
-                        </Td>
-                      ) : null}
+                              {p.archived ? (
+                                <Button
+                                  size="sm"
+                                  variant="ghost"
+                                  iconLeft={<IconRefund />}
+                                  onClick={() => void handleRestore(p)}
+                                >
+                                  Réactiver
+                                </Button>
+                              ) : (
+                                <Button
+                                  size="sm"
+                                  variant="ghost"
+                                  iconLeft={<IconArchive />}
+                                  onClick={() => void handleArchive(p)}
+                                >
+                                  Archiver
+                                </Button>
+                              )}
+                            </>
+                          ) : null}
+                        </div>
+                      </Td>
                     </Tr>
                   )
                 })}
@@ -498,35 +513,43 @@ export function CatalogueView({
                       ) : (
                         <Badge tone="success">Actif</Badge>
                       )}
-                      {canManageCatalog ? (
-                        <div className="ml-auto flex gap-1">
-                          <Button
-                            size="sm"
-                            variant="secondary"
-                            iconLeft={<IconEdit />}
-                            onClick={() => setEditing(p)}
-                          >
-                            Modifier
-                          </Button>
-                          {p.archived ? (
+                      <div className="ml-auto flex gap-1">
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          iconLeft={<IconEye />}
+                          onClick={() => setDetailProduct(p)}
+                          aria-label="Voir le détail"
+                        />
+                        {canManageCatalog ? (
+                          <>
                             <Button
                               size="sm"
-                              variant="ghost"
-                              iconLeft={<IconRefund />}
-                              onClick={() => void handleRestore(p)}
-                              aria-label="Réactiver"
+                              variant="secondary"
+                              iconLeft={<IconEdit />}
+                              onClick={() => setEditing(p)}
+                              aria-label="Modifier"
                             />
-                          ) : (
-                            <Button
-                              size="sm"
-                              variant="ghost"
-                              iconLeft={<IconArchive />}
-                              onClick={() => void handleArchive(p)}
-                              aria-label="Archiver"
-                            />
-                          )}
-                        </div>
-                      ) : null}
+                            {p.archived ? (
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                iconLeft={<IconRefund />}
+                                onClick={() => void handleRestore(p)}
+                                aria-label="Réactiver"
+                              />
+                            ) : (
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                iconLeft={<IconArchive />}
+                                onClick={() => void handleArchive(p)}
+                                aria-label="Archiver"
+                              />
+                            )}
+                          </>
+                        ) : null}
+                      </div>
                     </div>
                   </div>
                 </li>
@@ -555,6 +578,14 @@ export function CatalogueView({
           Lecture seule — contactez un gérant ou un administrateur pour modifier.
         </p>
       )}
+
+      <ProductDetailModal
+        product={detailProduct}
+        allProducts={rowsWithStock.filter((p) => !p.archived)}
+        variant="backoffice"
+        onClose={() => setDetailProduct(null)}
+        onSelect={(p) => setDetailProduct(p)}
+      />
     </div>
   )
 }

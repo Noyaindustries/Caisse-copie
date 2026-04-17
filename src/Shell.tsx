@@ -39,6 +39,7 @@ import {
   type CheckoutPaymentState,
 } from './lib/checkoutPayment'
 import { DEFAULT_VAT_RATE_PCT, formatFCFA, totalsFromLinesTTC } from './lib/money'
+import { productImageSrc } from './lib/productImage'
 import { appendAuditEvent } from './lib/auditLog'
 import { logCartCancellation } from './lib/refundApply'
 import { SESSION_ID } from './lib/session'
@@ -58,6 +59,16 @@ type Props = {
   staff: StaffProfile
   online: boolean
   onLogout: () => void
+}
+
+type FlyToCartAnim = {
+  id: number
+  src: string
+  x: number
+  y: number
+  dx: number
+  dy: number
+  active: boolean
 }
 
 const SIDEBAR_KEY = 'caisseci-sidebar-collapsed'
@@ -120,6 +131,13 @@ export function Shell({ staff, online, onLogout }: Props) {
   const [syncBusy, setSyncBusy] = useState(false)
 
   const barcodeFieldRef = useRef<HTMLInputElement>(null)
+  const sidebarCartCountRef = useRef<HTMLSpanElement>(null)
+  const drawerCartCountRef = useRef<HTMLSpanElement>(null)
+  const mobileFabBadgeRef = useRef<HTMLSpanElement>(null)
+  const mobileFabEmptyRef = useRef<HTMLButtonElement>(null)
+  const flyTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const prevCartItemCountRef = useRef(0)
+  const [, setFlyToCart] = useState<FlyToCartAnim | null>(null)
 
   const queueItems = useLiveQuery(() => db.syncQueue.toArray(), [], []) ?? []
   const productCategoryRows =
@@ -192,10 +210,12 @@ export function Shell({ staff, online, onLogout }: Props) {
   }, [activeView, isFloatingCartOpen])
 
   useEffect(() => {
-    if (cart.length === 0 && isFloatingCartOpen) {
-      setIsFloatingCartOpen(false)
+    return () => {
+      if (flyTimeoutRef.current) {
+        clearTimeout(flyTimeoutRef.current)
+      }
     }
-  }, [cart.length, isFloatingCartOpen])
+  }, [])
 
   const patchCheckoutPayment = useCallback(
     (patch: Partial<CheckoutPaymentState>) => {
@@ -230,6 +250,15 @@ export function Shell({ staff, online, onLogout }: Props) {
     () => cart.reduce((sum, line) => sum + line.qty, 0),
     [cart],
   )
+
+  useEffect(() => {
+    const prev = prevCartItemCountRef.current
+    if (prev > 0 && cartItemCount === 0 && isFloatingCartOpen) {
+      setIsFloatingCartOpen(false)
+    }
+    prevCartItemCountRef.current = cartItemCount
+  }, [cartItemCount, isFloatingCartOpen])
+
   const cartTotalTTC = useMemo(
     () => Math.round(totalsFromLinesTTC(cart, discountPct).totalTTC),
     [cart, discountPct],
@@ -269,42 +298,104 @@ export function Shell({ staff, online, onLogout }: Props) {
     requestAnimationFrame(() => barcodeFieldRef.current?.focus())
   }, [])
 
-  const handleAdd = useCallback((p: ProductWithStock) => {
-    if (p.archived) return
-    const vat = p.vatRatePct ?? DEFAULT_VAT_RATE_PCT
-    setCart((prev) => {
-      const line = prev.find((l) => l.productId === p.id)
-      const currentQty = line?.qty ?? 0
-      if (currentQty >= p.stock) return prev
-      if (!line) {
-        return [
-          ...prev,
-          {
-            productId: p.id,
-            name: p.name,
-            unitPriceTTC: p.priceTTC,
-            qty: 1,
-            vatRatePct: vat,
-          },
-        ]
+  const pickFlyCartTargetEl = useCallback((): HTMLElement | null => {
+    if (isFloatingCartOpen) {
+      const d = drawerCartCountRef.current
+      if (d && d.getClientRects().length > 0) return d
+    }
+    const s = sidebarCartCountRef.current
+    if (s && s.getClientRects().length > 0) return s
+    const b = mobileFabBadgeRef.current
+    if (b && b.getClientRects().length > 0) return b
+    const f = mobileFabEmptyRef.current
+    if (f && f.getClientRects().length > 0) return f
+    return null
+  }, [isFloatingCartOpen])
+
+  const triggerFlyToCart = useCallback(
+    (product: ProductWithStock, originEl?: HTMLElement | null) => {
+      const target = pickFlyCartTargetEl()
+      if (!originEl || !target) return
+      const from = originEl.getBoundingClientRect()
+      const to = target.getBoundingClientRect()
+      const fromX = from.left + from.width / 2
+      const fromY = from.top + from.height / 2
+      const toX = to.left + to.width / 2
+      const toY = to.top + to.height / 2
+
+      const animId = Date.now()
+      setFlyToCart({
+        id: animId,
+        src: productImageSrc(product),
+        x: fromX,
+        y: fromY,
+        dx: toX - fromX,
+        dy: toY - fromY,
+        active: false,
+      })
+
+      requestAnimationFrame(() => {
+        setFlyToCart((prev) =>
+          prev && prev.id === animId ? { ...prev, active: true } : prev,
+        )
+      })
+
+      if (flyTimeoutRef.current) {
+        clearTimeout(flyTimeoutRef.current)
       }
-      return prev.map((l) =>
-        l.productId === p.id
-          ? {
-              ...l,
-              qty: l.qty + 1,
-              unitPriceTTC: p.priceTTC,
+      flyTimeoutRef.current = setTimeout(() => {
+        setFlyToCart((prev) => (prev && prev.id === animId ? null : prev))
+        flyTimeoutRef.current = null
+      }, 620)
+    },
+    [pickFlyCartTargetEl],
+  )
+
+  const handleAdd = useCallback(
+    (p: ProductWithStock, originEl?: HTMLElement | null) => {
+      if (p.archived) return
+      const vat = p.vatRatePct ?? DEFAULT_VAT_RATE_PCT
+      let didAdd = false
+      setCart((prev) => {
+        const line = prev.find((l) => l.productId === p.id)
+        const currentQty = line?.qty ?? 0
+        if (currentQty >= p.stock) return prev
+        if (!line) {
+          didAdd = true
+          return [
+            ...prev,
+            {
+              productId: p.id,
               name: p.name,
+              unitPriceTTC: p.priceTTC,
+              qty: 1,
               vatRatePct: vat,
-            }
-          : l,
-      )
-    })
-  }, [])
+            },
+          ]
+        }
+        didAdd = true
+        return prev.map((l) =>
+          l.productId === p.id
+            ? {
+                ...l,
+                qty: l.qty + 1,
+                unitPriceTTC: p.priceTTC,
+                name: p.name,
+                vatRatePct: vat,
+              }
+            : l,
+        )
+      })
+      if (didAdd) {
+        triggerFlyToCart(p, originEl)
+      }
+    },
+    [triggerFlyToCart],
+  )
 
   const handleAddFromGrid = useCallback(
-    (p: ProductWithStock) => {
-      handleAdd(p)
+    (p: ProductWithStock, originEl?: HTMLElement | null) => {
+      handleAdd(p, originEl)
       refocusBarcodeField()
     },
     [handleAdd, refocusBarcodeField],

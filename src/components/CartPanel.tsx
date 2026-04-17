@@ -1,3 +1,4 @@
+import type { Ref } from 'react'
 import type { CartLine, MobileMoneyOperator } from '../db/types'
 import type { CheckoutPaymentState } from '../lib/checkoutPayment'
 import { validateCheckoutPayment } from '../lib/checkoutPayment'
@@ -46,6 +47,8 @@ type Props = {
   checkoutBusy: boolean
   /** Si fourni, ajoute un bouton de fermeture (drawer mobile). */
   onClose?: () => void
+  /** Cible pour animation « ajout au panier » (compteur dans l’en-tête). */
+  countBadgeRef?: Ref<HTMLSpanElement | null>
 }
 
 function stockFor(
@@ -76,6 +79,7 @@ export function CartPanel({
   onCheckout,
   checkoutBusy,
   onClose,
+  countBadgeRef,
 }: Props) {
   const totals = totalsFromLinesTTC(lines, discountPct)
   const vatSlices = vatSlicesFromLinesTTC(lines, discountPct)
@@ -119,7 +123,12 @@ export function CartPanel({
             <IconReceipt className="h-4 w-4 text-zinc-400" />
           )}
           <h2 className="text-[14px] font-semibold text-zinc-900">Panier</h2>
-          <span className="text-[12px] text-zinc-500">({count})</span>
+          <span
+            ref={countBadgeRef}
+            className="inline-block text-[12px] text-zinc-500 transition-transform duration-300 ease-out"
+          >
+            ({count})
+          </span>
         </div>
         <div className="flex shrink-0 items-center gap-1">
           {onCancelTransaction ? (

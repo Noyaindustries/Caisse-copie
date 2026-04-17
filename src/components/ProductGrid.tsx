@@ -15,7 +15,7 @@ type Props = {
   category: CategoryTab
   onCategoryChange: (tab: CategoryTab) => void
   search: string
-  onAdd: (p: ProductWithStock) => void
+  onAdd: (p: ProductWithStock, originEl?: HTMLElement | null) => void
   density?: ProductGridDensity
 }
 
@@ -89,7 +89,7 @@ export function ProductGrid({
                 key={p.id}
                 type="button"
                 disabled={disabled}
-                onClick={() => onAdd(p)}
+                onClick={(e) => onAdd(p, e.currentTarget)}
                 className={cn(
                   'ui-card-hover group flex flex-col rounded-xl border border-zinc-200 bg-white text-left transition disabled:cursor-not-allowed disabled:opacity-50',
                   isCompact ? 'p-2.5' : 'p-3',
