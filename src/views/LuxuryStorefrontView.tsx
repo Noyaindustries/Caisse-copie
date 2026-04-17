@@ -661,7 +661,12 @@ export function LuxuryStorefrontView({
                 >
                   <div className="flex items-center gap-2">
                     <img
-                      src={productImageSrc({ name: line.name })}
+                      src={productImageSrc(
+                        productById.get(line.productId) ?? {
+                          id: line.productId,
+                          name: line.name,
+                        },
+                      )}
                       alt={line.name}
                       className="h-9 w-9 rounded-xl border border-white/15 object-cover"
                     />

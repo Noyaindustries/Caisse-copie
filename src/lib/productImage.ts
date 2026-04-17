@@ -1,62 +1,12 @@
 type ProductImageLike = {
+  /** Préféré pour une vignette stable même si le nom change. */
+  id?: string
   name: string
   category?: string
   imageDataUrl?: string
 }
 
 const cache = new Map<string, string>()
-const remoteCache = new Map<string, string>()
-
-function canUseRemoteImages(): boolean {
-  if (import.meta.env.VITE_DISABLE_REMOTE_IMAGES === '1') return false
-  if (typeof navigator !== 'undefined' && !navigator.onLine) return false
-  return true
-}
-
-function curatedProductPhoto(name: string, category?: string): string | null {
-  const n = name.toLowerCase()
-
-  if (n.includes('eau')) {
-    return 'https://loremflickr.com/640/640/mineral-water,bottle?lock=101'
-  }
-  if (n.includes('bissap')) {
-    return 'https://loremflickr.com/640/640/hibiscus,juice,bottle?lock=102'
-  }
-  if (n.includes('coca')) {
-    return 'https://loremflickr.com/640/640/cola,can,drink?lock=103'
-  }
-  if (n.includes('riz')) {
-    return 'https://loremflickr.com/640/640/rice,bag,food?lock=104'
-  }
-  if (n.includes('huile')) {
-    return 'https://loremflickr.com/640/640/vegetable-oil,bottle?lock=105'
-  }
-  if (n.includes('pain')) {
-    return 'https://loremflickr.com/640/640/bread,loaf?lock=106'
-  }
-  if (n.includes('savon')) {
-    return 'https://loremflickr.com/640/640/soap,bar,bathroom?lock=107'
-  }
-  if (n.includes('papier toilette')) {
-    return 'https://loremflickr.com/640/640/toilet-paper,roll?lock=108'
-  }
-  if (n.includes('sac')) {
-    return 'https://loremflickr.com/640/640/reusable,shopping-bag?lock=109'
-  }
-
-  switch (category) {
-    case 'Boissons':
-      return 'https://loremflickr.com/640/640/soft-drink,bottle?lock=201'
-    case 'Alimentation':
-      return 'https://loremflickr.com/640/640/grocery,food,product?lock=202'
-    case 'Hygiène':
-      return 'https://loremflickr.com/640/640/hygiene,product,bathroom?lock=203'
-    case 'Autre':
-      return 'https://loremflickr.com/640/640/shop,retail,product?lock=204'
-    default:
-      return null
-  }
-}
 
 function initialsFromName(name: string): string {
   const words = name
@@ -88,8 +38,9 @@ function paletteForCategory(category?: string): {
 function generatedProductImageDataUrl(
   name: string,
   category?: string,
+  stableKey?: string,
 ): string {
-  const key = `${name}::${category ?? ''}`
+  const key = stableKey ?? `${name}::${category ?? ''}`
   const existing = cache.get(key)
   if (existing) return existing
 
@@ -118,19 +69,10 @@ function generatedProductImageDataUrl(
 export function productImageSrc(product: ProductImageLike): string {
   if (product.imageDataUrl) return product.imageDataUrl
 
-  if (!canUseRemoteImages()) {
-    return generatedProductImageDataUrl(product.name, product.category)
-  }
-
-  const remoteKey = `${product.name}::${product.category ?? ''}`
-  const remoteExisting = remoteCache.get(remoteKey)
-  if (remoteExisting) return remoteExisting
-
-  const curated = curatedProductPhoto(product.name, product.category)
-  if (curated) {
-    remoteCache.set(remoteKey, curated)
-    return curated
-  }
-
-  return generatedProductImageDataUrl(product.name, product.category)
+  const stableKey = product.id ?? `${product.name}::${product.category ?? ''}`
+  return generatedProductImageDataUrl(
+    product.name,
+    product.category,
+    stableKey,
+  )
 }
