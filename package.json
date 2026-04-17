@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "dev:full": "concurrently -k -n API,APP -c green,cyan \"npm:dev:api\" \"npm:dev\"",
     "dev:offline": "vite --mode offline",
     "dev:api": "tsx watch server/server.ts",
     "dev:kiosk": "concurrently -k -n API,APP -c green,cyan \"npm:dev:api\" \"npm:dev:offline\"",
@@ -14,6 +15,8 @@
     "preview": "vite preview",
     "start": "node server-dist/server.js",
     "start:kiosk": "npm run build:offline && npm run start",
+    "db:up": "docker compose up -d mongo",
+    "db:down": "docker compose down",
     "prisma:generate": "prisma generate",
     "prisma:push": "prisma db push"
   },
