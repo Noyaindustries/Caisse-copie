@@ -45,7 +45,7 @@ export function ProductGrid({
 
   return (
     <>
-      <div className="mb-4 ui-scroll -mx-1 flex gap-1.5 overflow-x-auto px-1 pb-1">
+      <div className="mb-4 ui-scroll flex gap-1.5 overflow-x-auto pb-1">
         {categoryTabs.map((tab) => {
           const on = tab === category
           return (
@@ -125,9 +125,6 @@ export function ProductGrid({
                   )}
                 >
                   {formatFCFA(p.priceTTC)}
-                </p>
-                <p className="mt-0.5 text-[10px] uppercase tracking-wide text-zinc-400">
-                  {p.stock} en stock
                 </p>
               </button>
             )

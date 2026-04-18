@@ -540,7 +540,7 @@ export function LuxuryStorefrontView({
   return (
     <div className="min-h-svh bg-linear-to-b from-[#090f1d] via-[#0f172a] to-premium-navy text-slate-100">
       {!online ? <OfflineBanner /> : null}
-      <div className="mx-auto flex w-full max-w-7xl flex-col px-4 pb-16 pt-6 sm:px-6 lg:px-8">
+      <div className="mx-auto flex w-full max-w-7xl flex-col px-2 pb-16 pt-6 sm:px-5 lg:px-7">
         <header className="premium-dark-card rounded-3xl bg-linear-to-r from-slate-900 via-slate-900 to-amber-950/70 p-6 shadow-2xl shadow-amber-900/20">
           <div className="mb-4 flex items-center gap-2 px-1 py-1">
             <button
@@ -945,15 +945,11 @@ export function LuxuryStorefrontView({
                         <span className="absolute left-1.5 top-1.5 rounded-full bg-black/65 px-2 py-0.5 text-[10px] font-semibold text-amber-100">
                           #{index + 1}
                         </span>
-                        <span
-                          className={`absolute right-1.5 top-1.5 rounded-full px-1.5 py-0.5 text-[9px] font-semibold ${
-                            soldOut
-                              ? 'bg-slate-700 text-slate-300'
-                              : 'bg-emerald-500/20 text-emerald-200'
-                          }`}
-                        >
-                          {soldOut ? 'Rupture' : `${product.stock}`}
-                        </span>
+                        {soldOut ? (
+                          <span className="absolute right-1.5 top-1.5 rounded-full bg-slate-700 px-1.5 py-0.5 text-[9px] font-semibold text-slate-300">
+                            Rupture
+                          </span>
+                        ) : null}
                       </button>
                       <button
                         type="button"
@@ -1045,15 +1041,11 @@ export function LuxuryStorefrontView({
                                 }`}
                               />
                               <div className="pointer-events-none absolute inset-0 bg-linear-to-t from-black/30 via-transparent to-transparent opacity-70 transition duration-300 group-hover:opacity-90" />
-                              <span
-                                className={`absolute right-2 top-2 rounded-full px-2 py-1 text-[10px] font-semibold uppercase ${
-                                  soldOut
-                                    ? 'bg-slate-700 text-slate-300'
-                                    : 'bg-emerald-500/20 text-emerald-200'
-                                }`}
-                              >
-                                {soldOut ? 'Rupture' : `${product.stock} dispo`}
-                              </span>
+                              {soldOut ? (
+                                <span className="absolute right-2 top-2 rounded-full bg-slate-700 px-2 py-1 text-[10px] font-semibold uppercase text-slate-300">
+                                  Rupture
+                                </span>
+                              ) : null}
                               <p className="absolute bottom-1.5 left-1.5 rounded-md bg-black/60 px-1.5 py-0.5 text-[10px] font-semibold text-amber-100 backdrop-blur-sm">
                                 {formatFCFA(
                                   discountPct > 0

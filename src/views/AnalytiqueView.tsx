@@ -5,6 +5,7 @@ import {
   BarChart,
   CartesianGrid,
   Cell,
+  Legend,
   ResponsiveContainer,
   Tooltip,
   XAxis,
@@ -13,6 +14,10 @@ import {
 import { db } from '../db/db'
 import type { PaymentMethod } from '../db/types'
 import { downloadTextFile, toCsvSemicolon } from '../lib/analyticsExport'
+import {
+  aggregateWebOrdersByDay,
+  filterOnlineOrdersInBucketWindow,
+} from '../lib/onlineOrderStats'
 import { formatFCFA } from '../lib/money'
 import {
   periodMarginTotals,
@@ -34,6 +39,7 @@ import { Table, TBody, Td, Th, THead, Tr } from '../ui/Table'
 import {
   IconDownload,
   IconFile,
+  IconOnlineOrders,
   IconPrinter,
   IconSpreadsheet,
 } from '../ui/icons'
@@ -51,11 +57,16 @@ const COLORS = {
   accent: '#059669',
   accentSoft: '#d1fae5',
   violet: '#7c3aed',
+  webPending: '#ca8a04',
+  webApproved: '#059669',
+  webRejected: '#e11d48',
 }
 
 export function AnalytiqueView() {
   const sales = useLiveQuery(() => db.sales.toArray(), [], []) ?? []
   const products = useLiveQuery(() => db.products.toArray(), [], []) ?? []
+  const onlineOrders =
+    useLiveQuery(() => db.onlineOrders.toArray(), [], []) ?? []
   const [period, setPeriod] = useState<Period>(7)
 
   const rangeSales = useMemo(() => {
@@ -75,6 +86,39 @@ export function AnalytiqueView() {
     () => bucketSalesByLocalDay(sales, period),
     [sales, period],
   )
+
+  const rangeWebOrders = useMemo(
+    () => filterOnlineOrdersInBucketWindow(onlineOrders, buckets),
+    [onlineOrders, buckets],
+  )
+
+  const webDaily = useMemo(
+    () => aggregateWebOrdersByDay(rangeWebOrders, buckets),
+    [rangeWebOrders, buckets],
+  )
+
+  const webStats = useMemo(() => {
+    const created = rangeWebOrders.length
+    const pending = rangeWebOrders.filter((o) => o.status === 'pending').length
+    const approved = rangeWebOrders.filter((o) => o.status === 'approved').length
+    const rejected = rangeWebOrders.filter((o) => o.status === 'rejected').length
+    const sumTTC = rangeWebOrders.reduce((s, o) => s + o.totalTTC, 0)
+    const sumApprovedTTC = rangeWebOrders
+      .filter((o) => o.status === 'approved')
+      .reduce((s, o) => s + o.totalTTC, 0)
+    const finalized = approved + rejected
+    const validationRatePct =
+      finalized > 0 ? Math.round((100 * approved) / finalized) : null
+    return {
+      created,
+      pending,
+      approved,
+      rejected,
+      sumTTC,
+      sumApprovedTTC,
+      validationRatePct,
+    }
+  }, [rangeWebOrders])
   const caPeriod = useMemo(() => sumTotalTTC(rangeSales), [rangeSales])
   const tickets = rangeSales.length
   const breakdown = useMemo(() => paymentBreakdown(rangeSales), [rangeSales])
@@ -181,6 +225,52 @@ export function AnalytiqueView() {
     )
   }, [buckets, period])
 
+  const exportWebOrdersCsv = useCallback(() => {
+    const rows: string[][] = [
+      ['Analytique — commandes web CaisseCI'],
+      ['Période (date de création)', periodLabel],
+      ['Commandes créées', String(webStats.created)],
+      ['En attente (état actuel)', String(webStats.pending)],
+      ['Validées', String(webStats.approved)],
+      ['Rejetées', String(webStats.rejected)],
+      ['Montant total paniers créés (TTC)', String(webStats.sumTTC)],
+      ['Montant commandes validées (TTC)', String(webStats.sumApprovedTTC)],
+      [
+        'Taux validation (validées / traitées)',
+        webStats.validationRatePct != null
+          ? `${webStats.validationRatePct} %`
+          : '—',
+      ],
+      [],
+      [
+        'Réf',
+        'Date création',
+        'Magasin',
+        'Client',
+        'Statut',
+        'Total TTC',
+        'Paiement',
+      ],
+      ...rangeWebOrders.map((o) => [
+        o.id.slice(0, 8).toUpperCase(),
+        new Date(o.createdAt).toLocaleString('fr-FR'),
+        o.storeName ?? o.storeId,
+        o.customerName,
+        o.status === 'pending'
+          ? 'En attente'
+          : o.status === 'approved'
+            ? 'Validée'
+            : 'Rejetée',
+        String(o.totalTTC),
+        paymentMethodShortLabel(o.paymentMethod),
+      ]),
+    ]
+    downloadTextFile(
+      `analytique-commandes-web-${period}j.csv`,
+      toCsvSemicolon(rows),
+    )
+  }, [periodLabel, rangeWebOrders, webStats, period])
+
   const exportExcelWorkbook = useCallback(() => {
     const rows: string[][] = [
       ['=== Résumé ==='],
@@ -210,12 +300,51 @@ export function AnalytiqueView() {
         r.marginTTC != null ? String(r.marginTTC) : '',
         r.marginPct != null ? String(r.marginPct) : '',
       ]),
+      [],
+      ['=== Commandes web (créées sur la période) ==='],
+      ['Créées', String(webStats.created)],
+      ['En attente (état actuel)', String(webStats.pending)],
+      ['Validées', String(webStats.approved)],
+      ['Rejetées', String(webStats.rejected)],
+      ['Montant total paniers (TTC)', String(webStats.sumTTC)],
+      ['Montant validé (TTC)', String(webStats.sumApprovedTTC)],
+      [
+        'Taux validation %',
+        webStats.validationRatePct != null
+          ? String(webStats.validationRatePct)
+          : '',
+      ],
+      [],
+      ['Réf', 'Date création', 'Magasin', 'Client', 'Statut', 'Total TTC', 'Paiement'],
+      ...rangeWebOrders.map((o) => [
+        o.id.slice(0, 8).toUpperCase(),
+        new Date(o.createdAt).toLocaleString('fr-FR'),
+        o.storeName ?? o.storeId,
+        o.customerName,
+        o.status === 'pending'
+          ? 'En attente'
+          : o.status === 'approved'
+            ? 'Validée'
+            : 'Rejetée',
+        String(o.totalTTC),
+        paymentMethodShortLabel(o.paymentMethod),
+      ]),
     ]
     downloadTextFile(
       `analytique-complet-${period}j.csv`,
       toCsvSemicolon(rows),
     )
-  }, [buckets, peaks, top, period, periodLabel, caPeriod, tickets])
+  }, [
+    buckets,
+    peaks,
+    top,
+    period,
+    periodLabel,
+    caPeriod,
+    tickets,
+    rangeWebOrders,
+    webStats,
+  ])
 
   const dailyData = useMemo(
     () =>
@@ -289,6 +418,14 @@ export function AnalytiqueView() {
             <Button
               size="sm"
               variant="secondary"
+              iconLeft={<IconOnlineOrders />}
+              onClick={exportWebOrdersCsv}
+            >
+              Web
+            </Button>
+            <Button
+              size="sm"
+              variant="secondary"
               iconLeft={<IconSpreadsheet />}
               onClick={exportExcelWorkbook}
             >
@@ -336,6 +473,157 @@ export function AnalytiqueView() {
             tone="neutral"
           />
         </div>
+
+        <Card>
+          <CardHeader
+            eyebrow="Canal web"
+            title="Commandes en ligne"
+            subtitle={`Créées sur ${periodLabel} · volumes par jour de création (état au moment présent)`}
+            action={
+              <Button
+                size="sm"
+                variant="secondary"
+                className="print:hidden"
+                iconLeft={<IconOnlineOrders />}
+                onClick={exportWebOrdersCsv}
+              >
+                CSV
+              </Button>
+            }
+          />
+          <CardContent className="space-y-5">
+            {webStats.created === 0 ? (
+              <p className="py-6 text-center text-[13px] text-zinc-500">
+                Aucune commande web créée sur cette fenêtre de dates.
+              </p>
+            ) : (
+              <>
+                <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                  <Kpi
+                    label="Commandes créées"
+                    value={String(webStats.created)}
+                    hint="Sur la période"
+                    tone="neutral"
+                  />
+                  <Kpi
+                    label="En attente"
+                    value={String(webStats.pending)}
+                    hint="État actuel"
+                    tone="amber"
+                  />
+                  <Kpi
+                    label="Validées"
+                    value={String(webStats.approved)}
+                    hint={formatFCFA(webStats.sumApprovedTTC)}
+                    tone="accent"
+                  />
+                  <Kpi
+                    label="Rejetées"
+                    value={String(webStats.rejected)}
+                    hint={
+                      webStats.validationRatePct != null
+                        ? `Taux validation ${webStats.validationRatePct} % (validées / traitées)`
+                        : 'Pas encore de décision enregistrée'
+                    }
+                    tone="violet"
+                  />
+                </div>
+                <div>
+                  <p className="mb-2 text-[12px] font-medium text-zinc-700">
+                    Répartition journalière (nombre de commandes)
+                  </p>
+                  <div className="h-[240px] w-full">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <BarChart
+                        data={webDaily}
+                        margin={{ top: 8, right: 8, left: 0, bottom: 0 }}
+                      >
+                        <CartesianGrid
+                          strokeDasharray="2 6"
+                          stroke={COLORS.border}
+                          vertical={false}
+                        />
+                        <XAxis
+                          dataKey="label"
+                          tick={{ fontSize: 9, fill: COLORS.inkMuted }}
+                          axisLine={false}
+                          tickLine={false}
+                          interval={Math.max(0, Math.floor(webDaily.length / 14))}
+                        />
+                        <YAxis
+                          allowDecimals={false}
+                          width={32}
+                          tick={{ fontSize: 10, fill: COLORS.inkMuted }}
+                          axisLine={false}
+                          tickLine={false}
+                        />
+                        <Tooltip
+                          cursor={{ fill: '#fafafa' }}
+                          content={({ active, payload, label }) => {
+                            if (!active || !payload?.length) return null
+                            const row = payload[0]?.payload as {
+                              pending: number
+                              approved: number
+                              rejected: number
+                              totalTTC: number
+                            }
+                            if (!row) return null
+                            return (
+                              <div className="rounded-lg border border-zinc-200 bg-white px-3 py-2 text-[12px] shadow-[var(--shadow-pop)]">
+                                <p className="font-semibold text-zinc-700">{label}</p>
+                                <ul className="mt-1 space-y-0.5 text-[11px] text-zinc-600">
+                                  <li>En attente : {row.pending}</li>
+                                  <li>Validées : {row.approved}</li>
+                                  <li>Rejetées : {row.rejected}</li>
+                                </ul>
+                                <p className="mt-1 font-mono-nums text-[11px] text-zinc-500">
+                                  Montant paniers : {formatFCFA(row.totalTTC)}
+                                </p>
+                              </div>
+                            )
+                          }}
+                        />
+                        <Legend
+                          wrapperStyle={{ fontSize: 11 }}
+                          formatter={(value) =>
+                            value === 'pending'
+                              ? 'En attente'
+                              : value === 'approved'
+                                ? 'Validées'
+                                : value === 'rejected'
+                                  ? 'Rejetées'
+                                  : String(value)
+                          }
+                        />
+                        <Bar
+                          dataKey="pending"
+                          stackId="web"
+                          name="pending"
+                          fill={COLORS.webPending}
+                          maxBarSize={28}
+                        />
+                        <Bar
+                          dataKey="approved"
+                          stackId="web"
+                          name="approved"
+                          fill={COLORS.webApproved}
+                          maxBarSize={28}
+                        />
+                        <Bar
+                          dataKey="rejected"
+                          stackId="web"
+                          name="rejected"
+                          fill={COLORS.webRejected}
+                          maxBarSize={28}
+                        />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </div>
+                </div>
+              </>
+            )}
+          </CardContent>
+        </Card>
 
         <div className="grid gap-4 xl:grid-cols-3">
           <Card className="xl:col-span-2">

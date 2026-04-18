@@ -16,6 +16,7 @@ import {
 } from 'recharts'
 import { useActiveStore } from '../context/ActiveStoreContext'
 import { db } from '../db/db'
+import { Button } from '../ui/Button'
 import { formatFCFA } from '../lib/money'
 import { describeSalePayment } from '../lib/paymentDisplay'
 import {
@@ -37,6 +38,7 @@ import { PageHeader } from '../ui/PageHeader'
 import {
   IconCalendar,
   IconClock,
+  IconOnlineOrders,
   IconReceipt,
   IconShield,
   IconSparkles,
@@ -109,11 +111,18 @@ type RechartsTooltip = {
   label?: unknown
 }
 
-export function DashboardView() {
+type DashboardProps = {
+  /** Raccourci vers la file des commandes web (menu Ventes). */
+  onOpenOnlineOrders?: () => void
+}
+
+export function DashboardView({ onOpenOnlineOrders }: DashboardProps) {
   const { displayProducts, activeStoreId, activeStore } = useActiveStore()
   const salesRaw =
     useLiveQuery(() => db.sales.orderBy('createdAt').reverse().toArray(), [], []) ?? []
   const pendingSync = useLiveQuery(() => db.syncQueue.count(), [], 0) ?? 0
+  const onlineOrdersRaw =
+    useLiveQuery(() => db.onlineOrders.toArray(), [], []) ?? []
 
   const sales = useMemo(
     () => filterSalesForStore(salesRaw, activeStoreId),
@@ -209,6 +218,18 @@ export function DashboardView() {
 
   const recent = useMemo(() => sales.slice(0, 8), [sales])
 
+  const webPending = useMemo(
+    () =>
+      onlineOrdersRaw.filter(
+        (o) => o.status === 'pending' && o.storeId === activeStoreId,
+      ),
+    [onlineOrdersRaw, activeStoreId],
+  )
+  const webPendingTotalTTC = useMemo(
+    () => webPending.reduce((sum, o) => sum + o.totalTTC, 0),
+    [webPending],
+  )
+
   return (
     <div className="space-y-6 pb-6">
       <PageHeader
@@ -256,6 +277,40 @@ export function DashboardView() {
           icon={<IconSync />}
         />
       </div>
+
+      {webPending.length > 0 && onOpenOnlineOrders ? (
+        <Card className="border-emerald-200/90 bg-emerald-50/50">
+          <CardContent className="flex flex-col gap-4 py-4 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex min-w-0 items-start gap-3">
+              <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-emerald-600 text-white shadow-sm">
+                <IconOnlineOrders className="h-5 w-5" />
+              </span>
+              <div className="min-w-0">
+                <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-emerald-800">
+                  Commandes web
+                </p>
+                <p className="mt-1 text-[15px] font-semibold text-zinc-900">
+                  {webPending.length} commande{webPending.length > 1 ? 's' : ''} en
+                  attente
+                </p>
+                <p className="mt-0.5 font-mono-nums text-[13px] text-zinc-600">
+                  Montant cumulé {formatFCFA(webPendingTotalTTC)} TTC (panier non
+                  encaissé)
+                </p>
+              </div>
+            </div>
+            <Button
+              type="button"
+              variant="accent"
+              className="shrink-0"
+              iconLeft={<IconOnlineOrders className="h-4 w-4" />}
+              onClick={onOpenOnlineOrders}
+            >
+              Traiter la file
+            </Button>
+          </CardContent>
+        </Card>
+      ) : null}
 
       <div className="grid gap-4 xl:grid-cols-12">
         <Card className="xl:col-span-8">

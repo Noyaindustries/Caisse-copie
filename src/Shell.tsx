@@ -31,7 +31,13 @@ import {
   ensureAllStoreStockRows,
   syncProductCategoriesFromProducts,
 } from './db/db'
-import type { CartLine, Product, ProductWithStock, Sale } from './db/types'
+import type {
+  CartLine,
+  OnlineOrder,
+  Product,
+  ProductWithStock,
+  Sale,
+} from './db/types'
 import {
   confirmCheckoutSummary,
   defaultCheckoutPayment,
@@ -123,10 +129,11 @@ export function Shell({ staff, online, onLogout }: Props) {
   const [checkoutBusy, setCheckoutBusy] = useState(false)
   const [activeView, setActiveView] = useState<NavViewId>('caisse')
   const [isFloatingCartOpen, setIsFloatingCartOpen] = useState(false)
-  const [receiptOpen, setReceiptOpen] = useState<{
-    sale: Sale
-    autoPrint: boolean
-  } | null>(null)
+  const [receiptOpen, setReceiptOpen] = useState<
+    | { type: 'sale'; sale: Sale; autoPrint: boolean }
+    | { type: 'onlineOrder'; order: OnlineOrder; autoPrint: boolean }
+    | null
+  >(null)
   const [syncMetaTick, setSyncMetaTick] = useState(0)
   const [syncBusy, setSyncBusy] = useState(false)
 
@@ -692,7 +699,7 @@ export function Shell({ staff, online, onLogout }: Props) {
         },
       )
 
-      setReceiptOpen({ sale: saleRecord, autoPrint: true })
+      setReceiptOpen({ type: 'sale', sale: saleRecord, autoPrint: true })
       setCart([])
       setDiscountPct(0)
       setPromoInput('')
@@ -747,7 +754,11 @@ export function Shell({ staff, online, onLogout }: Props) {
     <div className="flex min-h-svh w-full max-w-full overflow-x-clip bg-zinc-50">
       {receiptOpen ? (
         <ReceiptModal
-          sale={receiptOpen.sale}
+          source={
+            receiptOpen.type === 'sale'
+              ? { kind: 'sale', sale: receiptOpen.sale }
+              : { kind: 'onlineOrder', order: receiptOpen.order }
+          }
           autoPrint={receiptOpen.autoPrint}
           onClose={() => setReceiptOpen(null)}
         />
@@ -824,7 +835,7 @@ export function Shell({ staff, online, onLogout }: Props) {
 
         {isCaisse ? (
           <div className="flex min-w-0 flex-1 flex-col xl:flex-row">
-            <main className="ui-scroll min-w-0 flex-1 overflow-y-auto p-3 pb-24 sm:p-4 xl:p-6 xl:pb-6">
+            <main className="ui-scroll min-w-0 flex-1 overflow-y-auto px-1 pb-24 pt-3 sm:px-3 sm:pt-4 xl:px-5 xl:pt-6 xl:pb-6">
               <CaisseHeader
                 ref={barcodeFieldRef}
                 sessionId={SESSION_ID}
@@ -905,7 +916,11 @@ export function Shell({ staff, online, onLogout }: Props) {
           </div>
         ) : (
           <div className="ui-scroll flex-1 overflow-y-auto px-3 pb-10 pt-3 sm:px-4 sm:pt-4 lg:px-8">
-            {activeView === 'dash' ? <DashboardView /> : null}
+            {activeView === 'dash' ? (
+              <DashboardView
+                onOpenOnlineOrders={() => setActiveView('onlineOrders')}
+              />
+            ) : null}
             {activeView === 'catalogue' ? (
               <CatalogueView
                 canManageCatalog={perms.canManageCatalogFull}
@@ -930,10 +945,19 @@ export function Shell({ staff, online, onLogout }: Props) {
             {activeView === 'onlineOrders' ? (
               <OnlineOrdersValidationView
                 online={online}
+                activeStoreId={activeStoreId}
+                activeStoreLabel={activeStore?.name ?? 'Magasin'}
+                canSwitchStore={canSwitchStore}
+                canValidateOnlineOrders={
+                  staff.role === 'gerant' || staff.role === 'admin'
+                }
                 reviewer={{
                   id: staff.id,
                   displayName: staff.displayName,
                 }}
+                onPrintOrder={(order, autoPrint = false) =>
+                  setReceiptOpen({ type: 'onlineOrder', order, autoPrint })
+                }
               />
             ) : null}
             {activeView === 'journal' ? (
@@ -945,7 +969,7 @@ export function Shell({ staff, online, onLogout }: Props) {
                   displayName: staff.displayName,
                 }}
                 onViewReceipt={(sale) =>
-                  setReceiptOpen({ sale, autoPrint: false })
+                  setReceiptOpen({ type: 'sale', sale, autoPrint: false })
                 }
               />
             ) : null}

@@ -1,5 +1,5 @@
-import { useEffect } from 'react'
-import type { Sale } from '../db/types'
+import { useEffect, useMemo } from 'react'
+import type { OnlineOrder, Sale } from '../db/types'
 import { formatFCFA, vatSlicesFromLinesTTC } from '../lib/money'
 import {
   paymentMethodShortLabel,
@@ -11,32 +11,89 @@ import { Button } from '../ui/Button'
 import { Modal } from '../ui/Modal'
 import { IconPrinter } from '../ui/icons'
 
+export type ReceiptModalSource =
+  | { kind: 'sale'; sale: Sale }
+  | { kind: 'onlineOrder'; order: OnlineOrder }
+
 type Props = {
-  sale: Sale
+  source: ReceiptModalSource
   autoPrint?: boolean
   onClose: () => void
 }
 
-export function ReceiptModal({ sale, autoPrint = false, onClose }: Props) {
+function syntheticSaleFromOnlineOrder(order: OnlineOrder): Sale {
+  return {
+    id: order.id,
+    createdAt: order.createdAt,
+    lines: order.lines,
+    subtotalHT: order.subtotalHT,
+    tva: order.tva,
+    totalTTC: order.totalTTC,
+    discountPct: order.discountPct ?? 0,
+    paymentMethod: order.paymentMethod,
+    synced: false,
+    storeId: order.storeId,
+    storeName: order.storeName,
+  }
+}
+
+function onlineOrderPaymentCaption(method: OnlineOrder['paymentMethod']): string {
+  switch (method) {
+    case 'cash':
+      return 'Espèces à la livraison / au retrait'
+    case 'card':
+      return 'Carte bancaire'
+    case 'mobile':
+      return 'Mobile money'
+    default:
+      return 'Paiement mixte'
+  }
+}
+
+function onlineOrderStatusLabel(status: OnlineOrder['status']): string {
+  switch (status) {
+    case 'pending':
+      return 'En attente de validation'
+    case 'approved':
+      return 'Validée'
+    case 'rejected':
+      return 'Rejetée'
+  }
+}
+
+export function ReceiptModal({ source, autoPrint = false, onClose }: Props) {
+  const isOnline = source.kind === 'onlineOrder'
+  const order = isOnline ? source.order : null
+  const sale = useMemo(
+    () =>
+      source.kind === 'sale' ? source.sale : syntheticSaleFromOnlineOrder(source.order),
+    [source],
+  )
+
+  const receiptKey = source.kind === 'sale' ? source.sale.id : source.order.id
+
   useEffect(() => {
     if (!autoPrint) return
     const id = window.setTimeout(() => {
       window.print()
     }, 150)
     return () => clearTimeout(id)
-  }, [autoPrint, sale.id])
+  }, [autoPrint, receiptKey])
 
   const dt = new Date(sale.createdAt)
   const amt = salePaymentAmounts(sale)
   const vatSlices = vatSlicesFromLinesTTC(sale.lines, sale.discountPct)
+
+  const modalTitle = isOnline ? 'Reçu commande en ligne' : 'Reçu de vente'
+  const tagline = isOnline ? 'CaisseCI · Commande web' : 'CaisseCI · Ticket de caisse'
 
   return (
     <Modal
       open
       onClose={onClose}
       size="md"
-      title="Reçu de vente"
-      subtitle={`N° ${sale.id.slice(0, 8).toUpperCase()}`}
+      title={modalTitle}
+      subtitle={`Réf. ${sale.id.slice(0, 8).toUpperCase()}`}
       footer={
         <>
           <Button variant="ghost" onClick={onClose}>
@@ -55,7 +112,7 @@ export function ReceiptModal({ sale, autoPrint = false, onClose }: Props) {
       <div id="print-receipt" className="space-y-4 text-zinc-800">
         <header className="border-b border-dashed border-zinc-200 pb-3 text-center">
           <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-zinc-700">
-            CaisseCI · Ticket de caisse
+            {tagline}
           </p>
           <p className="mt-1.5 font-mono-nums text-[12px] text-zinc-500">
             {dt.toLocaleString('fr-FR', {
@@ -66,6 +123,29 @@ export function ReceiptModal({ sale, autoPrint = false, onClose }: Props) {
           <p className="mt-1 font-mono-nums text-[10px] text-zinc-500">
             Session #{SESSION_ID}
           </p>
+          {order ? (
+            <div className="mt-2 space-y-1 rounded-lg bg-zinc-50 px-2 py-2 text-[11px] text-zinc-700">
+              <p>
+                <span className="text-zinc-500">Client :</span>{' '}
+                <span className="font-semibold text-zinc-900">{order.customerName}</span>
+              </p>
+              {order.customerPhone ? (
+                <p>
+                  <span className="text-zinc-500">Tél. :</span> {order.customerPhone}
+                </p>
+              ) : null}
+              {order.customerAddress ? (
+                <p>
+                  <span className="text-zinc-500">Adresse :</span> {order.customerAddress}
+                </p>
+              ) : null}
+              <p className="text-zinc-600">
+                {order.fulfillmentMode === 'delivery' ? 'Livraison' : 'Retrait boutique'}
+                {' · '}
+                <span className="font-medium">{onlineOrderStatusLabel(order.status)}</span>
+              </p>
+            </div>
+          ) : null}
           {sale.cashierDisplayName ? (
             <p className="mt-1 text-[11px] text-zinc-600">
               Caissier :{' '}
@@ -106,6 +186,18 @@ export function ReceiptModal({ sale, autoPrint = false, onClose }: Props) {
         {sale.discountPct > 0 ? (
           <p className="text-[11px] text-emerald-700">
             Remise appliquée : {sale.discountPct} %
+            {order?.promoCode ? (
+              <span className="font-mono text-zinc-600"> · {order.promoCode}</span>
+            ) : null}
+          </p>
+        ) : null}
+
+        {order && order.deliveryFeeTTC && order.deliveryFeeTTC > 0 ? (
+          <p className="text-[11px] text-zinc-600">
+            Frais de livraison TTC :{' '}
+            <span className="font-mono-nums font-semibold text-zinc-800">
+              {formatFCFA(order.deliveryFeeTTC)}
+            </span>
           </p>
         ) : null}
 
@@ -141,7 +233,9 @@ export function ReceiptModal({ sale, autoPrint = false, onClose }: Props) {
             Paiement
           </p>
           <p className="mt-1 text-center font-semibold text-zinc-900">
-            {paymentMethodShortLabel(sale.paymentMethod)}
+            {order
+              ? onlineOrderPaymentCaption(order.paymentMethod)
+              : paymentMethodShortLabel(sale.paymentMethod)}
           </p>
           <ul className="mt-2 space-y-1 font-mono-nums text-zinc-700">
             {amt.cash > 0 ? (
@@ -185,8 +279,22 @@ export function ReceiptModal({ sale, autoPrint = false, onClose }: Props) {
           ) : null}
         </div>
 
+        {order?.reviewedByDisplayName && order.status !== 'pending' ? (
+          <p className="text-center text-[10px] text-zinc-500">
+            Traité par {order.reviewedByDisplayName}
+            {order.reviewedAt
+              ? ` · ${new Date(order.reviewedAt).toLocaleString('fr-FR', {
+                  dateStyle: 'short',
+                  timeStyle: 'short',
+                })}`
+              : null}
+          </p>
+        ) : null}
+
         <footer className="pt-2 text-center text-[10px] text-zinc-400">
-          Merci de votre achat · Document non fiscal
+          {isOnline
+            ? 'Commande en ligne · Document non fiscal'
+            : 'Merci de votre achat · Document non fiscal'}
         </footer>
       </div>
     </Modal>

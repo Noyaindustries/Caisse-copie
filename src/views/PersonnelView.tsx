@@ -34,6 +34,8 @@ const PERMISSIONS: PermRow[] = [
   { label: 'Multi-magasins — transferts de stock', caissier: false, gerant: true, admin: true },
   { label: 'Multi-magasins — création de magasins', caissier: false, gerant: false, admin: true },
   { label: 'Rapport journalier & réimpression des reçus', caissier: true, gerant: true, admin: true },
+  { label: 'Commandes en ligne — consultation, export & reçu', caissier: true, gerant: true, admin: true },
+  { label: 'Commandes en ligne — validation / rejet', caissier: false, gerant: true, admin: true },
   { label: 'Clôture journalière & fond de caisse', caissier: false, gerant: true, admin: true },
   { label: 'Remboursements vente (audit)', caissier: false, gerant: true, admin: true },
   { label: 'Annulation transaction (audit)', caissier: true, gerant: true, admin: true },

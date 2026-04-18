@@ -83,12 +83,13 @@ export const NAV_SECTIONS: readonly NavSection[] = [
   },
 ] as const
 
-/** Caissier : caisse, catalogue lecture, multi-magasins (vue), rapport du jour. */
+/** Caissier : caisse, commandes web (reçus), catalogue lecture, multi-magasins (vue), rapport du jour. */
 const NAV_SECTIONS_CAISSIER: readonly NavSection[] = [
   {
     title: 'Ventes',
     items: [
       { id: 'caisse', label: 'Caisse' },
+      { id: 'onlineOrders', label: 'Commandes en ligne' },
       { id: 'journal', label: 'Rapport journalier' },
     ],
   },
