@@ -56,6 +56,7 @@ export {
   RotateCcw as IconRefund,
   Calendar as IconCalendar,
   Clock as IconClock,
+  Timer as IconPointage,
   TrendingUp as IconTrendingUp,
   TrendingDown as IconTrendingDown,
   Store as IconStore,

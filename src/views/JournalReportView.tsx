@@ -42,6 +42,8 @@ function auditKindLabel(k: AuditEventKind): string {
       return 'Modification stock'
     case 'stock_transfer':
       return 'Transfert'
+    case 'time_punch':
+      return 'Pointage'
     default:
       return k
   }
@@ -77,6 +79,18 @@ function auditPayloadSummary(ev: AuditEvent): string | null {
     if (ev.kind === 'cart_cancelled') {
       const lines = o.lines as unknown[] | undefined
       return Array.isArray(lines) ? `${lines.length} ligne(s)` : null
+    }
+    if (ev.kind === 'time_punch') {
+      const kind = o.kind === 'in' ? 'Arrivée' : o.kind === 'out' ? 'Départ' : null
+      const store = o.storeName ?? o.storeId
+      const note = o.note
+      const bits = [kind, typeof store === 'string' ? store : null]
+        .filter(Boolean)
+        .join(' · ')
+      if (typeof note === 'string' && note.trim()) {
+        return `${bits} — ${note.trim()}`
+      }
+      return bits || null
     }
     return null
   } catch {

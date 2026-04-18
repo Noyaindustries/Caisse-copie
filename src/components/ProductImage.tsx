@@ -1,4 +1,4 @@
-import { useMemo, useState, type ImgHTMLAttributes } from 'react'
+import { useEffect, useMemo, useState, type ImgHTMLAttributes } from 'react'
 import {
   productImageFallbackSvg,
   productImageRemoteUrl,
@@ -41,6 +41,10 @@ export function ProductImage({ product, alt, ...rest }: Props) {
   }, [product, fallback])
 
   const [src, setSrc] = useState(initialSrc)
+
+  useEffect(() => {
+    setSrc(initialSrc)
+  }, [initialSrc])
 
   return (
     <img

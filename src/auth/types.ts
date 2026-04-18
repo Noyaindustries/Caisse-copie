@@ -16,6 +16,8 @@ export interface StaffPermissions {
   canProcessRefunds: boolean
   canSwitchStore: boolean
   canManagePersonnel: boolean
+  /** Voir et filtrer les pointages de toute l’équipe (sinon : uniquement le sien). */
+  canViewTeamPointage: boolean
   /** Onglet création magasins / admin réseau. */
   canConfigureStoresAdmin: boolean
   canManageIntegrations: boolean

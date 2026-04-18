@@ -48,6 +48,21 @@ export interface StockTransfer {
   createdByProfileId?: string
 }
 
+/** Entrée / sortie pointage (magasin courant au moment du pointage). */
+export type TimePunchKind = 'in' | 'out'
+
+export interface TimePunch {
+  id: string
+  createdAt: number
+  profileId: string
+  /** Libellé figé au moment du pointage (historique si le profil change). */
+  profileDisplayName: string
+  storeId: string
+  storeName?: string
+  kind: TimePunchKind
+  note?: string
+}
+
 export interface Product {
   id: string
   name: string
@@ -173,6 +188,7 @@ export type AuditEventKind =
   | 'promo_applied'
   | 'stock_adjusted'
   | 'stock_transfer'
+  | 'time_punch'
 
 export interface AuditEvent {
   id: string

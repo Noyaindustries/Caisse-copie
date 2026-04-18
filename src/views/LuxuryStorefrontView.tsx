@@ -930,7 +930,11 @@ export function LuxuryStorefrontView({
                   return (
                     <article
                       key={product.id}
-                      className="overflow-hidden rounded-xl border border-white/10 bg-slate-950/70 transition hover:border-amber-200/40"
+                      className={`overflow-hidden rounded-xl border bg-slate-950/70 transition hover:shadow-md hover:shadow-emerald-950/30 ${
+                        soldOut
+                          ? 'border-slate-600/55 hover:border-slate-500/70'
+                          : 'border-emerald-400/35 hover:border-amber-200/55'
+                      }`}
                     >
                       <button
                         type="button"
@@ -959,7 +963,14 @@ export function LuxuryStorefrontView({
                         <p className="line-clamp-2 text-[10px] font-semibold text-slate-100">
                           {product.name}
                         </p>
-                        <p className="text-[9px] text-emerald-200/90">
+                        <p className="font-mono-nums text-[10px] font-semibold text-emerald-400">
+                          {formatFCFA(
+                            discountPct > 0
+                              ? product.priceTTC * (1 - discountPct / 100)
+                              : product.priceTTC,
+                          )}
+                        </p>
+                        <p className="text-[9px] text-slate-400">
                           {orderedQty} commande(s)
                         </p>
                       </button>
@@ -1022,7 +1033,11 @@ export function LuxuryStorefrontView({
                         return (
                           <article
                             key={product.id}
-                            className={`group overflow-hidden border border-white/10 bg-slate-950/75 transition duration-200 hover:-translate-y-0.5 hover:border-amber-200/40 hover:shadow-lg hover:shadow-black/30 ${
+                            className={`group overflow-hidden border bg-slate-950/75 transition duration-200 hover:-translate-y-0.5 hover:shadow-lg hover:shadow-black/30 ${
+                              soldOut
+                                ? 'border-slate-600/50 hover:border-slate-500/65'
+                                : 'border-emerald-400/35 hover:border-amber-200/55'
+                            } ${
                               cardDensity === 'compact' ? 'rounded-lg' : 'rounded-xl'
                             }`}
                           >
@@ -1046,19 +1061,12 @@ export function LuxuryStorefrontView({
                                   Rupture
                                 </span>
                               ) : null}
-                              <p className="absolute bottom-1.5 left-1.5 rounded-md bg-black/60 px-1.5 py-0.5 text-[10px] font-semibold text-amber-100 backdrop-blur-sm">
-                                {formatFCFA(
-                                  discountPct > 0
-                                    ? product.priceTTC * (1 - discountPct / 100)
-                                    : product.priceTTC,
-                                )}
-                              </p>
                             </button>
 
                             <button
                               type="button"
                               onClick={() => setDetailProduct(product)}
-                              className={`block w-full cursor-pointer text-left space-y-1 ${
+                              className={`block w-full cursor-pointer text-left ${
                                 cardDensity === 'compact' ? 'p-1.5' : 'p-2'
                               }`}
                             >
@@ -1072,13 +1080,17 @@ export function LuxuryStorefrontView({
                                 {product.name}
                               </h3>
                               <p
-                                className={`text-slate-400 ${
+                                className={`mt-0.5 font-mono-nums font-semibold text-emerald-400 ${
                                   cardDensity === 'compact'
-                                    ? 'text-[9px]'
-                                    : 'text-[10px]'
+                                    ? 'text-[10px]'
+                                    : 'text-[11px]'
                                 }`}
                               >
-                                {product.category}
+                                {formatFCFA(
+                                  discountPct > 0
+                                    ? product.priceTTC * (1 - discountPct / 100)
+                                    : product.priceTTC,
+                                )}
                               </p>
                             </button>
 

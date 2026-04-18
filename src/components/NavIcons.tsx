@@ -150,6 +150,20 @@ function IconClipboardCheck() {
   )
 }
 
+function IconTimer() {
+  return (
+    <svg className={cls} viewBox="0 0 24 24" fill="none" aria-hidden>
+      <circle cx="12" cy="13" r="7" stroke="currentColor" strokeWidth="1.5" />
+      <path
+        d="M12 10v3.5l2.5 1.5M9 3h6"
+        stroke="currentColor"
+        strokeWidth="1.5"
+        strokeLinecap="round"
+      />
+    </svg>
+  )
+}
+
 function IconTrending() {
   return (
     <svg className={cls} viewBox="0 0 24 24" fill="none" aria-hidden>
@@ -179,6 +193,7 @@ const MAP: Record<NavViewId, ReactNode> = {
   onlineOrders: <IconClipboardCheck />,
   journal: <IconLockClose />,
   personnel: <IconUsers />,
+  pointage: <IconTimer />,
   analytique: <IconTrending />,
   integrations: <IconPuzzle />,
   network: <IconBuilding />,

@@ -352,7 +352,6 @@ export function CatalogueView({
         />
       ) : (
         <>
-          {/* Desktop : tableau dense */}
           <div className="hidden md:block">
             <Table minWidth={760}>
               <THead>
@@ -388,8 +387,14 @@ export function CatalogueView({
                       </Td>
                       <Td className="font-medium text-zinc-900">
                         {p.name}
-                        <span className="block text-[11px] font-normal text-zinc-500 lg:hidden">
-                          {p.category} · <span className="font-mono-nums">{p.barcode}</span>
+                        <span className="mt-0.5 block text-[11px] font-normal text-zinc-500 lg:hidden">
+                          <span className="font-mono-nums font-semibold text-emerald-600">
+                            {formatFCFA(p.priceTTC)}
+                          </span>
+                          <span>
+                            {' '}
+                            · <span className="font-mono-nums">{p.barcode}</span>
+                          </span>
                         </span>
                       </Td>
                       <Td hideBelow="lg">{p.category}</Td>
@@ -469,7 +474,6 @@ export function CatalogueView({
             </Table>
           </div>
 
-          {/* Mobile : cartes compactes */}
           <ul className="grid gap-2 md:hidden">
             {filtered.map((p) => {
               const stockTone =
@@ -492,7 +496,7 @@ export function CatalogueView({
                   />
                   <div className="min-w-0 flex-1">
                     <div className="flex items-start justify-between gap-2">
-                      <p className="truncate text-[13px] font-semibold text-zinc-900">
+                      <p className="min-w-0 flex-1 truncate text-[13px] font-semibold text-zinc-900">
                         {p.name}
                       </p>
                       <span className="shrink-0 font-mono-nums text-[13px] font-bold text-zinc-900">
@@ -500,8 +504,7 @@ export function CatalogueView({
                       </span>
                     </div>
                     <p className="mt-0.5 text-[11px] text-zinc-500">
-                      {p.category} ·{' '}
-                      <span className="font-mono-nums">{p.barcode}</span> · TVA{' '}
+                      {p.category} · <span className="font-mono-nums">{p.barcode}</span> · TVA{' '}
                       {p.vatRatePct ?? 18} %
                     </p>
                     <div className="mt-2 flex flex-wrap items-center gap-1.5">

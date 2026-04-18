@@ -12,6 +12,7 @@ import type {
   Store,
   StoreStock,
   SyncQueueItem,
+  TimePunch,
 } from './types'
 import { DEFAULT_PRODUCT_CATEGORIES } from './types'
 import { SEED_INITIAL_STOCK_MAIN, SEED_PRODUCTS } from './seed'
@@ -29,6 +30,7 @@ export class CaisseDB extends Dexie {
   auditEvents!: Table<AuditEvent, string>
   onlineOrders!: Table<OnlineOrder, string>
   productCategories!: Table<ProductCategoryRow, string>
+  timePunches!: Table<TimePunch, string>
 
   constructor() {
     super('caisseci')
@@ -168,6 +170,20 @@ export class CaisseDB extends Dexie {
           seen.add(key)
         }
       })
+    this.version(8).stores({
+      products: 'id, barcode, category, archived',
+      sales: 'id, createdAt, synced, storeId',
+      syncQueue: '++id, createdAt',
+      stores: 'id, sortOrder',
+      storeStocks: 'id, storeId, productId, [storeId+productId]',
+      stockTransfers: 'id, createdAt, fromStoreId, toStoreId',
+      dayClosures: 'dateYmd',
+      refunds: 'id, saleId, createdAt',
+      auditEvents: 'id, createdAt, kind',
+      onlineOrders: 'id, createdAt, status, storeId',
+      productCategories: 'id, sortOrder',
+      timePunches: 'id, profileId, storeId, createdAt',
+    })
   }
 }
 

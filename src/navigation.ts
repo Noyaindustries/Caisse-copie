@@ -8,6 +8,7 @@ export type NavViewId =
   | 'onlineOrders'
   | 'journal'
   | 'personnel'
+  | 'pointage'
   | 'analytique'
   | 'integrations'
   | 'network'
@@ -20,6 +21,7 @@ export const VIEW_LABELS: Record<NavViewId, string> = {
   onlineOrders: 'Commandes en ligne',
   journal: 'Rapport journalier',
   personnel: 'Personnel',
+  pointage: 'Pointage',
   analytique: 'Analytique',
   integrations: 'Intégrations',
   network: 'Multi-magasins',
@@ -35,6 +37,7 @@ export const VIEW_SUBTITLES: Record<NavViewId, string> = {
     'Validation des commandes web avant décrémentation stock et vente',
   journal: 'Synthèse du jour, paiements et reçus',
   personnel: 'Profils et rôles',
+  pointage: 'Arrivées, départs et historique par magasin',
   analytique:
     'Périodes, top produits, heures de pointe, marges, exports CSV / Excel / PDF',
   integrations: 'Marketplace, API partenaires, app mobile gérant',
@@ -74,6 +77,7 @@ export const NAV_SECTIONS: readonly NavSection[] = [
     title: 'Équipe',
     items: [
       { id: 'personnel', label: 'Personnel' },
+      { id: 'pointage', label: 'Pointage' },
       { id: 'analytique', label: 'Analytique' },
     ],
   },
@@ -100,6 +104,10 @@ const NAV_SECTIONS_CAISSIER: readonly NavSection[] = [
       { id: 'network', label: 'Multi-magasins' },
     ],
   },
+  {
+    title: 'Temps',
+    items: [{ id: 'pointage', label: 'Pointage' }],
+  },
 ]
 
 /** Gérant : comme l’admin sauf personnel, création de magasins (onglet) et intégrations. */
@@ -108,7 +116,10 @@ const NAV_SECTIONS_GERANT: readonly NavSection[] = [
   NAV_SECTIONS[1],
   {
     title: 'Équipe',
-    items: [{ id: 'analytique', label: 'Analytique' }],
+    items: [
+      { id: 'pointage', label: 'Pointage' },
+      { id: 'analytique', label: 'Analytique' },
+    ],
   },
 ] as const
 

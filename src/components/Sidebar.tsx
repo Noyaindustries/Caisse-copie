@@ -21,6 +21,7 @@ import {
   IconNetwork,
   IconOnlineOrders,
   IconPersonnel,
+  IconPointage,
   IconStocks,
   IconStore,
 } from '../ui/icons'
@@ -36,6 +37,7 @@ const ICON_BY_VIEW: Record<NavViewId, ReactNode> = {
   onlineOrders: <IconOnlineOrders />,
   journal: <IconJournal />,
   personnel: <IconPersonnel />,
+  pointage: <IconPointage />,
   analytique: <IconAnalytique />,
   integrations: <IconIntegrations />,
   network: <IconNetwork />,

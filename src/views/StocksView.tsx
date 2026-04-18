@@ -454,7 +454,8 @@ export function StocksView({ isAdmin, auditActor }: Props) {
                         Seuil{' '}
                         <span className="font-mono-nums font-medium text-zinc-700">
                           {p.lowStockThreshold}
-                        </span>{' '}
+                        </span>
+                        {' '}
                         ·{' '}
                         <span className="font-mono-nums">
                           {formatFCFA(p.priceTTC)}

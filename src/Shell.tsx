@@ -25,6 +25,7 @@ import { DashboardView } from './views/DashboardView'
 import { MultiStoreView } from './views/MultiStoreView'
 import { OnlineOrdersValidationView } from './views/OnlineOrdersValidationView'
 import { PersonnelView } from './views/PersonnelView'
+import { PointageView } from './views/PointageView'
 import { StocksView } from './views/StocksView'
 import {
   db,
@@ -975,6 +976,14 @@ export function Shell({ staff, online, onLogout }: Props) {
             ) : null}
             {activeView === 'personnel' ? (
               <PersonnelView currentProfileId={staff.id} />
+            ) : null}
+            {activeView === 'pointage' ? (
+              <PointageView
+                staff={staff}
+                activeStoreId={activeStoreId}
+                activeStoreLabel={activeStore?.name ?? 'Magasin'}
+                canViewTeamPointage={perms.canViewTeamPointage}
+              />
             ) : null}
             {activeView === 'analytique' ? <AnalytiqueView /> : null}
             {activeView === 'integrations' ? <IntegrationsView /> : null}

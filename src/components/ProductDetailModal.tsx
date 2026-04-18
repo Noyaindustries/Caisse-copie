@@ -168,18 +168,10 @@ export function ProductDetailModal({
             {/* Corps */}
             <div className="flex min-w-0 flex-col gap-4 p-5 sm:p-6">
               <div>
-                <p
-                  className={cn(
-                    'text-[10px] font-bold uppercase tracking-[0.22em]',
-                    eyebrow,
-                  )}
-                >
-                  {product.category ?? 'Produit'}
-                </p>
                 <h2
                   id="product-detail-title"
                   className={cn(
-                    'mt-1.5 text-xl font-semibold tracking-tight sm:text-2xl',
+                    'text-xl font-semibold tracking-tight sm:text-2xl',
                     strong,
                   )}
                   style={{ textWrap: 'balance' } as React.CSSProperties}
@@ -190,7 +182,7 @@ export function ProductDetailModal({
                   <span
                     className={cn(
                       'font-mono-nums text-2xl font-bold tracking-tight sm:text-3xl',
-                      isDark ? 'text-amber-100' : 'text-zinc-900',
+                      isDark ? 'text-emerald-400' : 'text-emerald-600',
                     )}
                   >
                     {formatFCFA(product.priceTTC)}
@@ -428,10 +420,8 @@ export function ProductDetailModal({
               >
                 Vous aimerez aussi
               </p>
-              <h3
-                className={cn('mt-1 text-[15px] font-semibold', strong)}
-              >
-                Suggestions dans « {product.category} »
+              <h3 className={cn('mt-1 text-[15px] font-semibold', strong)}>
+                Suggestions
               </h3>
               <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4">
                 {related.map((r) => (
@@ -464,7 +454,7 @@ export function ProductDetailModal({
                       <p
                         className={cn(
                           'mt-0.5 font-mono-nums text-[12px] font-bold',
-                          isDark ? 'text-amber-100' : 'text-zinc-900',
+                          isDark ? 'text-emerald-400' : 'text-emerald-600',
                         )}
                       >
                         {formatFCFA(r.priceTTC)}

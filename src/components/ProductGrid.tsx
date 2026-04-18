@@ -120,7 +120,7 @@ export function ProductGrid({
                 </p>
                 <p
                   className={cn(
-                    'mt-1 font-mono-nums font-semibold text-zinc-900',
+                    'mt-1 font-mono-nums font-semibold text-emerald-600',
                     isCompact ? 'text-[13px]' : 'text-[14px]',
                   )}
                 >
