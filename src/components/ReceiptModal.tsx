@@ -85,7 +85,9 @@ export function ReceiptModal({ source, autoPrint = false, onClose }: Props) {
   const vatSlices = vatSlicesFromLinesTTC(sale.lines, sale.discountPct)
 
   const modalTitle = isOnline ? 'Reçu commande en ligne' : 'Reçu de vente'
-  const tagline = isOnline ? 'CaisseCI · Commande web' : 'CaisseCI · Ticket de caisse'
+  const tagline = isOnline
+    ? 'Digitalpro Solutions · Commande web'
+    : 'Digitalpro Solutions · Ticket de caisse'
 
   return (
     <Modal

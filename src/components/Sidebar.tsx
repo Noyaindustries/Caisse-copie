@@ -6,6 +6,7 @@ import { navSectionsForRole, type NavViewId } from '../navigation'
 import { Badge } from '../ui/Badge'
 import { cn } from '../ui/cn'
 import { Tooltip } from '../ui/Tooltip'
+import { BRAND_LOGO_SRC, BRAND_NAME } from '../brand'
 import {
   IconAnalytique,
   IconCaisse,
@@ -105,16 +106,18 @@ function SidebarBody({
           collapsed ? 'justify-center' : 'px-4',
         )}
       >
-        <div
-          className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-zinc-900 text-[13px] font-bold text-white"
-          aria-hidden
-        >
-          C
-        </div>
+        <img
+          src={BRAND_LOGO_SRC}
+          alt=""
+          className={cn(
+            'shrink-0 rounded-lg border border-zinc-200 bg-white object-contain object-left',
+            collapsed ? 'h-8 w-8 p-0.5' : 'h-8 max-h-9 w-auto max-w-[140px]',
+          )}
+        />
         {!collapsed ? (
           <div className="min-w-0">
             <p className="truncate text-[13px] font-semibold tracking-tight text-zinc-900">
-              CaisseCI
+              {BRAND_NAME}
             </p>
             <p className="truncate text-[10px] uppercase tracking-wider text-zinc-400">
               Point de vente

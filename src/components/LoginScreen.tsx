@@ -6,6 +6,7 @@ import {
   subscribeStaffProfiles,
 } from '../auth/profiles'
 import type { StaffAuthMethod, StaffProfile } from '../auth/types'
+import { BRAND_LOGO_SRC, BRAND_NAME } from '../brand'
 import { Button } from '../ui/Button'
 import { Field, Input } from '../ui/Input'
 import { IconArrowLeft, IconArrowRight, IconShield } from '../ui/icons'
@@ -69,12 +70,11 @@ export function LoginScreen({ onSuccess }: Props) {
         </div>
         <div className="relative flex h-full flex-col justify-between p-12 text-zinc-100">
           <div className="flex items-center gap-3">
-            <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-white text-[14px] font-bold text-zinc-900">
-              C
-            </div>
-            <span className="text-[14px] font-semibold tracking-tight">
-              CaisseCI
-            </span>
+            <img
+              src={BRAND_LOGO_SRC}
+              alt={BRAND_NAME}
+              className="h-10 max-h-11 w-auto max-w-[min(85vw,260px)] rounded-lg border border-white/15 bg-white/95 object-contain object-left p-1"
+            />
           </div>
           <div>
             <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-emerald-400/90">

@@ -18,6 +18,7 @@ import { productImageSrc } from '../lib/productImage'
 import { ProductImage } from '../components/ProductImage'
 import { ProductDetailModal } from '../components/ProductDetailModal'
 import { storeStockRowId } from '../lib/storeStockId'
+import { BRAND_LOGO_SRC, BRAND_NAME } from '../brand'
 
 type Props = {
   online: boolean
@@ -40,7 +41,6 @@ const PROMO_CODES: Record<string, number> = {
   PROMO10: 10,
 }
 const FREE_DELIVERY_THRESHOLD = 15000
-const BRAND_LOGO_SRC = '/branding/greenfever-logo.png'
 
 function CartIcon({ className }: { className?: string }) {
   return (
@@ -547,12 +547,12 @@ export function LuxuryStorefrontView({
               type="button"
               onDoubleClick={onOpenStaffLogin}
               title="Double-clic pour accéder à la gestion"
-              className="shrink-0 rounded-full"
+              className="shrink-0 rounded-xl border border-amber-200/35 bg-white/5 p-1 ring-1 ring-emerald-200/25"
             >
               <img
                 src={BRAND_LOGO_SRC}
-                alt="Logo The Greenfever"
-                className="h-9 w-9 rounded-full border border-amber-200/45 object-cover ring-2 ring-emerald-200/35 lg:h-10 lg:w-10"
+                alt={BRAND_NAME}
+                className="h-8 max-h-9 w-auto max-w-[min(52vw,200px)] object-contain object-left sm:h-9 sm:max-h-10 lg:max-w-[240px]"
               />
             </button>
             <nav className="flex min-w-0 flex-1 items-center gap-1.5 overflow-x-auto whitespace-nowrap lg:justify-center">
@@ -1002,7 +1002,7 @@ export function LuxuryStorefrontView({
                   <img
                     src={BRAND_LOGO_SRC}
                     alt="Chargement catalogue"
-                    className="h-14 w-14 rounded-full border-2 border-amber-200/55 object-cover ring-2 ring-emerald-200/35 animate-[spin_3.2s_linear_infinite]"
+                    className="h-14 w-auto max-w-[200px] rounded-xl border border-amber-200/45 object-contain object-center ring-1 ring-emerald-200/30 animate-pulse"
                   />
                 </div>
                 <p className="text-sm text-slate-400">
@@ -1427,8 +1427,8 @@ export function LuxuryStorefrontView({
             <div>
               <img
                 src={BRAND_LOGO_SRC}
-                alt="Logo boutique"
-                className="h-12 w-12 rounded-full border border-amber-200/35 object-cover"
+                alt={BRAND_NAME}
+                className="h-12 w-auto max-w-[220px] rounded-xl border border-amber-200/35 object-contain object-left"
               />
               <p className="mt-2 text-sm text-slate-300">
                 Commande premium avec validation en magasin, livraison locale et

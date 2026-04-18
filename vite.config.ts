@@ -10,13 +10,13 @@ export default defineConfig({
     tailwindcss(),
     VitePWA({
       registerType: 'autoUpdate',
-      includeAssets: ['favicon.svg'],
+      includeAssets: ['favicon.svg', 'branding/digitalpro-solutions-logo.png'],
       manifest: {
-        name: 'CaisseCI — Point de vente',
-        short_name: 'CaisseCI',
+        name: 'Digitalpro Solutions — Point de vente',
+        short_name: 'Digitalpro Solutions',
         description:
           'Caisse enregistreuse hors ligne pour commerces en Côte d’Ivoire',
-        theme_color: '#16a34a',
+        theme_color: '#003399',
         background_color: '#f8fafc',
         display: 'standalone',
         orientation: 'any',
