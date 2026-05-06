@@ -1,9 +1,12 @@
 import Dexie, { type Table } from 'dexie'
 import { storeStockRowId } from '../lib/storeStockId'
+import { locationStockRowId } from '../lib/locationStockId'
 import type {
   AuditEvent,
   DayClosure,
+  DiningTable,
   OnlineOrder,
+  Promotion,
   Product,
   ProductCategoryRow,
   RefundRecord,
@@ -13,6 +16,16 @@ import type {
   StoreStock,
   SyncQueueItem,
   TimePunch,
+  LoyaltyCustomer,
+  LoyaltyTransaction,
+  HrRequest,
+  CrmInteraction,
+  TicketInvoice,
+  TerminalNode,
+  StockLocation,
+  LocationStock,
+  StockLocationTransfer,
+  TableReservation,
 } from './types'
 import { DEFAULT_PRODUCT_CATEGORIES } from './types'
 import { SEED_INITIAL_STOCK_MAIN, SEED_PRODUCTS } from './seed'
@@ -24,6 +37,9 @@ export class CaisseDB extends Dexie {
   syncQueue!: Table<SyncQueueItem, number>
   stores!: Table<Store, string>
   storeStocks!: Table<StoreStock, string>
+  stockLocations!: Table<StockLocation, string>
+  locationStocks!: Table<LocationStock, string>
+  locationTransfers!: Table<StockLocationTransfer, string>
   stockTransfers!: Table<StockTransfer, string>
   dayClosures!: Table<DayClosure, string>
   refunds!: Table<RefundRecord, string>
@@ -31,6 +47,15 @@ export class CaisseDB extends Dexie {
   onlineOrders!: Table<OnlineOrder, string>
   productCategories!: Table<ProductCategoryRow, string>
   timePunches!: Table<TimePunch, string>
+  diningTables!: Table<DiningTable, string>
+  promotions!: Table<Promotion, string>
+  loyaltyCustomers!: Table<LoyaltyCustomer, string>
+  loyaltyTransactions!: Table<LoyaltyTransaction, string>
+  hrRequests!: Table<HrRequest, string>
+  crmInteractions!: Table<CrmInteraction, string>
+  ticketInvoices!: Table<TicketInvoice, string>
+  terminalNodes!: Table<TerminalNode, string>
+  tableReservations!: Table<TableReservation, string>
 
   constructor() {
     super('caisseci')
@@ -184,6 +209,210 @@ export class CaisseDB extends Dexie {
       productCategories: 'id, sortOrder',
       timePunches: 'id, profileId, storeId, createdAt',
     })
+    this.version(9).stores({
+      products: 'id, barcode, category, archived',
+      sales: 'id, createdAt, synced, storeId',
+      syncQueue: '++id, createdAt',
+      stores: 'id, sortOrder',
+      storeStocks: 'id, storeId, productId, [storeId+productId]',
+      stockTransfers: 'id, createdAt, fromStoreId, toStoreId',
+      dayClosures: 'dateYmd',
+      refunds: 'id, saleId, createdAt',
+      auditEvents: 'id, createdAt, kind',
+      onlineOrders: 'id, createdAt, status, storeId',
+      productCategories: 'id, sortOrder',
+      timePunches: 'id, profileId, storeId, createdAt',
+      diningTables: 'id, storeId, status, sortOrder, [storeId+sortOrder]',
+    })
+    this.version(10).stores({
+      products: 'id, barcode, category, archived',
+      sales: 'id, createdAt, synced, storeId',
+      syncQueue: '++id, createdAt',
+      stores: 'id, sortOrder',
+      storeStocks: 'id, storeId, productId, [storeId+productId]',
+      stockTransfers: 'id, createdAt, fromStoreId, toStoreId',
+      dayClosures: 'dateYmd',
+      refunds: 'id, saleId, createdAt',
+      auditEvents: 'id, createdAt, kind',
+      onlineOrders: 'id, createdAt, status, storeId',
+      productCategories: 'id, sortOrder',
+      timePunches: 'id, profileId, storeId, createdAt',
+      diningTables: 'id, storeId, status, sortOrder, [storeId+sortOrder]',
+      promotions: 'id, code, active, storeId, [active+code]',
+    })
+    this.version(11).stores({
+      products: 'id, barcode, category, archived',
+      sales: 'id, createdAt, synced, storeId',
+      syncQueue: '++id, createdAt',
+      stores: 'id, sortOrder',
+      storeStocks: 'id, storeId, productId, [storeId+productId]',
+      stockTransfers: 'id, createdAt, fromStoreId, toStoreId',
+      dayClosures: 'dateYmd',
+      refunds: 'id, saleId, createdAt',
+      auditEvents: 'id, createdAt, kind',
+      onlineOrders: 'id, createdAt, status, storeId',
+      productCategories: 'id, sortOrder',
+      timePunches: 'id, profileId, storeId, createdAt',
+      diningTables: 'id, storeId, status, sortOrder, [storeId+sortOrder]',
+      promotions: 'id, code, active, storeId, [active+code]',
+      loyaltyCustomers: 'id, phone, updatedAt',
+      loyaltyTransactions: 'id, customerId, createdAt, type',
+    })
+    this.version(12).stores({
+      products: 'id, barcode, category, archived',
+      sales: 'id, createdAt, synced, storeId',
+      syncQueue: '++id, createdAt',
+      stores: 'id, sortOrder',
+      storeStocks: 'id, storeId, productId, [storeId+productId]',
+      stockTransfers: 'id, createdAt, fromStoreId, toStoreId',
+      dayClosures: 'dateYmd',
+      refunds: 'id, saleId, createdAt',
+      auditEvents: 'id, createdAt, kind',
+      onlineOrders: 'id, createdAt, status, storeId',
+      productCategories: 'id, sortOrder',
+      timePunches: 'id, profileId, storeId, createdAt',
+      diningTables: 'id, storeId, status, sortOrder, [storeId+sortOrder]',
+      promotions: 'id, code, active, storeId, [active+code]',
+      loyaltyCustomers: 'id, phone, updatedAt',
+      loyaltyTransactions: 'id, customerId, createdAt, type',
+      hrRequests: 'id, createdAt, staffProfileId, status, type, [staffProfileId+createdAt]',
+      crmInteractions:
+        'id, createdAt, customerId, customerPhone, kind, [customerId+createdAt]',
+    })
+    this.version(13).stores({
+      products: 'id, barcode, category, archived',
+      sales: 'id, createdAt, synced, storeId',
+      syncQueue: '++id, createdAt',
+      stores: 'id, sortOrder',
+      storeStocks: 'id, storeId, productId, [storeId+productId]',
+      stockTransfers: 'id, createdAt, fromStoreId, toStoreId',
+      dayClosures: 'dateYmd',
+      refunds: 'id, saleId, createdAt',
+      auditEvents: 'id, createdAt, kind',
+      onlineOrders: 'id, createdAt, status, storeId',
+      productCategories: 'id, sortOrder',
+      timePunches: 'id, profileId, storeId, createdAt',
+      diningTables: 'id, storeId, status, sortOrder, [storeId+sortOrder]',
+      promotions: 'id, code, active, storeId, [active+code]',
+      loyaltyCustomers: 'id, phone, updatedAt',
+      loyaltyTransactions: 'id, customerId, createdAt, type',
+      hrRequests: 'id, createdAt, staffProfileId, status, type, [staffProfileId+createdAt]',
+      crmInteractions:
+        'id, createdAt, customerId, customerPhone, kind, [customerId+createdAt]',
+      terminalNodes: 'id, storeId, online, lastSeenAt, [storeId+lastSeenAt]',
+    })
+    this.version(14).stores({
+      products: 'id, barcode, category, archived',
+      sales: 'id, createdAt, synced, storeId',
+      syncQueue: '++id, createdAt',
+      stores: 'id, sortOrder',
+      storeStocks: 'id, storeId, productId, [storeId+productId]',
+      stockLocations: 'id, storeId, active, sortOrder, [storeId+sortOrder]',
+      locationStocks:
+        'id, storeId, locationId, productId, [storeId+productId], [storeId+locationId]',
+      locationTransfers: 'id, createdAt, storeId, productId, fromLocationId, toLocationId',
+      stockTransfers: 'id, createdAt, fromStoreId, toStoreId',
+      dayClosures: 'dateYmd',
+      refunds: 'id, saleId, createdAt',
+      auditEvents: 'id, createdAt, kind',
+      onlineOrders: 'id, createdAt, status, storeId',
+      productCategories: 'id, sortOrder',
+      timePunches: 'id, profileId, storeId, createdAt',
+      diningTables: 'id, storeId, status, sortOrder, [storeId+sortOrder]',
+      promotions: 'id, code, active, storeId, [active+code]',
+      loyaltyCustomers: 'id, phone, updatedAt',
+      loyaltyTransactions: 'id, customerId, createdAt, type',
+      hrRequests: 'id, createdAt, staffProfileId, status, type, [staffProfileId+createdAt]',
+      crmInteractions:
+        'id, createdAt, customerId, customerPhone, kind, [customerId+createdAt]',
+      terminalNodes: 'id, storeId, online, lastSeenAt, [storeId+lastSeenAt]',
+    })
+    this.version(15).stores({
+      products: 'id, barcode, category, archived',
+      sales: 'id, createdAt, synced, storeId',
+      syncQueue: '++id, createdAt',
+      stores: 'id, sortOrder',
+      storeStocks: 'id, storeId, productId, [storeId+productId]',
+      stockLocations: 'id, storeId, active, sortOrder, [storeId+sortOrder]',
+      locationStocks:
+        'id, storeId, locationId, productId, [storeId+productId], [storeId+locationId]',
+      locationTransfers: 'id, createdAt, storeId, productId, fromLocationId, toLocationId',
+      stockTransfers: 'id, createdAt, fromStoreId, toStoreId',
+      dayClosures: 'dateYmd',
+      refunds: 'id, saleId, createdAt',
+      auditEvents: 'id, createdAt, kind',
+      onlineOrders: 'id, createdAt, status, storeId',
+      productCategories: 'id, sortOrder',
+      timePunches: 'id, profileId, storeId, createdAt',
+      diningTables: 'id, storeId, status, sortOrder, [storeId+sortOrder]',
+      promotions: 'id, code, active, storeId, [active+code]',
+      loyaltyCustomers: 'id, phone, updatedAt',
+      loyaltyTransactions: 'id, customerId, createdAt, type',
+      hrRequests: 'id, createdAt, staffProfileId, status, type, [staffProfileId+createdAt]',
+      crmInteractions:
+        'id, createdAt, customerId, customerPhone, kind, [customerId+createdAt]',
+      ticketInvoices: 'id, createdAt, updatedAt, kind, status, storeId, reference, [storeId+createdAt]',
+      terminalNodes: 'id, storeId, online, lastSeenAt, [storeId+lastSeenAt]',
+    })
+    this.version(16).stores({
+      products: 'id, barcode, category, archived',
+      sales: 'id, createdAt, synced, storeId',
+      syncQueue: '++id, createdAt',
+      stores: 'id, sortOrder',
+      storeStocks: 'id, storeId, productId, [storeId+productId]',
+      stockLocations: 'id, storeId, active, sortOrder, [storeId+sortOrder]',
+      locationStocks:
+        'id, storeId, locationId, productId, [storeId+productId], [storeId+locationId]',
+      locationTransfers: 'id, createdAt, storeId, productId, fromLocationId, toLocationId',
+      stockTransfers: 'id, createdAt, fromStoreId, toStoreId',
+      dayClosures: 'dateYmd',
+      refunds: 'id, saleId, createdAt',
+      auditEvents: 'id, createdAt, kind',
+      onlineOrders: 'id, createdAt, status, storeId',
+      productCategories: 'id, sortOrder',
+      timePunches: 'id, profileId, storeId, createdAt',
+      diningTables: 'id, storeId, status, sortOrder, [storeId+sortOrder]',
+      promotions: 'id, code, active, storeId, [active+code]',
+      loyaltyCustomers: 'id, phone, updatedAt',
+      loyaltyTransactions: 'id, customerId, createdAt, type',
+      hrRequests: 'id, createdAt, staffProfileId, status, type, [staffProfileId+createdAt]',
+      crmInteractions:
+        'id, createdAt, customerId, customerPhone, kind, [customerId+createdAt]',
+      ticketInvoices: 'id, createdAt, updatedAt, kind, status, storeId, reference, [storeId+createdAt]',
+      terminalNodes: 'id, storeId, online, lastSeenAt, [storeId+lastSeenAt]',
+      tableReservations:
+        'id, storeId, tableId, status, startAt, endAt, [storeId+startAt], [tableId+startAt]',
+    })
+    this.version(17).stores({
+      products: 'id, barcode, category, archived',
+      sales: 'id, createdAt, synced, storeId',
+      syncQueue: '++id, createdAt',
+      stores: 'id, sortOrder',
+      storeStocks: 'id, storeId, productId, [storeId+productId]',
+      stockLocations: 'id, storeId, active, sortOrder, [storeId+sortOrder]',
+      locationStocks:
+        'id, storeId, locationId, productId, [storeId+productId], [storeId+locationId]',
+      locationTransfers: 'id, createdAt, storeId, productId, fromLocationId, toLocationId',
+      stockTransfers: 'id, createdAt, fromStoreId, toStoreId',
+      dayClosures: 'dateYmd',
+      refunds: 'id, saleId, createdAt',
+      auditEvents: 'id, createdAt, kind',
+      onlineOrders:
+        'id, createdAt, status, storeId, sourcePlatform, externalOrderRef, [storeId+createdAt]',
+      productCategories: 'id, sortOrder',
+      timePunches: 'id, profileId, storeId, createdAt',
+      diningTables: 'id, storeId, status, sortOrder, [storeId+sortOrder]',
+      promotions: 'id, code, active, storeId, [active+code]',
+      loyaltyCustomers: 'id, phone, updatedAt',
+      loyaltyTransactions: 'id, customerId, createdAt, type',
+      hrRequests: 'id, createdAt, staffProfileId, status, type, [staffProfileId+createdAt]',
+      crmInteractions:
+        'id, createdAt, customerId, customerPhone, kind, [customerId+createdAt]',
+      ticketInvoices: 'id, createdAt, updatedAt, kind, status, storeId, reference, [storeId+createdAt]',
+      terminalNodes: 'id, storeId, online, lastSeenAt, [storeId+lastSeenAt]',
+      tableReservations:
+        'id, storeId, tableId, status, startAt, endAt, [storeId+startAt], [tableId+startAt]',
+    })
   }
 }
 
@@ -251,6 +480,82 @@ async function ensureStores(): Promise<void> {
   }
 }
 
+async function ensureDiningTablesSeed(): Promise<void> {
+  if ((await db.diningTables.count()) > 0) return
+  const stores = await db.stores.toArray()
+  const rows: DiningTable[] = []
+  for (const store of stores) {
+    for (let i = 1; i <= 8; i += 1) {
+      rows.push({
+        id: crypto.randomUUID(),
+        storeId: store.id,
+        name: `Table ${i}`,
+        capacity: i <= 4 ? 2 : 4,
+        area: i <= 4 ? 'Salle' : 'Terrasse',
+        status: 'free',
+        sortOrder: i - 1,
+      })
+    }
+  }
+  if (rows.length > 0) {
+    await db.diningTables.bulkAdd(rows)
+  }
+}
+
+async function ensurePromotionsSeed(): Promise<void> {
+  if ((await db.promotions.count()) > 0) return
+  const now = Date.now()
+  const rows: Promotion[] = [
+    {
+      id: crypto.randomUUID(),
+      code: 'PROMO5',
+      label: 'Remise bienvenue 5%',
+      discountPct: 5,
+      active: true,
+      usageCount: 0,
+      createdAt: now,
+      updatedAt: now,
+    },
+    {
+      id: crypto.randomUUID(),
+      code: 'PROMO10',
+      label: 'Offre fidélité 10%',
+      discountPct: 10,
+      active: true,
+      usageCount: 0,
+      createdAt: now,
+      updatedAt: now,
+    },
+  ]
+  await db.promotions.bulkAdd(rows)
+}
+
+async function ensureStockLocationsSeed(): Promise<void> {
+  const stores = await db.stores.toArray()
+  for (const store of stores) {
+    const existing = await db.stockLocations.where('storeId').equals(store.id).count()
+    if (existing > 0) continue
+    await db.stockLocations.bulkAdd([
+      {
+        id: crypto.randomUUID(),
+        storeId: store.id,
+        name: 'Réserve',
+        code: 'RES',
+        sortOrder: 0,
+        active: true,
+      },
+      {
+        id: crypto.randomUUID(),
+        storeId: store.id,
+        name: 'Surface de vente',
+        code: 'SHOP',
+        sortOrder: 1,
+        active: true,
+      },
+    ])
+  }
+}
+
 /** Crée toutes les cellules (magasin × produit) manquantes avec stock 0. */
 export async function ensureAllStoreStockRows(): Promise<void> {
   const [stores, products, rows] = await Promise.all([
@@ -270,6 +575,37 @@ export async function ensureAllStoreStockRows(): Promise<void> {
   }
   if (batch.length > 0) {
     await db.storeStocks.bulkPut(batch)
+  }
+}
+
+export async function ensureAllLocationStockRows(): Promise<void> {
+  const [stores, products, locations, rows] = await Promise.all([
+    db.stores.toArray(),
+    db.products.toArray(),
+    db.stockLocations.toArray(),
+    db.locationStocks.toArray(),
+  ])
+  const have = new Set(rows.map((r) => r.id))
+  const batch: LocationStock[] = []
+  for (const s of stores) {
+    const storeLocations = locations.filter((l) => l.storeId === s.id)
+    for (const loc of storeLocations) {
+      for (const p of products) {
+        const id = locationStockRowId(s.id, loc.id, p.id)
+        if (!have.has(id)) {
+          batch.push({
+            id,
+            storeId: s.id,
+            locationId: loc.id,
+            productId: p.id,
+            stock: 0,
+          })
+        }
+      }
+    }
+  }
+  if (batch.length > 0) {
+    await db.locationStocks.bulkPut(batch)
   }
 }
 
@@ -295,5 +631,9 @@ export async function ensureSeed(): Promise<void> {
   }
 
   await ensureAllStoreStockRows()
+  await ensureStockLocationsSeed()
+  await ensureAllLocationStockRows()
   await syncProductCategoriesFromProducts()
+  await ensureDiningTablesSeed()
+  await ensurePromotionsSeed()
 }

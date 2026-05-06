@@ -5,20 +5,20 @@
   --font-mono: 'JetBrains Mono', ui-monospace, monospace;
 
   --color-surface: #ffffff;
-  --color-surface-muted: #fafaf9;
-  --color-surface-sunken: #f4f4f5;
-  --color-border: #e4e4e7;
-  --color-border-strong: #d4d4d8;
-  --color-ink: #09090b;
-  --color-ink-muted: #52525b;
-  --color-ink-subtle: #71717a;
-  --color-accent: #059669;
-  --color-accent-soft: #d1fae5;
-  --color-accent-strong: #047857;
+  --color-surface-muted: #f6f8fc;
+  --color-surface-sunken: #eef2f8;
+  --color-border: #d9e1ee;
+  --color-border-strong: #c3cee2;
+  --color-ink: #172033;
+  --color-ink-muted: #4a5a78;
+  --color-ink-subtle: #6b7b98;
+  --color-accent: #1463ff;
+  --color-accent-soft: #e6efff;
+  --color-accent-strong: #0f4cc7;
 
-  --shadow-card: 0 1px 2px rgba(9, 9, 11, 0.04), 0 8px 24px -12px rgba(9, 9, 11, 0.08);
-  --shadow-pop: 0 1px 2px rgba(9, 9, 11, 0.05), 0 12px 32px -12px rgba(9, 9, 11, 0.18);
-  --shadow-overlay: 0 32px 64px -32px rgba(9, 9, 11, 0.45);
+  --shadow-card: 0 1px 2px rgba(23, 32, 51, 0.04), 0 14px 40px -24px rgba(23, 32, 51, 0.2);
+  --shadow-pop: 0 1px 2px rgba(23, 32, 51, 0.06), 0 18px 50px -22px rgba(23, 32, 51, 0.3);
+  --shadow-overlay: 0 40px 80px -34px rgba(23, 32, 51, 0.45);
 
   --ease-out-quart: cubic-bezier(0.22, 1, 0.36, 1);
 }
@@ -43,7 +43,11 @@ body {
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   color: var(--color-ink);
-  background: var(--color-surface-muted);
+  background:
+    radial-gradient(circle at 15% -10%, #e8f0ff 0%, transparent 42%),
+    radial-gradient(circle at 85% -20%, #f0ecff 0%, transparent 36%),
+    linear-gradient(180deg, #fbfcff 0%, var(--color-surface-muted) 100%);
+  padding-bottom: env(safe-area-inset-bottom);
 }
 
 #root {
@@ -64,9 +68,10 @@ body {
   }
 
   .ui-card {
-    background: var(--color-surface);
+    background:
+      linear-gradient(165deg, rgba(255, 255, 255, 0.96), rgba(250, 252, 255, 0.94));
     border: 1px solid var(--color-border);
-    border-radius: 12px;
+    border-radius: 14px;
     box-shadow: var(--shadow-card);
   }
   .ui-card-flat {
@@ -89,8 +94,8 @@ body {
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    gap: 0.5rem;
-    border-radius: 8px;
+    gap: 0.4375rem;
+    border-radius: 10px;
     border: 1px solid transparent;
     padding: 0.5rem 0.875rem;
     font-size: 0.8125rem;
@@ -102,6 +107,7 @@ body {
       color 140ms var(--ease-out-quart),
       box-shadow 140ms var(--ease-out-quart);
     cursor: pointer;
+    -webkit-user-select: none;
     user-select: none;
   }
   .ui-btn:disabled {
@@ -114,18 +120,20 @@ body {
   }
 
   .ui-btn-primary {
-    background: var(--color-ink);
+    background: linear-gradient(135deg, #1b2a4a, #273b66);
     color: white;
-    border-color: var(--color-ink);
+    border-color: #2f4778;
+    box-shadow: 0 10px 20px -14px rgba(27, 42, 74, 0.85);
   }
   .ui-btn-primary:hover:not(:disabled) {
-    background: #18181b;
+    filter: brightness(1.05);
   }
 
   .ui-btn-accent {
-    background: var(--color-accent);
+    background: linear-gradient(135deg, var(--color-accent), #3c7dff);
     color: white;
-    border-color: var(--color-accent);
+    border-color: #2f70ef;
+    box-shadow: 0 10px 20px -14px rgba(20, 99, 255, 0.8);
   }
   .ui-btn-accent:hover:not(:disabled) {
     background: var(--color-accent-strong);
@@ -133,10 +141,10 @@ body {
   }
 
   .ui-btn-secondary {
-    background: var(--color-surface);
+    background: linear-gradient(180deg, #ffffff, #f5f8ff);
     color: var(--color-ink);
     border-color: var(--color-border);
-    box-shadow: 0 1px 0 rgba(9, 9, 11, 0.02);
+    box-shadow: 0 6px 18px -16px rgba(23, 32, 51, 0.55);
   }
   .ui-btn-secondary:hover:not(:disabled) {
     background: var(--color-surface-sunken);
@@ -165,9 +173,10 @@ body {
     width: 100%;
     background: var(--color-surface);
     border: 1px solid var(--color-border);
-    border-radius: 8px;
+    border-radius: 10px;
     padding: 0.5rem 0.75rem;
     font-size: 0.875rem;
+    line-height: 1.45;
     color: var(--color-ink);
     transition:
       border-color 140ms var(--ease-out-quart),
@@ -179,12 +188,26 @@ body {
   .ui-input:focus {
     outline: none;
     border-color: var(--color-ink);
-    box-shadow: 0 0 0 3px rgba(9, 9, 11, 0.06);
+    box-shadow: 0 0 0 3px rgba(20, 99, 255, 0.14);
   }
   .ui-input:disabled {
     background: var(--color-surface-sunken);
     color: var(--color-ink-subtle);
     cursor: not-allowed;
+  }
+
+  /* Évite la superposition icône custom / décorations natives des champs search */
+  .ui-input[type='search'] {
+    appearance: none;
+    -webkit-appearance: none;
+  }
+  .ui-input[type='search']::-webkit-search-decoration,
+  .ui-input[type='search']::-webkit-search-cancel-button,
+  .ui-input[type='search']::-webkit-search-results-button,
+  .ui-input[type='search']::-webkit-search-results-decoration {
+    -webkit-appearance: none;
+    appearance: none;
+    display: none;
   }
 
   .ui-pill {
@@ -265,6 +288,47 @@ body {
   }
   .ui-subtle {
     color: var(--color-ink-subtle);
+  }
+
+  .ui-pay-progress {
+    width: 100%;
+    height: 0.375rem;
+    border: 0;
+    border-radius: 9999px;
+    overflow: hidden;
+    background: var(--color-surface-sunken);
+  }
+  .ui-pay-progress::-webkit-progress-bar {
+    background: var(--color-surface-sunken);
+    border-radius: 9999px;
+  }
+  .ui-pay-progress::-webkit-progress-value {
+    background: var(--color-ink);
+    border-radius: 9999px;
+  }
+  .ui-pay-progress::-moz-progress-bar {
+    background: var(--color-ink);
+    border-radius: 9999px;
+  }
+}
+
+@media (pointer: coarse) {
+  .ui-btn {
+    min-height: 40px;
+  }
+  .ui-input {
+    min-height: 40px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
   }
 }
 
@@ -456,5 +520,15 @@ body {
     left: 0;
     top: 0;
     width: 100%;
+  }
+
+  /* Pendant l’impression, le Modal a `overflow-hidden` + une hauteur max.
+     On libère ces contraintes pour éviter la troncature du contenu (ex: une seule ligne). */
+  [role='dialog'] {
+    overflow: visible !important;
+    max-height: none !important;
+  }
+  .ui-scroll {
+    overflow: visible !important;
   }
 }

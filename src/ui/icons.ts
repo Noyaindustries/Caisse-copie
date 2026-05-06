@@ -9,6 +9,7 @@ export {
   BarChart3 as IconAnalytique,
   Plug as IconIntegrations,
   Building2 as IconNetwork,
+  TableProperties as IconTable,
   Search as IconSearch,
   ScanLine as IconScan,
   Bell as IconBell,

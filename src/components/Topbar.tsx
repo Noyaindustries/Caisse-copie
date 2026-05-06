@@ -1,5 +1,10 @@
 import type { ReactNode } from 'react'
-import { VIEW_LABELS, VIEW_SUBTITLES, type NavViewId } from '../navigation'
+import {
+  VIEW_ACCENTS,
+  VIEW_LABELS,
+  VIEW_SUBTITLES,
+  type NavViewId,
+} from '../navigation'
 import { Badge } from '../ui/Badge'
 import { Button } from '../ui/Button'
 import { cn } from '../ui/cn'
@@ -30,13 +35,14 @@ export function Topbar({
   rightSlot,
   onOpenMobileMenu,
 }: Props) {
+  const accent = VIEW_ACCENTS[view]
   return (
-    <header className="sticky top-0 z-20 flex h-14 items-center gap-3 border-b border-zinc-200 bg-white/80 px-4 backdrop-blur-md lg:px-6">
+    <header className="sticky top-0 z-20 flex min-h-14 flex-wrap items-center gap-2 border-b border-border bg-white/88 px-3 py-2 backdrop-blur-xl sm:gap-3 sm:px-4 lg:px-6">
       {onOpenMobileMenu ? (
         <button
           type="button"
           onClick={onOpenMobileMenu}
-          className="rounded-md p-1.5 text-zinc-500 transition hover:bg-zinc-100 hover:text-zinc-900 lg:hidden"
+          className="rounded-md p-1.5 text-ink-subtle transition hover:bg-surface-sunken hover:text-ink lg:hidden"
           aria-label="Ouvrir le menu"
         >
           <IconMenu className="h-4 w-4" />
@@ -45,16 +51,24 @@ export function Topbar({
 
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-2">
-          <h1 className="truncate text-[14px] font-semibold tracking-tight text-zinc-900">
+          <span
+            className={cn(
+              'hidden rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide sm:inline-flex',
+              accent.chip,
+            )}
+          >
+            Module
+          </span>
+          <h1 className="truncate text-[14px] font-semibold tracking-tight text-ink">
             {VIEW_LABELS[view]}
           </h1>
         </div>
-        <p className="hidden truncate text-[11px] text-zinc-500 sm:block">
+        <p className="hidden truncate text-[11px] text-ink-subtle md:block">
           {VIEW_SUBTITLES[view]}
         </p>
       </div>
 
-      <div className="flex shrink-0 items-center gap-2">
+      <div className="ml-auto flex max-w-full shrink-0 flex-wrap items-center justify-end gap-1.5 sm:gap-2">
         {rightSlot}
         <Tooltip content={syncLabel} side="bottom">
           <Badge tone={online ? 'success' : 'warning'} dot>

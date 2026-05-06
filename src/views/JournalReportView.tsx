@@ -3,6 +3,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { RefundSaleModal } from '../components/RefundSaleModal'
 import { db } from '../db/db'
 import type { AuditEvent, AuditEventKind, Sale } from '../db/types'
+import { downloadTextFile, toCsvSemicolon } from '../lib/analyticsExport'
 import { formatFCFA } from '../lib/money'
 import { paymentMethodShortLabel } from '../lib/paymentDisplay'
 import { saleFullyRefunded, saleNetTTC } from '../lib/refundMath'
@@ -24,6 +25,7 @@ import { PageHeader, SectionHeader } from '../ui/PageHeader'
 import { Table, TBody, Td, Th, THead, Tr } from '../ui/Table'
 import { useToast } from '../ui/Toast'
 import {
+  IconDownload,
   IconCheckCircle,
   IconEye,
   IconPrinter,
@@ -268,20 +270,58 @@ export function JournalReportView({
     toast,
   ])
 
+  const exportDayCsv = useCallback(() => {
+    const rows: string[][] = [
+      ['Journal de caisse'],
+      ['Date', todayYmd],
+      ['Total TTC net', String(totalNet)],
+      ['Tickets', String(ticketCount)],
+      ['Panier moyen', String(avgTicket)],
+      [],
+      ['Réf vente', 'Heure', 'Magasin', 'Caissier', 'Paiement', 'Net TTC'],
+      ...[...today]
+        .sort((a, b) => b.createdAt - a.createdAt)
+        .map((s) => [
+          s.id.slice(0, 8).toUpperCase(),
+          new Date(s.createdAt).toLocaleTimeString('fr-FR', {
+            hour: '2-digit',
+            minute: '2-digit',
+          }),
+          s.storeName ?? '',
+          s.cashierDisplayName ?? '',
+          paymentMethodShortLabel(s.paymentMethod),
+          String(saleNetTTC(s)),
+        ]),
+    ]
+    downloadTextFile(`journal-caisse-${todayYmd}.csv`, toCsvSemicolon(rows))
+    toast.success('Export journal prêt')
+  }, [todayYmd, totalNet, ticketCount, avgTicket, today, toast])
+
   return (
-    <div className="space-y-5 pb-6">
+    <div className="space-y-4 pb-6 sm:space-y-5">
       <PageHeader
         eyebrow="Rapport quotidien"
         title="Journal de caisse"
         subtitle={`${dateStr.charAt(0).toUpperCase()}${dateStr.slice(1)} · Session #${SESSION_ID}`}
         actions={
-          <Button
-            variant="secondary"
-            iconLeft={<IconPrinter />}
-            onClick={() => window.print()}
-          >
-            Imprimer
-          </Button>
+          <div className="flex flex-wrap gap-2">
+            <Button
+              variant="secondary"
+              iconLeft={<IconDownload />}
+              onClick={exportDayCsv}
+              className="w-full sm:w-auto"
+            >
+              Export CSV
+            </Button>
+            <Button
+              variant="secondary"
+              iconLeft={<IconPrinter />}
+              onClick={() => window.print()}
+              className="w-full sm:w-auto"
+            >
+              Imprimer
+            </Button>
+          </div>
         }
       />
 
@@ -310,7 +350,7 @@ export function JournalReportView({
       ) : null}
 
       <div id="print-journal" className="space-y-5">
-        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        <div className="grid gap-2.5 sm:grid-cols-2 xl:grid-cols-4">
           <Kpi label="Total ventes (TTC)" value={formatFCFA(totalNet)} tone="accent" />
           <Kpi label="Tickets" value={String(ticketCount)} tone="neutral" />
           <Kpi label="Panier moyen" value={formatFCFA(avgTicket)} tone="violet" />
@@ -326,7 +366,7 @@ export function JournalReportView({
           />
         </div>
 
-        <Card>
+        <Card className="rounded-2xl">
           <CardContent>
             <h3 className="text-[14px] font-semibold text-zinc-900">
               Détail solde espèces
@@ -406,7 +446,7 @@ export function JournalReportView({
           </CardContent>
         </Card>
 
-        <Card>
+        <Card className="rounded-2xl">
           <CardContent>
             <h3 className="text-[14px] font-semibold text-zinc-900">
               Modes de paiement
@@ -433,12 +473,11 @@ export function JournalReportView({
                         </span>
                       </span>
                     </div>
-                    <div className="mt-1 h-1.5 overflow-hidden rounded-full bg-zinc-100">
-                      <div
-                        className="h-full rounded-full bg-zinc-900"
-                        style={{ width: `${pct}%` }}
-                      />
-                    </div>
+                    <progress
+                      className="ui-pay-progress mt-1"
+                      value={pct}
+                      max={100}
+                    />
                   </li>
                 )
               })}
@@ -447,7 +486,7 @@ export function JournalReportView({
         </Card>
 
         {!isClosed && canDailyClosure ? (
-          <Card>
+          <Card className="rounded-2xl">
             <CardContent>
               <h3 className="text-[14px] font-semibold text-zinc-900">
                 Clôture journalière
@@ -493,7 +532,7 @@ export function JournalReportView({
         {today.length === 0 ? (
           <EmptyState title="Aucune vente aujourd’hui" variant="flat" />
         ) : (
-          <Table minWidth={640}>
+          <Table minWidth={700}>
             <THead>
               <Tr hover={false}>
                 <Th>Heure</Th>
@@ -581,8 +620,8 @@ export function JournalReportView({
         {auditEvents.length === 0 ? (
           <EmptyState title="Aucun événement" variant="flat" />
         ) : (
-          <Card>
-            <CardContent className="!p-0">
+          <Card className="rounded-2xl">
+            <CardContent className="p-0!">
               <ul className="divide-y divide-zinc-100">
                 {auditEvents.map((ev) => {
                   const detail = auditPayloadSummary(ev)

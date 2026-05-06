@@ -2,7 +2,7 @@ import { useEffect, useState, type ReactNode } from 'react'
 import type { UserRole } from '../auth/types'
 import { roleLabel } from '../auth/profiles'
 import type { Store } from '../db/types'
-import { navSectionsForRole, type NavViewId } from '../navigation'
+import { navSectionsForRole, VIEW_ACCENTS, type NavViewId } from '../navigation'
 import { Badge } from '../ui/Badge'
 import { cn } from '../ui/cn'
 import { Tooltip } from '../ui/Tooltip'
@@ -23,8 +23,15 @@ import {
   IconOnlineOrders,
   IconPersonnel,
   IconPointage,
+  IconSpreadsheet,
   IconStocks,
   IconStore,
+  IconTable,
+  IconTag,
+  IconStar,
+  IconMail,
+  IconFile,
+  IconReceipt,
 } from '../ui/icons'
 
 /** Onglet filtre caisse : « Tous » ou libellé de catégorie (voir `productCategories` en base). */
@@ -35,6 +42,14 @@ const ICON_BY_VIEW: Record<NavViewId, ReactNode> = {
   dash: <IconDash />,
   catalogue: <IconCatalogue />,
   stocks: <IconStocks />,
+  comptabilite: <IconSpreadsheet />,
+  rh: <IconPersonnel />,
+  crm: <IconMail />,
+  kitchen: <IconFile />,
+  ticketsFactures: <IconReceipt />,
+  tables: <IconTable />,
+  promotions: <IconTag />,
+  loyalty: <IconStar />,
   onlineOrders: <IconOnlineOrders />,
   journal: <IconJournal />,
   personnel: <IconPersonnel />,
@@ -43,6 +58,7 @@ const ICON_BY_VIEW: Record<NavViewId, ReactNode> = {
   integrations: <IconIntegrations />,
   network: <IconNetwork />,
 }
+
 
 type CommonProps = {
   activeView: NavViewId
@@ -149,6 +165,7 @@ function SidebarBody({
                 const badgeCount =
                   item.badge === 'lowStock' ? lowStockCount : 0
                 const icon = ICON_BY_VIEW[item.id]
+                const color = VIEW_ACCENTS[item.id]
 
                 const button = (
                   <button
@@ -172,15 +189,20 @@ function SidebarBody({
                     <span
                       aria-hidden
                       className={cn(
-                        'flex h-4 w-4 shrink-0 items-center justify-center [&_svg]:h-4 [&_svg]:w-4',
-                        isActive ? 'text-zinc-900' : 'text-zinc-400',
+                        'flex h-6 w-6 shrink-0 items-center justify-center rounded-md [&_svg]:h-4 [&_svg]:w-4',
+                        isActive ? color.iconActive : color.icon,
                       )}
                     >
                       {icon}
                     </span>
                     {!collapsed ? (
                       <>
-                        <span className="min-w-0 flex-1 truncate text-left">
+                        <span
+                          className={cn(
+                            'min-w-0 flex-1 truncate text-left',
+                            isActive && color.labelActive,
+                          )}
+                        >
                           {item.label}
                         </span>
                         {showStockBadges ? (
@@ -244,26 +266,27 @@ function SidebarBody({
               ) : null}
             </button>
             {storeMenuOpen && canSwitchStore ? (
-              <div className="absolute bottom-full left-0 right-0 z-10 mb-1 max-h-56 overflow-y-auto rounded-md border border-zinc-200 bg-white p-1 shadow-[var(--shadow-pop)]">
+              <ul className="absolute bottom-full left-0 right-0 z-10 mb-1 max-h-56 overflow-y-auto rounded-md border border-zinc-200 bg-white p-1 shadow-(--shadow-pop)">
                 {stores.map((s) => (
-                  <button
-                    key={s.id}
-                    type="button"
-                    onClick={() => {
-                      onActiveStoreChange(s.id)
-                      setStoreMenuOpen(false)
-                    }}
-                    className={cn(
-                      'flex w-full items-center gap-2 rounded px-2 py-1.5 text-[12px] text-left',
-                      s.id === activeStoreId
-                        ? 'bg-zinc-100 font-semibold text-zinc-900'
-                        : 'text-zinc-700 hover:bg-zinc-50',
-                    )}
-                  >
-                    {s.name}
-                  </button>
+                  <li key={s.id}>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        onActiveStoreChange(s.id)
+                        setStoreMenuOpen(false)
+                      }}
+                      className={cn(
+                        'flex w-full items-center gap-2 rounded px-2 py-1.5 text-[12px] text-left',
+                        s.id === activeStoreId
+                          ? 'bg-zinc-100 font-semibold text-zinc-900'
+                          : 'text-zinc-700 hover:bg-zinc-50',
+                      )}
+                    >
+                      {s.name}
+                    </button>
+                  </li>
                 ))}
-              </div>
+              </ul>
             ) : null}
           </div>
         ) : null}
@@ -334,7 +357,7 @@ export function Sidebar({
   return (
     <aside
       className={cn(
-        'sticky top-0 hidden h-svh shrink-0 flex-col border-r border-zinc-200 bg-white lg:flex',
+        'sticky top-0 hidden h-svh shrink-0 flex-col border-r border-border bg-white/92 backdrop-blur-sm lg:flex',
         collapsed ? 'w-[68px]' : 'w-[244px]',
       )}
     >
@@ -372,14 +395,14 @@ export function MobileNavDrawer({
   if (!open) return null
 
   return (
-    <div className="fixed inset-0 z-[90] flex lg:hidden" role="dialog" aria-modal="true">
+    <div className="fixed inset-0 z-90 flex lg:hidden" role="dialog" aria-modal="true">
       <button
         type="button"
         aria-label="Fermer le menu"
         onClick={onClose}
         className="absolute inset-0 animate-ui-fade-in bg-zinc-950/40 backdrop-blur-[2px]"
       />
-      <aside className="relative z-10 flex h-svh w-[280px] max-w-[85vw] animate-ui-slide-up flex-col border-r border-zinc-200 bg-white shadow-[var(--shadow-overlay)]">
+      <aside className="relative z-10 flex h-svh w-[280px] max-w-[85vw] animate-ui-slide-up flex-col border-r border-border bg-white/95 backdrop-blur-md shadow-(--shadow-overlay)">
         <button
           type="button"
           onClick={onClose}

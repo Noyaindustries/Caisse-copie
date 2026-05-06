@@ -91,7 +91,7 @@ export function ProductGrid({
                 disabled={disabled}
                 onClick={(e) => onAdd(p, e.currentTarget)}
                 className={cn(
-                  'ui-card-hover group flex flex-col rounded-xl border border-zinc-200 bg-white text-left transition disabled:cursor-not-allowed disabled:opacity-50',
+                  'ui-card-hover group flex min-h-30 flex-col rounded-xl border border-zinc-200 bg-white text-left transition disabled:cursor-not-allowed disabled:opacity-50 sm:min-h-28',
                   isCompact ? 'p-2.5' : 'p-3',
                 )}
               >

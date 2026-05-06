@@ -61,7 +61,7 @@ export function CardFooter({ className, ...rest }: DivProps) {
   return (
     <div
       className={cn(
-        'flex items-center justify-between gap-3 border-t border-zinc-100 px-5 py-3 text-sm text-zinc-500',
+        'flex items-center justify-between gap-3 border-t border-border/60 px-5 py-3 text-sm text-ink-subtle',
         className,
       )}
       {...rest}

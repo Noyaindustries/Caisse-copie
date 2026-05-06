@@ -10,12 +10,12 @@ import { IconArrowDownRight, IconArrowUpRight } from './icons'
 export type KpiTone = 'neutral' | 'accent' | 'violet' | 'amber' | 'sky' | 'rose'
 
 const SPARK_COLOR: Record<KpiTone, string> = {
-  neutral: '#71717a',
-  accent: '#059669',
-  violet: '#7c3aed',
-  amber: '#d97706',
-  sky: '#0284c7',
-  rose: '#e11d48',
+  neutral: '#5f6f8d',
+  accent: '#1463ff',
+  violet: '#7452d8',
+  amber: '#c98613',
+  sky: '#2a86d4',
+  rose: '#d84b7a',
 }
 
 export function Kpi({
@@ -46,19 +46,19 @@ export function Kpi({
   return (
     <div
       className={cn(
-        'ui-card relative overflow-hidden p-4',
+        'ui-card relative overflow-hidden p-4 before:pointer-events-none before:absolute before:inset-0 before:bg-linear-to-br before:from-white/60 before:to-transparent',
         className,
       )}
     >
       <div className="flex items-start justify-between gap-3">
         <p className="ui-eyebrow">{label}</p>
         {icon ? (
-          <span className="text-zinc-400 [&_svg]:h-3.5 [&_svg]:w-3.5">
+          <span className="text-ink-subtle [&_svg]:h-3.5 [&_svg]:w-3.5">
             {icon}
           </span>
         ) : null}
       </div>
-      <p className="mt-2 truncate font-mono-nums text-[20px] font-semibold tracking-tight text-zinc-900 sm:text-[22px]">
+      <p className="mt-2 truncate font-mono-nums text-[20px] font-semibold tracking-tight text-ink sm:text-[22px]">
         {value}
       </p>
       <div className="mt-1 flex items-center gap-2 text-[12px]">
@@ -67,7 +67,7 @@ export function Kpi({
             className={cn(
               'inline-flex items-center gap-0.5 font-semibold',
               deltaPositive === undefined
-                ? 'text-zinc-500'
+                ? 'text-ink-subtle'
                 : deltaPositive
                   ? 'text-emerald-700'
                   : 'text-rose-600',
@@ -81,7 +81,7 @@ export function Kpi({
             {delta}
           </span>
         ) : null}
-        {hint ? <span className="text-zinc-500">{hint}</span> : null}
+        {hint ? <span className="text-ink-subtle">{hint}</span> : null}
       </div>
 
       {sparkData.length > 1 ? (

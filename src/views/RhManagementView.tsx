@@ -1,0 +1,214 @@
+import { useLiveQuery } from 'dexie-react-hooks'
+import { useMemo, useState } from 'react'
+import { listStaffProfiles } from '../auth/profiles'
+import { useActiveStore } from '../context/ActiveStoreContext'
+import { db } from '../db/db'
+import type { HrRequest, HrRequestStatus, HrRequestType, TimePunch } from '../db/types'
+import { saleLocalYmd } from '../lib/salesStats'
+import { Button } from '../ui/Button'
+import { Card, CardContent } from '../ui/Card'
+import { EmptyState } from '../ui/EmptyState'
+import { Field, Input, Select } from '../ui/Input'
+import { Kpi } from '../ui/Kpi'
+import { PageHeader } from '../ui/PageHeader'
+import { Table, TBody, Td, Th, THead, Tr } from '../ui/Table'
+import { useToast } from '../ui/Toast'
+
+type Props = {
+  actor: { id: string; displayName: string }
+  canReview: boolean
+}
+
+function statusLabel(s: HrRequestStatus): string {
+  if (s === 'pending') return 'En attente'
+  if (s === 'approved') return 'Approuvée'
+  return 'Rejetée'
+}
+
+export function RhManagementView({ actor, canReview }: Props) {
+  const { activeStoreId } = useActiveStore()
+  const toast = useToast()
+  const [staffProfileId, setStaffProfileId] = useState(actor.id)
+  const [type, setType] = useState<HrRequestType>('leave')
+  const [startDate, setStartDate] = useState('')
+  const [endDate, setEndDate] = useState('')
+  const [amountFCFA, setAmountFCFA] = useState('')
+  const [reason, setReason] = useState('')
+
+  const profiles = useMemo(() => listStaffProfiles(), [])
+  const punches = useLiveQuery(() => db.timePunches.orderBy('createdAt').reverse().limit(2000).toArray(), [], []) ?? []
+  const requests = useLiveQuery(() => db.hrRequests.orderBy('createdAt').reverse().limit(300).toArray(), [], []) ?? []
+
+  const kpis = useMemo(() => {
+    const pending = requests.filter((r) => r.status === 'pending').length
+    const approved = requests.filter((r) => r.status === 'approved').length
+    const absentToday = new Set<string>()
+    const today = saleLocalYmd(Date.now())
+    const byProfile = new Map<string, TimePunch[]>()
+    for (const p of punches) {
+      const arr = byProfile.get(p.profileId) ?? []
+      arr.push(p)
+      byProfile.set(p.profileId, arr)
+    }
+    for (const profile of profiles) {
+      const rows = (byProfile.get(profile.id) ?? []).filter((x) => saleLocalYmd(x.createdAt) === today)
+      if (rows.length === 0) absentToday.add(profile.id)
+    }
+    return { pending, approved, absentToday: absentToday.size }
+  }, [requests, punches, profiles])
+
+  const createRequest = async (): Promise<void> => {
+    if (!reason.trim()) {
+      toast.error('Motif requis')
+      return
+    }
+    const staff = profiles.find((p) => p.id === staffProfileId)
+    if (!staff) {
+      toast.error('Collaborateur invalide')
+      return
+    }
+    const amount = Number.parseInt(amountFCFA.trim() || '0', 10)
+    const rec: HrRequest = {
+      id: crypto.randomUUID(),
+      createdAt: Date.now(),
+      staffProfileId: staff.id,
+      staffDisplayName: staff.displayName,
+      storeId: activeStoreId,
+      type,
+      reason: reason.trim(),
+      status: 'pending',
+      startDate: startDate || undefined,
+      endDate: endDate || undefined,
+      amountFCFA: Number.isFinite(amount) && amount > 0 ? amount : undefined,
+    }
+    await db.hrRequests.add(rec)
+    setReason('')
+    setAmountFCFA('')
+    toast.success('Demande RH créée')
+  }
+
+  const reviewRequest = async (
+    id: string,
+    status: Exclude<HrRequestStatus, 'pending'>,
+  ): Promise<void> => {
+    const promptText =
+      status === 'approved'
+        ? 'Commentaire de validation (optionnel) :'
+        : 'Motif du refus (recommandé) :'
+    const raw = window.prompt(promptText)
+    if (raw === null) return
+    const reviewNote = raw.trim() || undefined
+    if (status === 'rejected' && !reviewNote) {
+      const ok = window.confirm(
+        'Aucun motif saisi. Enregistrer le rejet sans commentaire ?',
+      )
+      if (!ok) return
+    }
+    await db.hrRequests.update(id, {
+      status,
+      reviewedAt: Date.now(),
+      reviewedByProfileId: actor.id,
+      reviewedByDisplayName: actor.displayName,
+      reviewNote,
+    })
+    toast.success(status === 'approved' ? 'Demande approuvée' : 'Demande rejetée')
+  }
+
+  return (
+    <div className="space-y-5 pb-6">
+      <PageHeader eyebrow="Ressources Humaines" title="Gestion RH" subtitle="Demandes RH, suivi de présence et validation manager" />
+
+      <div className="grid gap-3 sm:grid-cols-3">
+        <Kpi label="Demandes en attente" value={String(kpis.pending)} tone="amber" />
+        <Kpi label="Demandes approuvées" value={String(kpis.approved)} tone="accent" />
+        <Kpi label="Absents aujourd’hui" value={String(kpis.absentToday)} tone="neutral" />
+      </div>
+
+      <Card className="bg-[linear-gradient(165deg,rgba(255,255,255,0.98),rgba(246,250,255,0.94))]">
+        <CardContent className="grid gap-2 md:grid-cols-3">
+          <Field label="Collaborateur">
+            <Select value={staffProfileId} onChange={(e) => setStaffProfileId(e.target.value)}>
+              {profiles.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.displayName}
+                </option>
+              ))}
+            </Select>
+          </Field>
+          <Field label="Type de demande">
+            <Select value={type} onChange={(e) => setType(e.target.value as HrRequestType)}>
+              <option value="leave">Congé</option>
+              <option value="advance">Avance salaire</option>
+              <option value="expense">Remboursement frais</option>
+            </Select>
+          </Field>
+          <Field label="Montant FCFA (si applicable)">
+            <Input inputMode="numeric" value={amountFCFA} onChange={(e) => setAmountFCFA(e.target.value)} placeholder="0" />
+          </Field>
+          <Field label="Date début">
+            <Input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} />
+          </Field>
+          <Field label="Date fin">
+            <Input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} />
+          </Field>
+          <Field label="Motif" className="md:col-span-3">
+            <Input value={reason} onChange={(e) => setReason(e.target.value)} placeholder="Motif de la demande..." />
+          </Field>
+          <div className="md:col-span-3">
+            <Button variant="accent" onClick={() => void createRequest()}>
+              Soumettre la demande
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card className="bg-[linear-gradient(165deg,rgba(255,255,255,0.98),rgba(246,250,255,0.94))]">
+        <CardContent>
+          {requests.length === 0 ? (
+            <EmptyState title="Aucune demande RH" variant="flat" />
+          ) : (
+            <Table minWidth={1040}>
+              <THead>
+                <Tr hover={false}>
+                  <Th>Date</Th>
+                  <Th>Collaborateur</Th>
+                  <Th>Type</Th>
+                  <Th>Période</Th>
+                  <Th align="right">Montant</Th>
+                  <Th>Statut</Th>
+                  <Th>Commentaire manager</Th>
+                  <Th align="right">Action</Th>
+                </Tr>
+              </THead>
+              <TBody>
+                {requests.map((r) => (
+                  <Tr key={r.id}>
+                    <Td mono>{new Date(r.createdAt).toLocaleDateString('fr-FR')}</Td>
+                    <Td>{r.staffDisplayName}</Td>
+                    <Td>{r.type}</Td>
+                    <Td>{r.startDate ?? '—'} {r.endDate ? `-> ${r.endDate}` : ''}</Td>
+                    <Td align="right" mono>{r.amountFCFA ?? 0}</Td>
+                    <Td>{statusLabel(r.status)}</Td>
+                    <Td className="max-w-[220px] truncate" title={r.reviewNote}>
+                      {r.reviewNote ?? '—'}
+                    </Td>
+                    <Td align="right">
+                      {canReview && r.status === 'pending' ? (
+                        <div className="flex justify-end gap-1">
+                          <Button size="sm" variant="secondary" onClick={() => void reviewRequest(r.id, 'approved')}>Approuver</Button>
+                          <Button size="sm" variant="ghost" onClick={() => void reviewRequest(r.id, 'rejected')}>Rejeter</Button>
+                        </div>
+                      ) : (
+                        '—'
+                      )}
+                    </Td>
+                  </Tr>
+                ))}
+              </TBody>
+            </Table>
+          )}
+        </CardContent>
+      </Card>
+    </div>
+  )
+}

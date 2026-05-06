@@ -24,7 +24,7 @@ export function Table({
   return (
     <div
       className={cn(
-        'overflow-hidden rounded-xl border border-zinc-200 bg-white',
+        'overflow-hidden rounded-xl border border-border bg-white/96 shadow-[0_10px_28px_-22px_rgba(23,32,51,0.35)]',
         className,
       )}
       data-density={density}
@@ -43,7 +43,7 @@ export function Table({
 
 export function THead({ children }: { children: ReactNode }) {
   return (
-    <thead className="border-b border-zinc-200 bg-zinc-50/60 text-[11px] font-semibold uppercase tracking-wider text-zinc-500">
+    <thead className="border-b border-border bg-surface-sunken/70 text-[11px] font-semibold uppercase tracking-wider text-ink-subtle">
       {children}
     </thead>
   )
@@ -57,7 +57,7 @@ export function TBody({
   className?: string
 }) {
   return (
-    <tbody className={cn('divide-y divide-zinc-100', className)}>
+    <tbody className={cn('divide-y divide-border/50', className)}>
       {children}
     </tbody>
   )
@@ -72,7 +72,7 @@ export function Tr({
   return (
     <tr
       className={cn(
-        hover && 'transition-colors hover:bg-zinc-50/70',
+        hover && 'transition-colors duration-150 hover:bg-accent-soft/35',
         className,
       )}
       {...rest}
@@ -107,11 +107,11 @@ export function Th({
   return (
     <th
       className={cn(
-        'px-3 py-2.5 font-semibold sm:px-4',
+        'px-3 py-3 font-semibold tracking-wide sm:px-4',
         align === 'right' && 'text-right',
         align === 'center' && 'text-center',
         sticky &&
-          'sticky left-0 z-10 bg-zinc-50/95 backdrop-blur-sm',
+          'sticky left-0 z-10 bg-surface-sunken/95 backdrop-blur-sm',
         hideBelow && HIDE_CLS[hideBelow],
         className,
       )}
@@ -135,7 +135,7 @@ export function Td({
   return (
     <td
       className={cn(
-        'px-3 py-2.5 text-[13px] text-zinc-700 sm:px-4 sm:py-3',
+        'px-3 py-2.5 text-[13px] leading-snug text-ink-muted sm:px-4 sm:py-3.5',
         mono && 'font-mono-nums',
         align === 'right' && 'text-right',
         align === 'center' && 'text-center',

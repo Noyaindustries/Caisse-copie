@@ -1,11 +1,19 @@
 import { useLiveQuery } from 'dexie-react-hooks'
-import { useCallback, useMemo, useState } from 'react'
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+  type CSSProperties,
+} from 'react'
 import { useActiveStore } from '../context/ActiveStoreContext'
 import { db } from '../db/db'
 import type { ProductWithStock } from '../db/types'
+import { downloadTextFile, toCsvSemicolon } from '../lib/analyticsExport'
 import { formatFCFA } from '../lib/money'
 import { productIsActive } from '../lib/productFilters'
 import { storeStockRowId } from '../lib/storeStockId'
+import { locationStockRowId } from '../lib/locationStockId'
 import type { AuditActor } from '../lib/auditLog'
 import { appendAuditEvent } from '../lib/auditLog'
 import { enqueueStockSync } from '../lib/sync'
@@ -14,7 +22,7 @@ import { Button } from '../ui/Button'
 import { Card, CardContent } from '../ui/Card'
 import { cn } from '../ui/cn'
 import { EmptyState } from '../ui/EmptyState'
-import { Field, Input } from '../ui/Input'
+import { Field, Input, Select } from '../ui/Input'
 import { Kpi } from '../ui/Kpi'
 import { PageHeader } from '../ui/PageHeader'
 import { Switch } from '../ui/Switch'
@@ -23,6 +31,7 @@ import { useToast } from '../ui/Toast'
 import {
   IconAlert,
   IconCheckCircle,
+  IconDownload,
   IconScan,
   IconSearch,
   IconStocks,
@@ -48,10 +57,31 @@ export function StocksView({ isAdmin, auditActor }: Props) {
       [activeStoreId],
       [],
     ) ?? []
+  const stockLocations =
+    useLiveQuery(
+      () =>
+        db.stockLocations.where('storeId').equals(activeStoreId).sortBy('sortOrder'),
+      [activeStoreId],
+      [],
+    ) ?? []
+  const locationStocks =
+    useLiveQuery(
+      () => db.locationStocks.where('storeId').equals(activeStoreId).toArray(),
+      [activeStoreId],
+      [],
+    ) ?? []
+  const [selectedLocationId, setSelectedLocationId] = useState<string>('all')
   const mergedProducts = useMemo((): ProductWithStock[] => {
-    const m = new Map(stockRows.map((r) => [r.productId, r.stock]))
+    const m =
+      selectedLocationId === 'all'
+        ? new Map(stockRows.map((r) => [r.productId, r.stock]))
+        : new Map(
+            locationStocks
+              .filter((r) => r.locationId === selectedLocationId)
+              .map((r) => [r.productId, r.stock]),
+          )
     return products.map((p) => ({ ...p, stock: m.get(p.id) ?? 0 }))
-  }, [products, stockRows])
+  }, [products, stockRows, locationStocks, selectedLocationId])
   const [showArchived, setShowArchived] = useState(false)
   const [filter, setFilter] = useState<StockFilter>('tous')
   const [q, setQ] = useState('')
@@ -62,6 +92,20 @@ export function StocksView({ isAdmin, auditActor }: Props) {
   const [quickBarcode, setQuickBarcode] = useState('')
   const [quickQty, setQuickQty] = useState('')
   const [quickBusy, setQuickBusy] = useState(false)
+  const [bulkQty, setBulkQty] = useState('10')
+  const [bulkBusy, setBulkBusy] = useState(false)
+  const auditRows = useLiveQuery(
+    () => db.auditEvents.orderBy('createdAt').reverse().limit(200).toArray(),
+    [],
+    [],
+  )
+
+  useEffect(() => {
+    if (selectedLocationId === 'all') return
+    if (!stockLocations.some((l) => l.id === selectedLocationId)) {
+      setSelectedLocationId('all')
+    }
+  }, [selectedLocationId, stockLocations])
 
   const visibleProducts = useMemo(
     () =>
@@ -78,6 +122,14 @@ export function StocksView({ isAdmin, auditActor }: Props) {
     ).length
     const ok = visibleProducts.length - rupture - low
     return { rupture, low, ok, total: visibleProducts.length }
+  }, [visibleProducts])
+  const stockValuation = useMemo(() => {
+    return visibleProducts.reduce((sum, p) => sum + p.stock * p.priceTTC, 0)
+  }, [visibleProducts])
+  const ruptureValuation = useMemo(() => {
+    return visibleProducts
+      .filter((p) => p.stock <= 0)
+      .reduce((sum, p) => sum + p.priceTTC, 0)
   }, [visibleProducts])
 
   const filtered = useMemo(() => {
@@ -103,6 +155,39 @@ export function StocksView({ isAdmin, auditActor }: Props) {
     })
   }, [visibleProducts, filter, q])
 
+  const stockMovements = useMemo(() => {
+    const rows = auditRows ?? []
+    return rows
+      .filter((ev) => ev.kind === 'stock_adjusted')
+      .map((ev) => {
+        try {
+          const payload = JSON.parse(ev.payloadJson) as {
+            storeId?: string
+            productName?: string
+            previousQty?: number
+            newQty?: number
+            source?: string
+          }
+          if (payload.storeId !== activeStoreId) return null
+          return {
+            id: ev.id,
+            createdAt: ev.createdAt,
+            actorDisplayName: ev.actorDisplayName,
+            reason: ev.reason,
+            productName: payload.productName ?? 'Article',
+            previousQty:
+              typeof payload.previousQty === 'number' ? payload.previousQty : null,
+            newQty: typeof payload.newQty === 'number' ? payload.newQty : null,
+            source: payload.source ?? 'manual',
+          }
+        } catch {
+          return null
+        }
+      })
+      .filter((x): x is NonNullable<typeof x> => x !== null)
+      .slice(0, 20)
+  }, [auditRows, activeStoreId])
+
   const pushStockCloud = useCallback(
     async (p: ProductWithStock) => {
       await enqueueStockSync({
@@ -115,21 +200,45 @@ export function StocksView({ isAdmin, auditActor }: Props) {
     [activeStoreId],
   )
 
+  const recomputeAndWriteStoreStock = useCallback(
+    async (productId: string) => {
+      const rows = await db.locationStocks
+        .where('[storeId+productId]')
+        .equals([activeStoreId, productId])
+        .toArray()
+      const total = rows.reduce((sum, r) => sum + r.stock, 0)
+      await db.storeStocks.put({
+        id: storeStockRowId(activeStoreId, productId),
+        storeId: activeStoreId,
+        productId,
+        stock: total,
+      })
+      return total
+    },
+    [activeStoreId],
+  )
+
   const adjust = useCallback(
     async (id: string, delta: number) => {
+      if (selectedLocationId === 'all') {
+        toast.error('Choisissez un emplacement', 'Sélectionnez Réserve ou Surface pour ajuster.')
+        return
+      }
       const p = mergedProducts.find((x) => x.id === id)
       if (!p) return
       const previousQty = p.stock
       const next = Math.max(0, p.stock + delta)
       setBusyId(id)
       try {
-        await db.storeStocks.put({
-          id: storeStockRowId(activeStoreId, id),
+        await db.locationStocks.put({
+          id: locationStockRowId(activeStoreId, selectedLocationId, id),
           storeId: activeStoreId,
+          locationId: selectedLocationId,
           productId: id,
           stock: next,
         })
-        const updated = { ...p, stock: next }
+        const totalStock = await recomputeAndWriteStoreStock(id)
+        const updated = { ...p, stock: totalStock }
         if (isAdmin) await pushStockCloud(updated)
         void appendAuditEvent({
           kind: 'stock_adjusted',
@@ -140,6 +249,10 @@ export function StocksView({ isAdmin, auditActor }: Props) {
               delta >= 0 ? 'stocks_delta_plus' : 'stocks_delta_minus',
             storeId: activeStoreId,
             storeName: activeStore?.name,
+            locationId: selectedLocationId,
+            locationName:
+              stockLocations.find((l) => l.id === selectedLocationId)?.name ??
+              selectedLocationId,
             productId: id,
             productName: p.name,
             barcode: p.barcode,
@@ -155,10 +268,14 @@ export function StocksView({ isAdmin, auditActor }: Props) {
     [
       activeStoreId,
       activeStore?.name,
+      selectedLocationId,
+      stockLocations,
       auditActor,
       isAdmin,
       mergedProducts,
       pushStockCloud,
+      recomputeAndWriteStoreStock,
+      toast,
     ],
   )
 
@@ -169,6 +286,10 @@ export function StocksView({ isAdmin, auditActor }: Props) {
   }
 
   const applyAbsolute = async (p: ProductWithStock) => {
+    if (selectedLocationId === 'all') {
+      toast.error('Choisissez un emplacement', 'Sélectionnez Réserve ou Surface pour inventorier.')
+      return
+    }
     const st = Number.parseInt(stockInput.replace(/\s/g, ''), 10)
     const th = Number.parseInt(thresholdInput.replace(/\s/g, ''), 10)
     if (!Number.isFinite(st) || st < 0) {
@@ -184,13 +305,15 @@ export function StocksView({ isAdmin, auditActor }: Props) {
     setBusyId(p.id)
     try {
       await db.products.update(p.id, { lowStockThreshold: th })
-      await db.storeStocks.put({
-        id: storeStockRowId(activeStoreId, p.id),
+      await db.locationStocks.put({
+        id: locationStockRowId(activeStoreId, selectedLocationId, p.id),
         storeId: activeStoreId,
+        locationId: selectedLocationId,
         productId: p.id,
         stock: st,
       })
-      await pushStockCloud({ ...p, stock: st, lowStockThreshold: th })
+      const totalStock = await recomputeAndWriteStoreStock(p.id)
+      await pushStockCloud({ ...p, stock: totalStock, lowStockThreshold: th })
       void appendAuditEvent({
         kind: 'stock_adjusted',
         actor: auditActor,
@@ -199,6 +322,7 @@ export function StocksView({ isAdmin, auditActor }: Props) {
           source: 'stocks_absolute',
           storeId: activeStoreId,
           storeName: activeStore?.name,
+          locationId: selectedLocationId,
           productId: p.id,
           productName: p.name,
           barcode: p.barcode,
@@ -216,6 +340,10 @@ export function StocksView({ isAdmin, auditActor }: Props) {
   }
 
   const applyQuickInventory = useCallback(async () => {
+    if (selectedLocationId === 'all') {
+      toast.error('Choisissez un emplacement', 'Inventaire rapide par emplacement uniquement.')
+      return
+    }
     const code = quickBarcode.trim()
     const qty = Number.parseInt(quickQty.replace(/\s/g, ''), 10)
     if (!code) {
@@ -235,15 +363,17 @@ export function StocksView({ isAdmin, auditActor }: Props) {
       }
       const row = mergedProducts.find((x) => x.id === p.id)
       const previousQty = row?.stock ?? 0
-      await db.storeStocks.put({
-        id: storeStockRowId(activeStoreId, p.id),
+      await db.locationStocks.put({
+        id: locationStockRowId(activeStoreId, selectedLocationId, p.id),
         storeId: activeStoreId,
+        locationId: selectedLocationId,
         productId: p.id,
         stock: qty,
       })
+      const totalStock = await recomputeAndWriteStoreStock(p.id)
       const updated: ProductWithStock = {
         ...(row ?? { ...p, stock: 0 }),
-        stock: qty,
+        stock: totalStock,
       }
       if (isAdmin) await pushStockCloud(updated)
       void appendAuditEvent({
@@ -254,6 +384,7 @@ export function StocksView({ isAdmin, auditActor }: Props) {
           source: 'stocks_quick_inventory',
           storeId: activeStoreId,
           storeName: activeStore?.name,
+          locationId: selectedLocationId,
           productId: p.id,
           productName: p.name,
           barcode: p.barcode,
@@ -275,9 +406,114 @@ export function StocksView({ isAdmin, auditActor }: Props) {
     pushStockCloud,
     activeStoreId,
     activeStore?.name,
+    selectedLocationId,
     mergedProducts,
+    recomputeAndWriteStoreStock,
     toast,
   ])
+
+  const applyBulkRestockLow = useCallback(async () => {
+    if (selectedLocationId === 'all') {
+      toast.error('Choisissez un emplacement', 'Le réappro bulk est appliqué par emplacement.')
+      return
+    }
+    const qty = Number.parseInt(bulkQty.replace(/\s/g, ''), 10)
+    if (!Number.isFinite(qty) || qty <= 0) {
+      toast.error('Quantité de réappro invalide')
+      return
+    }
+    const targets = visibleProducts.filter((p) => p.stock <= p.lowStockThreshold)
+    if (targets.length === 0) {
+      toast.info('Aucun article sous seuil')
+      return
+    }
+    setBulkBusy(true)
+    try {
+      await db.transaction('rw', [db.locationStocks, db.storeStocks, db.auditEvents], async () => {
+        for (const p of targets) {
+          const previousQty = p.stock
+          const newQty = previousQty + qty
+          await db.locationStocks.put({
+            id: locationStockRowId(activeStoreId, selectedLocationId, p.id),
+            storeId: activeStoreId,
+            locationId: selectedLocationId,
+            productId: p.id,
+            stock: newQty,
+          })
+          await recomputeAndWriteStoreStock(p.id)
+          await appendAuditEvent({
+            kind: 'stock_adjusted',
+            actor: auditActor,
+            reason: `Réappro bulk: ${p.name} ${previousQty} → ${newQty} (+${qty})`,
+            payload: {
+              source: 'stocks_bulk_restock',
+              storeId: activeStoreId,
+              storeName: activeStore?.name,
+              locationId: selectedLocationId,
+              productId: p.id,
+              productName: p.name,
+              previousQty,
+              newQty,
+              delta: qty,
+            },
+          })
+        }
+      })
+      toast.success(
+        'Réapprovisionnement terminé',
+        `${targets.length} article(s) +${qty}`,
+      )
+    } finally {
+      setBulkBusy(false)
+    }
+  }, [
+    bulkQty,
+    visibleProducts,
+    activeStoreId,
+    selectedLocationId,
+    auditActor,
+    activeStore?.name,
+    recomputeAndWriteStoreStock,
+    toast,
+  ])
+
+  const exportStockCsv = useCallback(() => {
+    const rows: string[][] = [
+      ['Article', 'Code-barres', 'Catégorie', 'Stock', 'Seuil', 'Prix TTC'],
+      ...visibleProducts.map((p) => [
+        p.name,
+        p.barcode,
+        p.category,
+        String(p.stock),
+        String(p.lowStockThreshold),
+        String(p.priceTTC),
+      ]),
+    ]
+    downloadTextFile(
+      `stocks-${activeStore?.shortCode ?? activeStoreId}-${new Date().toISOString().slice(0, 10)}.csv`,
+      toCsvSemicolon(rows),
+    )
+    toast.success('Export stock prêt', `${visibleProducts.length} ligne(s)`)
+  }, [visibleProducts, activeStore?.shortCode, activeStoreId, toast])
+  const exportMovementsCsv = useCallback(() => {
+    const rows: string[][] = [
+      ['Date', 'Article', 'Avant', 'Après', 'Source', 'Acteur', 'Motif'],
+      ...stockMovements.map((m) => [
+        new Date(m.createdAt).toLocaleString('fr-FR'),
+        m.productName,
+        m.previousQty != null ? String(m.previousQty) : '',
+        m.newQty != null ? String(m.newQty) : '',
+        m.source,
+        m.actorDisplayName,
+        m.reason,
+      ]),
+    ]
+    downloadTextFile(
+      `mouvements-stock-${activeStore?.shortCode ?? activeStoreId}-${new Date().toISOString().slice(0, 10)}.csv`,
+      toCsvSemicolon(rows),
+    )
+    toast.success('Export mouvements prêt', `${stockMovements.length} ligne(s)`)
+  }, [stockMovements, activeStore?.shortCode, activeStoreId, toast])
 
   const filterTabs = useMemo(
     () => [
@@ -294,8 +530,30 @@ export function StocksView({ isAdmin, auditActor }: Props) {
       <PageHeader
         eyebrow={`Magasin · ${activeStore?.name ?? '—'}`}
         title="Stocks"
-        subtitle="Niveaux par magasin, seuils d’alerte et inventaire rapide"
+        subtitle="Niveaux par magasin et par emplacement, seuils d’alerte et inventaire rapide"
       />
+
+      <Card>
+        <CardContent className="grid gap-2 sm:grid-cols-2">
+          <Field label="Emplacement de stock actif">
+            <Select
+              value={selectedLocationId}
+              onChange={(e) => setSelectedLocationId(e.target.value)}
+            >
+              <option value="all">Tous les emplacements (total magasin)</option>
+              {stockLocations.map((loc) => (
+                <option key={loc.id} value={loc.id}>
+                  {loc.name} ({loc.code})
+                </option>
+              ))}
+            </Select>
+          </Field>
+          <div className="rounded-lg border border-border bg-surface-sunken/70 px-3 py-2 text-[12px] text-ink-muted">
+            Ajustements, inventaires rapides et réappro bulk s’appliquent à
+            l’emplacement sélectionné, puis le total magasin est recalculé.
+          </div>
+        </CardContent>
+      </Card>
 
       <div className="grid gap-3 sm:grid-cols-3">
         <Kpi
@@ -320,17 +578,33 @@ export function StocksView({ isAdmin, auditActor }: Props) {
           icon={<IconCheckCircle />}
         />
       </div>
+      <div className="grid gap-3 sm:grid-cols-2">
+        <Kpi
+          label="Valeur du stock"
+          value={formatFCFA(stockValuation)}
+          hint="Stock courant du magasin actif"
+          tone="accent"
+          icon={<IconStocks />}
+        />
+        <Kpi
+          label="Valeur exposée (rupture)"
+          value={formatFCFA(ruptureValuation)}
+          hint="Valeur des références en rupture"
+          tone="rose"
+          icon={<IconAlert />}
+        />
+      </div>
 
       {isAdmin ? (
         <Card>
           <CardContent>
             <div className="mb-3 flex items-center gap-2">
-              <IconScan className="h-4 w-4 text-zinc-500" />
-              <h2 className="text-[14px] font-semibold text-zinc-900">
+              <IconScan className="h-4 w-4 text-ink-subtle" />
+              <h2 className="text-[14px] font-semibold text-ink">
                 Inventaire rapide
               </h2>
             </div>
-            <p className="mb-3 text-[12px] text-zinc-500">
+            <p className="mb-3 text-[12px] text-ink-subtle">
               Scannez ou saisissez le code-barres puis la quantité comptée.
               Le stock sera fixé à cette valeur.
             </p>
@@ -363,6 +637,58 @@ export function StocksView({ isAdmin, auditActor }: Props) {
           </CardContent>
         </Card>
       ) : null}
+
+      <Card>
+        <CardContent className="space-y-3">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <h2 className="text-[14px] font-semibold text-ink">
+              Actions stock
+            </h2>
+            <div className="flex flex-wrap gap-2">
+              <Button
+                variant="secondary"
+                size="sm"
+                iconLeft={<IconDownload />}
+                onClick={exportStockCsv}
+              >
+                Export stock
+              </Button>
+              <Button
+                variant="secondary"
+                size="sm"
+                iconLeft={<IconDownload />}
+                onClick={exportMovementsCsv}
+                disabled={stockMovements.length === 0}
+              >
+                Export mouvements
+              </Button>
+            </div>
+          </div>
+          {isAdmin ? (
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-end">
+              <Field label="Réappro bas stocks (+)">
+                <Input
+                  inputMode="numeric"
+                  value={bulkQty}
+                  onChange={(e) => setBulkQty(e.target.value)}
+                  className="font-mono-nums sm:w-28"
+                />
+              </Field>
+              <Button
+                variant="accent"
+                loading={bulkBusy}
+                onClick={() => void applyBulkRestockLow()}
+              >
+                Réapprovisionner les articles sous seuil
+              </Button>
+            </div>
+          ) : (
+            <p className="text-[12px] text-ink-subtle">
+              Réapprovisionnement en masse réservé aux administrateurs.
+            </p>
+          )}
+        </CardContent>
+      </Card>
 
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <Tabs
@@ -428,10 +754,10 @@ export function StocksView({ isAdmin, auditActor }: Props) {
                 <CardContent className="space-y-3">
                   <div className="flex items-start justify-between gap-2">
                     <div className="min-w-0">
-                      <h3 className="truncate text-[14px] font-semibold text-zinc-900">
+                      <h3 className="truncate text-[14px] font-semibold text-ink">
                         {p.name}
                       </h3>
-                      <p className="mt-0.5 text-[11px] text-zinc-500">
+                      <p className="mt-0.5 text-[11px] text-ink-subtle">
                         {p.category} ·{' '}
                         <span className="font-mono-nums">{p.barcode}</span>
                       </p>
@@ -447,12 +773,12 @@ export function StocksView({ isAdmin, auditActor }: Props) {
 
                   <div>
                     <div className="mb-1 flex items-baseline justify-between">
-                      <span className="font-mono-nums text-2xl font-bold text-zinc-900">
+                      <span className="font-mono-nums text-2xl font-bold text-ink">
                         {p.stock}
                       </span>
-                      <span className="text-[11px] text-zinc-500">
+                      <span className="text-[11px] text-ink-subtle">
                         Seuil{' '}
-                        <span className="font-mono-nums font-medium text-zinc-700">
+                        <span className="font-mono-nums font-medium text-ink-muted">
                           {p.lowStockThreshold}
                         </span>
                         {' '}
@@ -462,17 +788,26 @@ export function StocksView({ isAdmin, auditActor }: Props) {
                         </span>
                       </span>
                     </div>
-                    <div className="h-1.5 overflow-hidden rounded-full bg-zinc-100">
+                    <div
+                      className="h-1.5 overflow-hidden rounded-full bg-surface-sunken"
+                      style={
+                        {
+                          ['--stock-bar-pct' as string]: `${pct}%`,
+                        } as CSSProperties
+                      }
+                    >
                       <div
-                        className={cn('h-full rounded-full transition-all', barColor)}
-                        style={{ width: `${pct}%` }}
+                        className={cn(
+                          'h-full max-w-full rounded-full transition-[width] duration-300 ease-out w-(--stock-bar-pct)',
+                          barColor,
+                        )}
                       />
                     </div>
                   </div>
 
                   {isAdmin ? (
                     isEditing ? (
-                      <div className="space-y-2 border-t border-zinc-100 pt-3">
+                      <div className="space-y-2 border-t border-border/60 pt-3">
                         <Field label="Stock (absolu)">
                           <Input
                             inputMode="numeric"
@@ -507,7 +842,7 @@ export function StocksView({ isAdmin, auditActor }: Props) {
                         </div>
                       </div>
                     ) : (
-                      <div className="space-y-2 border-t border-zinc-100 pt-3">
+                      <div className="space-y-2 border-t border-border/60 pt-3">
                         <div className="grid grid-cols-5 gap-1">
                           <Button
                             size="sm"
@@ -560,7 +895,7 @@ export function StocksView({ isAdmin, auditActor }: Props) {
                       </div>
                     )
                   ) : (
-                    <p className="border-t border-zinc-100 pt-3 text-[11px] text-zinc-400">
+                    <p className="border-t border-border/60 pt-3 text-[11px] text-ink-subtle">
                       Ajustement réservé aux administrateurs.
                     </p>
                   )}
@@ -570,6 +905,42 @@ export function StocksView({ isAdmin, auditActor }: Props) {
           })}
         </div>
       )}
+
+      <Card>
+        <CardContent>
+          <h2 className="mb-3 text-[14px] font-semibold text-ink">
+            Derniers mouvements de stock
+          </h2>
+          {stockMovements.length === 0 ? (
+            <p className="text-[12px] text-ink-subtle">
+              Aucun mouvement récent pour ce magasin.
+            </p>
+          ) : (
+            <ul className="divide-y divide-border/50">
+              {stockMovements.map((m) => (
+                <li key={m.id} className="py-2 text-[12px]">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <p className="font-medium text-ink-muted">
+                      {m.productName}{' '}
+                      {m.previousQty != null && m.newQty != null ? (
+                        <span className="font-mono-nums text-ink-subtle">
+                          {m.previousQty} → {m.newQty}
+                        </span>
+                      ) : null}
+                    </p>
+                    <span className="font-mono-nums text-[11px] text-ink-subtle">
+                      {new Date(m.createdAt).toLocaleString('fr-FR')}
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-ink-subtle">
+                    {m.actorDisplayName} · {m.reason}
+                  </p>
+                </li>
+              ))}
+            </ul>
+          )}
+        </CardContent>
+      </Card>
     </div>
   )
 }

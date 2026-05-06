@@ -37,6 +37,197 @@ export interface StoreStock {
   stock: number
 }
 
+export interface StockLocation {
+  id: string
+  storeId: string
+  name: string
+  code: string
+  sortOrder: number
+  active: boolean
+}
+
+export interface LocationStock {
+  id: string
+  storeId: string
+  locationId: string
+  productId: string
+  stock: number
+}
+
+export interface StockLocationTransfer {
+  id: string
+  createdAt: number
+  storeId: string
+  productId: string
+  fromLocationId: string
+  toLocationId: string
+  qty: number
+  note?: string
+  createdByProfileId?: string
+}
+
+export type DiningTableStatus = 'free' | 'occupied' | 'reserved' | 'cleaning'
+
+export interface DiningTable {
+  id: string
+  storeId: string
+  name: string
+  capacity: number
+  area?: string
+  status: DiningTableStatus
+  occupiedSince?: number
+  note?: string
+  sortOrder: number
+}
+
+export type TableReservationStatus =
+  | 'pending'
+  | 'confirmed'
+  | 'seated'
+  | 'completed'
+  | 'cancelled'
+  | 'no_show'
+
+export interface TableReservation {
+  id: string
+  storeId: string
+  tableId: string
+  customerName: string
+  customerPhone?: string
+  guests: number
+  startAt: number
+  endAt: number
+  status: TableReservationStatus
+  notes?: string
+  createdAt: number
+  updatedAt: number
+}
+
+export interface Promotion {
+  id: string
+  code: string
+  label: string
+  discountPct: number
+  active: boolean
+  startAt?: number
+  endAt?: number
+  minCartTTC?: number
+  storeId?: string
+  usageCount: number
+  maxUsage?: number
+  createdAt: number
+  updatedAt: number
+}
+
+export interface LoyaltyCustomer {
+  id: string
+  phone: string
+  displayName?: string
+  points: number
+  totalSpentTTC: number
+  visitCount: number
+  createdAt: number
+  updatedAt: number
+}
+
+export interface LoyaltyTransaction {
+  id: string
+  customerId: string
+  saleId?: string
+  createdAt: number
+  type: 'earn' | 'redeem' | 'adjustment'
+  points: number
+  amountTTC?: number
+  note?: string
+  actorProfileId?: string
+}
+
+export type HrRequestStatus = 'pending' | 'approved' | 'rejected'
+
+export type HrRequestType = 'leave' | 'advance' | 'expense'
+
+export interface HrRequest {
+  id: string
+  createdAt: number
+  staffProfileId: string
+  staffDisplayName: string
+  storeId?: string
+  type: HrRequestType
+  startDate?: string
+  endDate?: string
+  amountFCFA?: number
+  reason: string
+  status: HrRequestStatus
+  reviewedAt?: number
+  reviewedByProfileId?: string
+  reviewedByDisplayName?: string
+  reviewNote?: string
+}
+
+export type CrmInteractionKind =
+  | 'call'
+  | 'sms'
+  | 'whatsapp'
+  | 'email'
+  | 'visit'
+  | 'note'
+
+export interface CrmInteraction {
+  id: string
+  createdAt: number
+  customerId: string
+  customerPhone: string
+  customerName?: string
+  kind: CrmInteractionKind
+  note: string
+  nextActionAt?: number
+  actorProfileId?: string
+  actorDisplayName?: string
+}
+
+export type TicketInvoiceKind = 'ticket' | 'facture'
+
+export type TicketInvoiceStatus = 'draft' | 'issued' | 'paid' | 'cancelled'
+
+export interface TicketInvoice {
+  id: string
+  createdAt: number
+  updatedAt: number
+  reference: string
+  kind: TicketInvoiceKind
+  status: TicketInvoiceStatus
+  storeId?: string
+  storeName?: string
+  customerName?: string
+  customerPhone?: string
+  notes?: string
+  dueAt?: number
+  issuedAt?: number
+  paidAt?: number
+  currency: 'XOF'
+  lines: SaleLine[]
+  subtotalHT: number
+  tva: number
+  totalTTC: number
+  linkedSaleId?: string
+  createdByProfileId?: string
+  createdByDisplayName?: string
+}
+
+export interface TerminalNode {
+  id: string
+  label: string
+  storeId?: string
+  storeName?: string
+  profileId?: string
+  profileDisplayName?: string
+  lastSeenAt: number
+  lastSyncAt?: number
+  pendingSyncCount: number
+  online: boolean
+  appVersion?: string
+}
+
 export interface StockTransfer {
   id: string
   createdAt: number
@@ -112,6 +303,32 @@ export interface SaleLine {
 
 export type OnlineOrderStatus = 'pending' | 'approved' | 'rejected'
 
+export type OnlineOrderPlatform =
+  | 'native'
+  | 'glovo'
+  | 'ubereats'
+  | 'jumia'
+  | 'shopify'
+  | 'whatsapp'
+
+export type DeliveryStatus =
+  | 'queued'
+  | 'assigned'
+  | 'picked_up'
+  | 'in_transit'
+  | 'delivered'
+  | 'failed'
+  | 'cancelled'
+
+export type KitchenStatus =
+  | 'queued'
+  | 'preparing'
+  | 'ready'
+  | 'served'
+  | 'cancelled'
+
+export type KitchenPriority = 'low' | 'normal' | 'high'
+
 export interface OnlineOrder {
   id: string
   createdAt: number
@@ -120,6 +337,8 @@ export interface OnlineOrder {
   customerName: string
   customerPhone?: string
   customerAddress?: string
+  customerNote?: string
+  desiredTimeSlot?: string
   paymentMethod: PaymentMethod
   lines: SaleLine[]
   subtotalHT: number
@@ -131,10 +350,25 @@ export interface OnlineOrder {
   deliveryFeeTTC?: number
   fulfillmentMode?: 'pickup' | 'delivery'
   status: OnlineOrderStatus
+  sourcePlatform?: OnlineOrderPlatform
+  externalOrderRef?: string
+  importedAt?: number
   reviewedAt?: number
   reviewedByProfileId?: string
   reviewedByDisplayName?: string
   reviewNote?: string
+  deliveryStatus?: DeliveryStatus
+  deliveryProvider?: string
+  deliveryTrackingCode?: string
+  deliveryRiderName?: string
+  deliveryEtaAt?: number
+  deliveryLastEvent?: string
+  deliveryUpdatedAt?: number
+  kitchenStatus?: KitchenStatus
+  kitchenPriority?: KitchenPriority
+  kitchenStation?: string
+  kitchenTicketCode?: string
+  kitchenUpdatedAt?: number
 }
 
 export interface Sale {
@@ -167,6 +401,12 @@ export interface Sale {
   refundsTotalTTC?: number
   /** Quantités déjà remboursées par produit (clé = productId). */
   refundedLineQty?: Record<string, number>
+  promoCode?: string
+  loyaltyCustomerId?: string
+  loyaltyCustomerPhone?: string
+  loyaltyPointsEarned?: number
+  loyaltyPointsRedeemed?: number
+  loyaltyDiscountTTC?: number
 }
 
 /** Remboursement enregistré (traçabilité). */

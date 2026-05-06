@@ -61,6 +61,68 @@ function IconPackage() {
   )
 }
 
+function IconLedger() {
+  return (
+    <svg className={cls} viewBox="0 0 24 24" fill="none" aria-hidden>
+      <rect
+        x="4"
+        y="4"
+        width="16"
+        height="16"
+        rx="2"
+        stroke="currentColor"
+        strokeWidth="1.5"
+      />
+      <path
+        d="M8 9h8M8 12h8M8 15h5"
+        stroke="currentColor"
+        strokeWidth="1.5"
+        strokeLinecap="round"
+      />
+    </svg>
+  )
+}
+
+function IconTable() {
+  return (
+    <svg className={cls} viewBox="0 0 24 24" fill="none" aria-hidden>
+      <path
+        d="M4 9h16M6 9v9m12-9v9M3 18h18"
+        stroke="currentColor"
+        strokeWidth="1.5"
+        strokeLinecap="round"
+      />
+    </svg>
+  )
+}
+
+function IconTag() {
+  return (
+    <svg className={cls} viewBox="0 0 24 24" fill="none" aria-hidden>
+      <path
+        d="M11 4H6a2 2 0 00-2 2v5l8 8 8-8-8-8z"
+        stroke="currentColor"
+        strokeWidth="1.5"
+        strokeLinejoin="round"
+      />
+      <circle cx="7.5" cy="7.5" r="1.2" fill="currentColor" />
+    </svg>
+  )
+}
+
+function IconStar() {
+  return (
+    <svg className={cls} viewBox="0 0 24 24" fill="none" aria-hidden>
+      <path
+        d="M12 4l2.3 4.7 5.2.8-3.7 3.7.9 5.2L12 16l-4.7 2.4.9-5.2-3.7-3.7 5.2-.8L12 4z"
+        stroke="currentColor"
+        strokeWidth="1.4"
+        strokeLinejoin="round"
+      />
+    </svg>
+  )
+}
+
 function IconLockClose() {
   return (
     <svg className={cls} viewBox="0 0 24 24" fill="none" aria-hidden>
@@ -95,6 +157,48 @@ function IconUsers() {
       />
       <path
         d="M17 11h2M19 11v8"
+        stroke="currentColor"
+        strokeWidth="1.5"
+        strokeLinecap="round"
+      />
+    </svg>
+  )
+}
+
+function IconMail() {
+  return (
+    <svg className={cls} viewBox="0 0 24 24" fill="none" aria-hidden>
+      <rect
+        x="3.5"
+        y="6.5"
+        width="17"
+        height="11"
+        rx="2"
+        stroke="currentColor"
+        strokeWidth="1.5"
+      />
+      <path
+        d="M5 8l7 5 7-5"
+        stroke="currentColor"
+        strokeWidth="1.5"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  )
+}
+
+function IconFile() {
+  return (
+    <svg className={cls} viewBox="0 0 24 24" fill="none" aria-hidden>
+      <path
+        d="M7 3h7l4 4v14H7V3z"
+        stroke="currentColor"
+        strokeWidth="1.5"
+        strokeLinejoin="round"
+      />
+      <path
+        d="M14 3v4h4M10 12h5M10 15h5"
         stroke="currentColor"
         strokeWidth="1.5"
         strokeLinecap="round"
@@ -190,6 +294,14 @@ const MAP: Record<NavViewId, ReactNode> = {
   dash: <IconChart />,
   catalogue: <IconGrid />,
   stocks: <IconPackage />,
+  comptabilite: <IconLedger />,
+  rh: <IconUsers />,
+  crm: <IconMail />,
+  kitchen: <IconFile />,
+  ticketsFactures: <IconLedger />,
+  tables: <IconTable />,
+  promotions: <IconTag />,
+  loyalty: <IconStar />,
   onlineOrders: <IconClipboardCheck />,
   journal: <IconLockClose />,
   personnel: <IconUsers />,

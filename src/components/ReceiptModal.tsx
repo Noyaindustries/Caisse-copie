@@ -75,8 +75,10 @@ export function ReceiptModal({ source, autoPrint = false, onClose }: Props) {
   useEffect(() => {
     if (!autoPrint) return
     const id = window.setTimeout(() => {
-      window.print()
-    }, 150)
+      // L’impression automatique peut démarrer avant que le DOM soit totalement
+      // stabilisé (surtout la liste des lignes). On laisse un léger délai.
+      requestAnimationFrame(() => requestAnimationFrame(() => window.print()))
+    }, 450)
     return () => clearTimeout(id)
   }, [autoPrint, receiptKey])
 
@@ -86,8 +88,8 @@ export function ReceiptModal({ source, autoPrint = false, onClose }: Props) {
 
   const modalTitle = isOnline ? 'Reçu commande en ligne' : 'Reçu de vente'
   const tagline = isOnline
-    ? 'Digitalpro Solutions · Commande web'
-    : 'Digitalpro Solutions · Ticket de caisse'
+    ? 'Infinitecore Système · Commande web'
+    : 'Infinitecore Système · Ticket de caisse'
 
   return (
     <Modal

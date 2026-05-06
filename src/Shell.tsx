@@ -1,4 +1,12 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import {
+  Suspense,
+  lazy,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { effectivePermissions } from './auth/permissions'
 import { clearStaffSession } from './auth/session'
@@ -17,16 +25,7 @@ import {
   navSectionsForRole,
   type NavViewId,
 } from './navigation'
-import { AnalytiqueView } from './views/AnalytiqueView'
-import { IntegrationsView } from './views/IntegrationsView'
-import { CatalogueView } from './views/CatalogueView'
-import { JournalReportView } from './views/JournalReportView'
 import { DashboardView } from './views/DashboardView'
-import { MultiStoreView } from './views/MultiStoreView'
-import { OnlineOrdersValidationView } from './views/OnlineOrdersValidationView'
-import { PersonnelView } from './views/PersonnelView'
-import { PointageView } from './views/PointageView'
-import { StocksView } from './views/StocksView'
 import {
   db,
   ensureAllStoreStockRows,
@@ -38,6 +37,7 @@ import type {
   Product,
   ProductWithStock,
   Sale,
+  DiningTableStatus,
 } from './db/types'
 import {
   confirmCheckoutSummary,
@@ -50,6 +50,11 @@ import { productImageSrc } from './lib/productImage'
 import { appendAuditEvent } from './lib/auditLog'
 import { logCartCancellation } from './lib/refundApply'
 import { SESSION_ID } from './lib/session'
+import {
+  cleanupStaleTerminalNodes,
+  touchTerminalSyncTimestamp,
+  upsertTerminalPresence,
+} from './lib/terminalSync'
 import { useBarcodeScannerWedge } from './hooks/useBarcodeScannerWedge'
 import { storeStockRowId } from './lib/storeStockId'
 import {
@@ -57,6 +62,7 @@ import {
   getLastSyncTimestamp,
 } from './lib/syncMeta'
 import { flushSyncQueue } from './lib/sync'
+import { getDeviceConnectivityDemo } from './lib/integrationsConfig'
 import { Tabs } from './ui/Tabs'
 import { Button } from './ui/Button'
 import { useToast } from './ui/Toast'
@@ -78,7 +84,88 @@ type FlyToCartAnim = {
   active: boolean
 }
 
+function tableStatusLabel(status: DiningTableStatus): string {
+  if (status === 'free') return 'libre'
+  if (status === 'occupied') return 'occupée'
+  if (status === 'reserved') return 'réservée'
+  return 'nettoyage'
+}
+
+function normalizePhone(raw: string): string {
+  return raw.replace(/\D/g, '')
+}
+
 const SIDEBAR_KEY = 'caisseci-sidebar-collapsed'
+
+const CatalogueView = lazy(() =>
+  import('./views/CatalogueView').then((m) => ({ default: m.CatalogueView })),
+)
+const StocksView = lazy(() =>
+  import('./views/StocksView').then((m) => ({ default: m.StocksView })),
+)
+const ComptabiliteView = lazy(() =>
+  import('./views/ComptabiliteView').then((m) => ({
+    default: m.ComptabiliteView,
+  })),
+)
+const RhManagementView = lazy(() =>
+  import('./views/RhManagementView').then((m) => ({
+    default: m.RhManagementView,
+  })),
+)
+const CrmView = lazy(() =>
+  import('./views/CrmView').then((m) => ({ default: m.CrmView })),
+)
+const TablesManagementView = lazy(() =>
+  import('./views/TablesManagementView').then((m) => ({
+    default: m.TablesManagementView,
+  })),
+)
+const PromotionsView = lazy(() =>
+  import('./views/PromotionsView').then((m) => ({
+    default: m.PromotionsView,
+  })),
+)
+const LoyaltyProgramView = lazy(() =>
+  import('./views/LoyaltyProgramView').then((m) => ({
+    default: m.LoyaltyProgramView,
+  })),
+)
+const KitchenView = lazy(() =>
+  import('./views/KitchenView').then((m) => ({ default: m.KitchenView })),
+)
+const TicketsFacturesView = lazy(() =>
+  import('./views/TicketsFacturesView').then((m) => ({
+    default: m.TicketsFacturesView,
+  })),
+)
+const OnlineOrdersValidationView = lazy(() =>
+  import('./views/OnlineOrdersValidationView').then((m) => ({
+    default: m.OnlineOrdersValidationView,
+  })),
+)
+const JournalReportView = lazy(() =>
+  import('./views/JournalReportView').then((m) => ({
+    default: m.JournalReportView,
+  })),
+)
+const PersonnelView = lazy(() =>
+  import('./views/PersonnelView').then((m) => ({ default: m.PersonnelView })),
+)
+const PointageView = lazy(() =>
+  import('./views/PointageView').then((m) => ({ default: m.PointageView })),
+)
+const AnalytiqueView = lazy(() =>
+  import('./views/AnalytiqueView').then((m) => ({ default: m.AnalytiqueView })),
+)
+const IntegrationsView = lazy(() =>
+  import('./views/IntegrationsView').then((m) => ({
+    default: m.IntegrationsView,
+  })),
+)
+const MultiStoreView = lazy(() =>
+  import('./views/MultiStoreView').then((m) => ({ default: m.MultiStoreView })),
+)
 
 export function Shell({ staff, online, onLogout }: Props) {
   const {
@@ -124,6 +211,10 @@ export function Shell({ staff, online, onLogout }: Props) {
   const [discountPct, setDiscountPct] = useState(0)
   const [promoInput, setPromoInput] = useState('')
   const [promoFeedback, setPromoFeedback] = useState<string | null>(null)
+  const [appliedPromotionId, setAppliedPromotionId] = useState<string | null>(null)
+  const [selectedTableId, setSelectedTableId] = useState('')
+  const [loyaltyPhoneInput, setLoyaltyPhoneInput] = useState('')
+  const [loyaltyRedeemInput, setLoyaltyRedeemInput] = useState('')
   const [checkoutPayment, setCheckoutPayment] = useState<CheckoutPaymentState>(
     () => defaultCheckoutPayment(),
   )
@@ -137,6 +228,9 @@ export function Shell({ staff, online, onLogout }: Props) {
   >(null)
   const [syncMetaTick, setSyncMetaTick] = useState(0)
   const [syncBusy, setSyncBusy] = useState(false)
+  const [deviceConnectivity, setDeviceConnectivity] = useState(() =>
+    getDeviceConnectivityDemo(),
+  )
 
   const barcodeFieldRef = useRef<HTMLInputElement>(null)
   const sidebarCartCountRef = useRef<HTMLSpanElement>(null)
@@ -171,6 +265,23 @@ export function Shell({ staff, online, onLogout }: Props) {
       [],
       0,
     ) ?? 0
+  const diningTables =
+    useLiveQuery(
+      () =>
+        db.diningTables.where('storeId').equals(activeStoreId).sortBy('sortOrder'),
+      [activeStoreId],
+      [],
+    ) ?? []
+  const promotions = useLiveQuery(() => db.promotions.toArray(), [], []) ?? []
+  const loyaltyCustomers =
+    useLiveQuery(() => db.loyaltyCustomers.toArray(), [], []) ?? []
+
+  useEffect(() => {
+    if (!selectedTableId) return
+    if (!diningTables.some((t) => t.id === selectedTableId)) {
+      setSelectedTableId('')
+    }
+  }, [diningTables, selectedTableId])
 
   const refreshSyncMeta = useCallback(() => {
     setSyncMetaTick((n) => n + 1)
@@ -187,6 +298,28 @@ export function Shell({ staff, online, onLogout }: Props) {
       }
     })
   }, [online, refreshSyncMeta])
+
+  useEffect(() => {
+    let disposed = false
+    const tick = async () => {
+      if (disposed) return
+      await upsertTerminalPresence({
+        storeId: activeStoreId,
+        storeName: activeStore?.name,
+        profileId: staff.id,
+        profileDisplayName: staff.displayName,
+      })
+      await cleanupStaleTerminalNodes()
+    }
+    void tick()
+    const id = window.setInterval(() => {
+      void tick()
+    }, 15_000)
+    return () => {
+      disposed = true
+      window.clearInterval(id)
+    }
+  }, [activeStoreId, activeStore?.name, staff.id, staff.displayName])
 
   useEffect(() => {
     if (online) return
@@ -239,6 +372,10 @@ export function Shell({ staff, online, onLogout }: Props) {
   }, [staff.role, activeView, allowedViews])
 
   useEffect(() => {
+    setDeviceConnectivity(getDeviceConnectivityDemo())
+  }, [activeView])
+
+  useEffect(() => {
     setDiscountPct((d) => Math.min(d, perms.maxDiscountPct))
   }, [perms.maxDiscountPct])
 
@@ -259,6 +396,36 @@ export function Shell({ staff, online, onLogout }: Props) {
     [cart],
   )
 
+  const canLeaveCaisseWithCart = useCallback(
+    (targetView: NavViewId) => {
+      if (activeView !== 'caisse') return true
+      if (targetView === 'caisse') return true
+      if (cartItemCount === 0) return true
+      return window.confirm(
+        'Un panier est en cours. Quitter la caisse sans encaisser ?',
+      )
+    },
+    [activeView, cartItemCount],
+  )
+
+  const handleSelectView = useCallback(
+    (targetView: NavViewId) => {
+      if (!canLeaveCaisseWithCart(targetView)) return
+      setActiveView(targetView)
+    },
+    [canLeaveCaisseWithCart],
+  )
+
+  useEffect(() => {
+    if (cartItemCount === 0) return
+    const onBeforeUnload = (e: BeforeUnloadEvent) => {
+      e.preventDefault()
+      e.returnValue = ''
+    }
+    window.addEventListener('beforeunload', onBeforeUnload)
+    return () => window.removeEventListener('beforeunload', onBeforeUnload)
+  }, [cartItemCount])
+
   useEffect(() => {
     const prev = prevCartItemCountRef.current
     if (prev > 0 && cartItemCount === 0 && isFloatingCartOpen) {
@@ -271,6 +438,26 @@ export function Shell({ staff, online, onLogout }: Props) {
     () => Math.round(totalsFromLinesTTC(cart, discountPct).totalTTC),
     [cart, discountPct],
   )
+  const activeLoyaltyCustomer = useMemo(() => {
+    const phone = normalizePhone(loyaltyPhoneInput)
+    if (!phone) return null
+    return loyaltyCustomers.find((c) => c.phone === phone) ?? null
+  }, [loyaltyCustomers, loyaltyPhoneInput])
+  const loyaltyRedeemPoints = useMemo(() => {
+    const raw = Number.parseInt(loyaltyRedeemInput.trim() || '0', 10)
+    if (!Number.isFinite(raw) || raw <= 0) return 0
+    const maxByWallet = activeLoyaltyCustomer?.points ?? 0
+    return Math.max(0, Math.min(raw, maxByWallet))
+  }, [loyaltyRedeemInput, activeLoyaltyCustomer?.points])
+  const loyaltyRedeemAmountTTC = useMemo(() => {
+    const gross = Math.round(totalsFromLinesTTC(cart, discountPct).totalTTC)
+    const byPoints = loyaltyRedeemPoints * 10
+    return Math.max(0, Math.min(byPoints, gross))
+  }, [cart, discountPct, loyaltyRedeemPoints])
+  const payableTotalTTC = useMemo(() => {
+    const gross = Math.round(totalsFromLinesTTC(cart, discountPct).totalTTC)
+    return Math.max(0, gross - loyaltyRedeemAmountTTC)
+  }, [cart, discountPct, loyaltyRedeemAmountTTC])
 
   const syncLabel = useMemo(() => {
     const pending = queueItems.length
@@ -292,6 +479,7 @@ export function Shell({ staff, online, onLogout }: Props) {
       const r = await flushSyncQueue()
       if (r.mode === 'cloud' || r.mode === 'local') {
         refreshSyncMeta()
+        await touchTerminalSyncTimestamp()
         toast.success('Synchronisation terminée')
       }
       if (r.mode === 'failed' && r.error) {
@@ -449,6 +637,9 @@ export function Shell({ staff, online, onLogout }: Props) {
     setDiscountPct(0)
     setPromoInput('')
     setPromoFeedback(null)
+    setAppliedPromotionId(null)
+    setLoyaltyRedeemInput('')
+    setLoyaltyPhoneInput('')
     setCheckoutPayment(defaultCheckoutPayment())
   }, [])
 
@@ -497,9 +688,11 @@ export function Shell({ staff, online, onLogout }: Props) {
     const c = promoInput.trim().toUpperCase()
     const max = perms.maxDiscountPct
     const prevPct = discountPct
-    const apply = (requestedPct: number) => {
+    const totalTTC = Math.round(totalsFromLinesTTC(cart, discountPct).totalTTC)
+    const apply = (requestedPct: number, promotionId?: string) => {
       if (max <= 0) {
         setDiscountPct(0)
+        setAppliedPromotionId(null)
         setPromoFeedback('Aucune remise autorisée pour ce profil')
         void appendAuditEvent({
           kind: 'promo_applied',
@@ -517,6 +710,7 @@ export function Shell({ staff, online, onLogout }: Props) {
       }
       const applied = Math.min(requestedPct, max)
       setDiscountPct(applied)
+      setAppliedPromotionId(promotionId ?? null)
       setPromoFeedback(
         applied < requestedPct
           ? `Remise plafonnée à ${max} % (profil)`
@@ -546,8 +740,54 @@ export function Shell({ staff, online, onLogout }: Props) {
       apply(5)
       return
     }
-    setPromoFeedback('Code promo non reconnu')
-  }, [promoInput, perms.maxDiscountPct, discountPct, staff.displayName, staff.id])
+    const now = Date.now()
+    const promo = promotions.find((p) => p.code.toUpperCase() === c)
+    if (!promo) {
+      setAppliedPromotionId(null)
+      setPromoFeedback('Code promo non reconnu')
+      return
+    }
+    if (!promo.active) {
+      setAppliedPromotionId(null)
+      setPromoFeedback('Promotion inactive')
+      return
+    }
+    if (promo.storeId && promo.storeId !== activeStoreId) {
+      setAppliedPromotionId(null)
+      setPromoFeedback('Code non valable pour ce magasin')
+      return
+    }
+    if (promo.startAt != null && now < promo.startAt) {
+      setAppliedPromotionId(null)
+      setPromoFeedback('Promotion pas encore active')
+      return
+    }
+    if (promo.endAt != null && now > promo.endAt) {
+      setAppliedPromotionId(null)
+      setPromoFeedback('Promotion expirée')
+      return
+    }
+    if (promo.maxUsage != null && promo.usageCount >= promo.maxUsage) {
+      setAppliedPromotionId(null)
+      setPromoFeedback('Limite d’utilisation atteinte')
+      return
+    }
+    if (promo.minCartTTC != null && totalTTC < promo.minCartTTC) {
+      setAppliedPromotionId(null)
+      setPromoFeedback(`Panier minimum requis: ${formatFCFA(promo.minCartTTC)}`)
+      return
+    }
+    apply(promo.discountPct, promo.id)
+  }, [
+    promoInput,
+    perms.maxDiscountPct,
+    discountPct,
+    staff.displayName,
+    staff.id,
+    promotions,
+    activeStoreId,
+    cart,
+  ])
 
   const processScannedBarcode = useCallback(
     (raw: string) => {
@@ -613,11 +853,22 @@ export function Shell({ staff, online, onLogout }: Props) {
     }
 
     const totals = totalsFromLinesTTC(cart, discountPct)
-    const totalR = Math.round(totals.totalTTC)
-    const payCheck = validateCheckoutPayment(checkoutPayment, totalR, online)
+    const totalR = payableTotalTTC
+    const canPayElectronicNow = online && deviceConnectivity.paymentTerminals
+    const payCheck = validateCheckoutPayment(
+      checkoutPayment,
+      totalR,
+      canPayElectronicNow,
+    )
     if (!payCheck.ok) {
       toast.error('Paiement incomplet', payCheck.message)
       return
+    }
+    if (payCheck.split.cash > 0 && !deviceConnectivity.cashDrawer) {
+      const proceed = window.confirm(
+        'Tiroir-caisse désactivé. Continuer l’encaissement en espèces malgré tout ?',
+      )
+      if (!proceed) return
     }
     if (
       !window.confirm(
@@ -658,14 +909,29 @@ export function Shell({ staff, online, onLogout }: Props) {
         storeName,
         cashierProfileId: staff.id,
         cashierDisplayName: staff.displayName,
+        promoCode:
+          appliedPromotionId != null
+            ? promotions.find((p) => p.id === appliedPromotionId)?.code
+            : undefined,
+        loyaltyCustomerId: activeLoyaltyCustomer?.id,
+        loyaltyCustomerPhone: activeLoyaltyCustomer?.phone,
+        loyaltyPointsEarned: Math.floor(totalR / 100),
+        loyaltyPointsRedeemed: loyaltyRedeemPoints,
+        loyaltyDiscountTTC: loyaltyRedeemAmountTTC,
       }
 
       await db.transaction(
         'rw',
-        db.products,
-        db.sales,
-        db.syncQueue,
-        db.storeStocks,
+        [
+          db.products,
+          db.sales,
+          db.syncQueue,
+          db.storeStocks,
+          db.promotions,
+          db.diningTables,
+          db.loyaltyCustomers,
+          db.loyaltyTransactions,
+        ],
         async () => {
           for (const line of cart) {
             const p = await db.products.get(line.productId)
@@ -692,6 +958,71 @@ export function Shell({ staff, online, onLogout }: Props) {
 
           await db.sales.add(saleRecord)
 
+          if (appliedPromotionId) {
+            const promo = await db.promotions.get(appliedPromotionId)
+            if (promo) {
+              await db.promotions.update(appliedPromotionId, {
+                usageCount: (promo.usageCount ?? 0) + 1,
+                updatedAt: Date.now(),
+              })
+            }
+          }
+
+          if (selectedTableId) {
+            const table = await db.diningTables.get(selectedTableId)
+            if (table) {
+              await db.diningTables.update(selectedTableId, {
+                status: 'occupied',
+                occupiedSince: table.occupiedSince ?? Date.now(),
+              })
+            }
+          }
+
+          const cleanPhone = normalizePhone(loyaltyPhoneInput)
+          if (cleanPhone) {
+            const earnPts = Math.floor(totalR / 100)
+            const existing =
+              activeLoyaltyCustomer ??
+              (await db.loyaltyCustomers.where('phone').equals(cleanPhone).first())
+            const customerId = existing?.id ?? crypto.randomUUID()
+            const nextPoints =
+              (existing?.points ?? 0) + earnPts - loyaltyRedeemPoints
+            await db.loyaltyCustomers.put({
+              id: customerId,
+              phone: cleanPhone,
+              displayName: existing?.displayName,
+              points: Math.max(0, nextPoints),
+              totalSpentTTC: (existing?.totalSpentTTC ?? 0) + totalR,
+              visitCount: (existing?.visitCount ?? 0) + 1,
+              createdAt: existing?.createdAt ?? Date.now(),
+              updatedAt: Date.now(),
+            })
+            if (earnPts > 0) {
+              await db.loyaltyTransactions.add({
+                id: crypto.randomUUID(),
+                customerId,
+                saleId,
+                createdAt: Date.now(),
+                type: 'earn',
+                points: earnPts,
+                amountTTC: totalR,
+                actorProfileId: staff.id,
+              })
+            }
+            if (loyaltyRedeemPoints > 0) {
+              await db.loyaltyTransactions.add({
+                id: crypto.randomUUID(),
+                customerId,
+                saleId,
+                createdAt: Date.now(),
+                type: 'redeem',
+                points: -loyaltyRedeemPoints,
+                amountTTC: loyaltyRedeemAmountTTC,
+                actorProfileId: staff.id,
+              })
+            }
+          }
+
           await db.syncQueue.add({
             kind: 'sale',
             payload: JSON.stringify({ saleId }),
@@ -700,11 +1031,24 @@ export function Shell({ staff, online, onLogout }: Props) {
         },
       )
 
-      setReceiptOpen({ type: 'sale', sale: saleRecord, autoPrint: true })
+      setReceiptOpen({
+        type: 'sale',
+        sale: saleRecord,
+        autoPrint: deviceConnectivity.receiptPrinters,
+      })
+      if (!deviceConnectivity.receiptPrinters) {
+        toast.info(
+          'Imprimante ticket désactivée',
+          'Le reçu reste consultable à l’écran.',
+        )
+      }
       setCart([])
       setDiscountPct(0)
       setPromoInput('')
       setPromoFeedback(null)
+      setAppliedPromotionId(null)
+      setLoyaltyRedeemInput('')
+      setLoyaltyPhoneInput('')
       setBarcodeInput('')
       setCheckoutPayment(defaultCheckoutPayment())
       toast.success(
@@ -716,6 +1060,7 @@ export function Shell({ staff, online, onLogout }: Props) {
         const r = await flushSyncQueue()
         if (r.mode === 'cloud' || r.mode === 'local') {
           refreshSyncMeta()
+          await touchTerminalSyncTimestamp()
         }
       }
     } catch (e) {
@@ -734,7 +1079,18 @@ export function Shell({ staff, online, onLogout }: Props) {
     refreshSyncMeta,
     activeStoreId,
     activeStore?.name,
+    deviceConnectivity.cashDrawer,
+    deviceConnectivity.receiptPrinters,
+    deviceConnectivity.paymentTerminals,
     toast,
+    appliedPromotionId,
+    selectedTableId,
+    payableTotalTTC,
+    promotions,
+    activeLoyaltyCustomer,
+    loyaltyPhoneInput,
+    loyaltyRedeemAmountTTC,
+    loyaltyRedeemPoints,
   ])
 
   const handleLogoutClick = useCallback(() => {
@@ -743,6 +1099,8 @@ export function Shell({ staff, online, onLogout }: Props) {
   }, [onLogout])
 
   const isCaisse = activeView === 'caisse'
+  const cartHideClass = 'lg:hidden'
+  const cartDesktopClass = 'hidden lg:flex'
   const densityTabs = useMemo(
     () => [
       { id: 'compact' as const, label: 'Compact' },
@@ -774,7 +1132,7 @@ export function Shell({ staff, online, onLogout }: Props) {
 
       <Sidebar
         activeView={activeView}
-        onSelectView={setActiveView}
+        onSelectView={handleSelectView}
         ruptureCount={ruptureCount}
         lowStockCount={lowStockCount}
         onlineOrdersPending={onlineOrdersPending}
@@ -796,7 +1154,7 @@ export function Shell({ staff, online, onLogout }: Props) {
         open={mobileNavOpen}
         onClose={() => setMobileNavOpen(false)}
         activeView={activeView}
-        onSelectView={setActiveView}
+        onSelectView={handleSelectView}
         ruptureCount={ruptureCount}
         lowStockCount={lowStockCount}
         onlineOrdersPending={onlineOrdersPending}
@@ -835,7 +1193,7 @@ export function Shell({ staff, online, onLogout }: Props) {
         {!online ? <OfflineBanner /> : null}
 
         {isCaisse ? (
-          <div className="flex min-w-0 flex-1 flex-col xl:flex-row">
+          <div className="flex min-w-0 flex-1 flex-col lg:flex-row">
             <main className="ui-scroll min-w-0 flex-1 overflow-y-auto px-1 pb-24 pt-3 sm:px-3 sm:pt-4 xl:px-5 xl:pt-6 xl:pb-6">
               <CaisseHeader
                 ref={barcodeFieldRef}
@@ -875,7 +1233,7 @@ export function Shell({ staff, online, onLogout }: Props) {
                     <Button
                       size="sm"
                       variant="primary"
-                      onClick={() => setActiveView('stocks')}
+                      onClick={() => handleSelectView('stocks')}
                     >
                       Gérer les stocks
                     </Button>
@@ -892,7 +1250,7 @@ export function Shell({ staff, online, onLogout }: Props) {
                 density={productGridDensity}
               />
             </main>
-            <div className="hidden xl:flex">
+            <div className={cartDesktopClass}>
               <CartPanel
                 lines={cart}
                 products={displayProducts}
@@ -902,9 +1260,25 @@ export function Shell({ staff, online, onLogout }: Props) {
                 onPromoInputChange={setPromoInput}
                 onApplyPromo={handleApplyPromo}
                 promoFeedback={promoFeedback}
+                tableOptions={diningTables.map((t) => ({
+                  id: t.id,
+                  name: t.name,
+                  status: tableStatusLabel(t.status),
+                }))}
+                selectedTableId={selectedTableId}
+                onSelectedTableIdChange={setSelectedTableId}
+                loyaltyPhone={loyaltyPhoneInput}
+                onLoyaltyPhoneChange={setLoyaltyPhoneInput}
+                loyaltyPointsAvailable={activeLoyaltyCustomer?.points ?? 0}
+                loyaltyRedeemPoints={loyaltyRedeemInput}
+                onLoyaltyRedeemPointsChange={setLoyaltyRedeemInput}
+                loyaltyRedeemAmountTTC={loyaltyRedeemAmountTTC}
+                payableTotalTTC={payableTotalTTC}
                 payment={checkoutPayment}
                 onPaymentPatch={patchCheckoutPayment}
                 online={online}
+                canPayElectronic={online && deviceConnectivity.paymentTerminals}
+                receiptPrinterEnabled={deviceConnectivity.receiptPrinters}
                 onInc={handleInc}
                 onDec={handleDec}
                 onRemove={handleRemove}
@@ -917,87 +1291,133 @@ export function Shell({ staff, online, onLogout }: Props) {
           </div>
         ) : (
           <div className="ui-scroll flex-1 overflow-y-auto px-3 pb-10 pt-3 sm:px-4 sm:pt-4 lg:px-8">
-            {activeView === 'dash' ? (
-              <DashboardView
-                onOpenOnlineOrders={() => setActiveView('onlineOrders')}
-              />
-            ) : null}
-            {activeView === 'catalogue' ? (
-              <CatalogueView
-                canManageCatalog={perms.canManageCatalogFull}
-                canEditPrices={perms.canEditPrices}
-                density={productGridDensity}
-                auditActor={{
-                  profileId: staff.id,
-                  displayName: staff.displayName,
-                }}
-                onAddClick={() => setAddProductOpen(true)}
-              />
-            ) : null}
-            {activeView === 'stocks' ? (
-              <StocksView
-                isAdmin={perms.canManageStocks}
-                auditActor={{
-                  profileId: staff.id,
-                  displayName: staff.displayName,
-                }}
-              />
-            ) : null}
-            {activeView === 'onlineOrders' ? (
-              <OnlineOrdersValidationView
-                online={online}
-                activeStoreId={activeStoreId}
-                activeStoreLabel={activeStore?.name ?? 'Magasin'}
-                canSwitchStore={canSwitchStore}
-                canValidateOnlineOrders={
-                  staff.role === 'gerant' || staff.role === 'admin'
-                }
-                reviewer={{
-                  id: staff.id,
-                  displayName: staff.displayName,
-                }}
-                onPrintOrder={(order, autoPrint = false) =>
-                  setReceiptOpen({ type: 'onlineOrder', order, autoPrint })
-                }
-              />
-            ) : null}
-            {activeView === 'journal' ? (
-              <JournalReportView
-                canDailyClosure={perms.canDailyClosure}
-                canProcessRefunds={perms.canProcessRefunds}
-                currentProfile={{
-                  id: staff.id,
-                  displayName: staff.displayName,
-                }}
-                onViewReceipt={(sale) =>
-                  setReceiptOpen({ type: 'sale', sale, autoPrint: false })
-                }
-              />
-            ) : null}
-            {activeView === 'personnel' ? (
-              <PersonnelView currentProfileId={staff.id} />
-            ) : null}
-            {activeView === 'pointage' ? (
-              <PointageView
-                staff={staff}
-                activeStoreId={activeStoreId}
-                activeStoreLabel={activeStore?.name ?? 'Magasin'}
-                canViewTeamPointage={perms.canViewTeamPointage}
-              />
-            ) : null}
-            {activeView === 'analytique' ? <AnalytiqueView /> : null}
-            {activeView === 'integrations' ? <IntegrationsView /> : null}
-            {activeView === 'network' ? (
-              <MultiStoreView
-                canConfigureStores={perms.canConfigureStoresAdmin}
-                canCreateTransfers={perms.canManageStocks}
-                profileId={staff.id}
-                auditActor={{
-                  profileId: staff.id,
-                  displayName: staff.displayName,
-                }}
-              />
-            ) : null}
+            <Suspense
+              fallback={
+                <div className="flex min-h-[40vh] items-center justify-center text-sm text-zinc-500">
+                  Chargement du module...
+                </div>
+              }
+            >
+              {activeView === 'dash' ? (
+                <DashboardView
+                  onOpenOnlineOrders={() => handleSelectView('onlineOrders')}
+                />
+              ) : null}
+              {activeView === 'catalogue' ? (
+                <CatalogueView
+                  canManageCatalog={perms.canManageCatalogFull}
+                  canEditPrices={perms.canEditPrices}
+                  density={productGridDensity}
+                  auditActor={{
+                    profileId: staff.id,
+                    displayName: staff.displayName,
+                  }}
+                  onAddClick={() => setAddProductOpen(true)}
+                />
+              ) : null}
+              {activeView === 'stocks' ? (
+                <StocksView
+                  isAdmin={perms.canManageStocks}
+                  auditActor={{
+                    profileId: staff.id,
+                    displayName: staff.displayName,
+                  }}
+                />
+              ) : null}
+              {activeView === 'comptabilite' ? (
+                <ComptabiliteView canManageCompta={perms.canDailyClosure} />
+              ) : null}
+              {activeView === 'rh' ? (
+                <RhManagementView
+                  actor={{ id: staff.id, displayName: staff.displayName }}
+                  canReview={staff.role === 'admin' || staff.role === 'gerant'}
+                />
+              ) : null}
+              {activeView === 'crm' ? (
+                <CrmView actor={{ id: staff.id, displayName: staff.displayName }} />
+              ) : null}
+              {activeView === 'tables' ? (
+                <TablesManagementView
+                  activeStoreId={activeStoreId}
+                  activeStoreLabel={activeStore?.name ?? 'Magasin'}
+                  canManageTables={perms.canManageStocks}
+                />
+              ) : null}
+              {activeView === 'promotions' ? (
+                <PromotionsView
+                  activeStoreId={activeStoreId}
+                  canManagePromotions={perms.canEditPrices}
+                />
+              ) : null}
+              {activeView === 'loyalty' ? (
+                <LoyaltyProgramView canManageLoyalty={perms.canEditPrices} />
+              ) : null}
+              {activeView === 'kitchen' ? (
+                <KitchenView activeStoreId={activeStoreId} />
+              ) : null}
+              {activeView === 'ticketsFactures' ? (
+                <TicketsFacturesView
+                  activeStoreId={activeStoreId}
+                  activeStoreLabel={activeStore?.name ?? 'Magasin'}
+                  actor={{ id: staff.id, displayName: staff.displayName }}
+                />
+              ) : null}
+              {activeView === 'onlineOrders' ? (
+                <OnlineOrdersValidationView
+                  online={online}
+                  activeStoreId={activeStoreId}
+                  activeStoreLabel={activeStore?.name ?? 'Magasin'}
+                  canSwitchStore={canSwitchStore}
+                  canValidateOnlineOrders={
+                    staff.role === 'gerant' || staff.role === 'admin'
+                  }
+                  reviewer={{
+                    id: staff.id,
+                    displayName: staff.displayName,
+                  }}
+                  onPrintOrder={(order, autoPrint = false) =>
+                    setReceiptOpen({ type: 'onlineOrder', order, autoPrint })
+                  }
+                />
+              ) : null}
+              {activeView === 'journal' ? (
+                <JournalReportView
+                  canDailyClosure={perms.canDailyClosure}
+                  canProcessRefunds={perms.canProcessRefunds}
+                  currentProfile={{
+                    id: staff.id,
+                    displayName: staff.displayName,
+                  }}
+                  onViewReceipt={(sale) =>
+                    setReceiptOpen({ type: 'sale', sale, autoPrint: false })
+                  }
+                />
+              ) : null}
+              {activeView === 'personnel' ? (
+                <PersonnelView currentProfileId={staff.id} />
+              ) : null}
+              {activeView === 'pointage' ? (
+                <PointageView
+                  staff={staff}
+                  activeStoreId={activeStoreId}
+                  activeStoreLabel={activeStore?.name ?? 'Magasin'}
+                  canViewTeamPointage={perms.canViewTeamPointage}
+                />
+              ) : null}
+              {activeView === 'analytique' ? <AnalytiqueView /> : null}
+              {activeView === 'integrations' ? <IntegrationsView /> : null}
+              {activeView === 'network' ? (
+                <MultiStoreView
+                  canConfigureStores={perms.canConfigureStoresAdmin}
+                  canCreateTransfers={perms.canManageStocks}
+                  profileId={staff.id}
+                  auditActor={{
+                    profileId: staff.id,
+                    displayName: staff.displayName,
+                  }}
+                />
+              ) : null}
+            </Suspense>
           </div>
         )}
 
@@ -1008,17 +1428,17 @@ export function Shell({ staff, online, onLogout }: Props) {
               <button
                 type="button"
                 onClick={() => setIsFloatingCartOpen(true)}
-                className="fixed inset-x-3 bottom-3 z-30 flex items-center justify-between gap-3 rounded-2xl bg-zinc-900 px-4 py-3 text-left text-white shadow-[0_12px_32px_-8px_rgba(9,9,11,0.45)] transition hover:bg-zinc-800 xl:hidden"
+                className={`fixed inset-x-3 bottom-3 z-30 flex items-center justify-between gap-3 rounded-2xl border border-border bg-white/95 px-4 py-3 text-left text-ink shadow-(--shadow-pop) backdrop-blur-sm transition hover:bg-white ${cartHideClass}`}
               >
                 <span className="flex items-center gap-3">
-                  <span className="relative flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-white/10">
+                  <span className="relative flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-accent-soft text-accent">
                     <IconReceipt className="h-4 w-4" />
-                    <span className="absolute -right-1 -top-1 flex h-5 min-w-5 items-center justify-center rounded-full border-2 border-zinc-900 bg-emerald-500 px-1 text-[10px] font-bold text-white">
+                    <span className="absolute -right-1 -top-1 flex h-5 min-w-5 items-center justify-center rounded-full border-2 border-white bg-accent px-1 text-[10px] font-bold text-white">
                       {cartItemCount}
                     </span>
                   </span>
                   <span className="flex flex-col">
-                    <span className="text-[11px] uppercase tracking-wider text-white/60">
+                    <span className="text-[11px] uppercase tracking-wider text-ink-subtle">
                       Panier
                     </span>
                     <span className="font-mono-nums text-[15px] font-bold">
@@ -1026,7 +1446,7 @@ export function Shell({ staff, online, onLogout }: Props) {
                     </span>
                   </span>
                 </span>
-                <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-500 px-3 py-1.5 text-[12px] font-semibold text-white">
+                <span className="inline-flex items-center gap-1.5 rounded-full bg-accent px-3 py-1.5 text-[12px] font-semibold text-white">
                   Encaisser
                   <IconArrowRight className="h-3.5 w-3.5" />
                 </span>
@@ -1038,7 +1458,7 @@ export function Shell({ staff, online, onLogout }: Props) {
               <button
                 type="button"
                 onClick={() => setIsFloatingCartOpen(true)}
-                className="fixed bottom-3 right-3 z-30 flex h-12 w-12 items-center justify-center rounded-full bg-zinc-900 text-white shadow-[0_12px_32px_-8px_rgba(9,9,11,0.45)] transition hover:bg-zinc-800 xl:hidden"
+                className={`fixed bottom-3 right-3 z-30 flex h-12 w-12 items-center justify-center rounded-full border border-border bg-white text-accent shadow-(--shadow-pop) transition hover:bg-surface-sunken ${cartHideClass}`}
                 aria-label="Ouvrir le panier"
               >
                 <IconReceipt className="h-5 w-5" />
@@ -1048,7 +1468,7 @@ export function Shell({ staff, online, onLogout }: Props) {
             {/* Drawer panier (mobile = full-width, tablette = max-w-md) */}
             {isFloatingCartOpen ? (
               <div
-                className="fixed inset-0 z-40 xl:hidden"
+                className={`fixed inset-0 z-40 ${cartHideClass}`}
                 role="dialog"
                 aria-modal="true"
                 aria-label="Panier"
@@ -1060,7 +1480,7 @@ export function Shell({ staff, online, onLogout }: Props) {
                   onClick={() => setIsFloatingCartOpen(false)}
                 />
                 <div className="absolute inset-y-0 right-0 w-full animate-ui-slide-up sm:w-[min(420px,92vw)]">
-                  <div className="flex h-full flex-col border-l border-zinc-200 bg-white shadow-[var(--shadow-overlay)]">
+                  <div className="flex h-full flex-col border-l border-zinc-200 bg-white shadow-(--shadow-overlay)">
                     <CartPanel
                       lines={cart}
                       products={displayProducts}
@@ -1070,9 +1490,25 @@ export function Shell({ staff, online, onLogout }: Props) {
                       onPromoInputChange={setPromoInput}
                       onApplyPromo={handleApplyPromo}
                       promoFeedback={promoFeedback}
+                      tableOptions={diningTables.map((t) => ({
+                        id: t.id,
+                        name: t.name,
+                        status: tableStatusLabel(t.status),
+                      }))}
+                      selectedTableId={selectedTableId}
+                      onSelectedTableIdChange={setSelectedTableId}
+                      loyaltyPhone={loyaltyPhoneInput}
+                      onLoyaltyPhoneChange={setLoyaltyPhoneInput}
+                      loyaltyPointsAvailable={activeLoyaltyCustomer?.points ?? 0}
+                      loyaltyRedeemPoints={loyaltyRedeemInput}
+                      onLoyaltyRedeemPointsChange={setLoyaltyRedeemInput}
+                      loyaltyRedeemAmountTTC={loyaltyRedeemAmountTTC}
+                      payableTotalTTC={payableTotalTTC}
                       payment={checkoutPayment}
                       onPaymentPatch={patchCheckoutPayment}
                       online={online}
+                      canPayElectronic={online && deviceConnectivity.paymentTerminals}
+                      receiptPrinterEnabled={deviceConnectivity.receiptPrinters}
                       onInc={handleInc}
                       onDec={handleDec}
                       onRemove={handleRemove}

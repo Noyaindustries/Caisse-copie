@@ -14,6 +14,20 @@ import { useOnlineStatus } from './hooks/useOnlineStatus'
 import { Shell } from './Shell'
 import { LuxuryStorefrontView } from './views/LuxuryStorefrontView'
 
+function urlTargetsStaff(): boolean {
+  if (typeof window === 'undefined') return false
+  const { pathname, search, hash } = window.location
+  const p = pathname.toLowerCase()
+  const q = search.toLowerCase()
+  const h = hash.toLowerCase()
+  return (
+    p.endsWith('/staff') ||
+    p.includes('/staff/') ||
+    q.includes('staff') ||
+    h.includes('staff')
+  )
+}
+
 export default function App() {
   const online = useOnlineStatus()
   const [staff, setStaff] = useState(() => getStaffSession())
@@ -29,6 +43,12 @@ export default function App() {
       cancelled = true
     }
   }, [])
+
+  useEffect(() => {
+    if (staff) return
+    if (!urlTargetsStaff()) return
+    setShowStaffLogin(true)
+  }, [staff])
 
   const handleLogin = useCallback(
     (profile: StaffProfile, authMethod: StaffAuthMethod) => {

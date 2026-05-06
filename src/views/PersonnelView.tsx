@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import {
+  changeStaffPassword,
   createStaffProfile,
   listStaffProfiles,
   roleLabel,
@@ -14,7 +15,7 @@ import { Kpi } from '../ui/Kpi'
 import { PageHeader, SectionHeader } from '../ui/PageHeader'
 import { Table, TBody, Td, Th, THead, Tr } from '../ui/Table'
 import { useToast } from '../ui/Toast'
-import { IconCheck, IconClose, IconShield } from '../ui/icons'
+import { IconCheck, IconClose, IconEye, IconEyeOff, IconShield } from '../ui/icons'
 
 type Props = { currentProfileId: string }
 
@@ -70,6 +71,14 @@ export function PersonnelView({ currentProfileId }: Props) {
   const [role, setRole] = useState<UserRole>('caissier')
   const [pin, setPin] = useState('')
   const [password, setPassword] = useState('')
+  const [currentSecret, setCurrentSecret] = useState('')
+  const [newPassword, setNewPassword] = useState('')
+  const [confirmPassword, setConfirmPassword] = useState('')
+  const [showCurrentSecret, setShowCurrentSecret] = useState(false)
+  const [showNewPassword, setShowNewPassword] = useState(false)
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false)
+  const [showCreatePin, setShowCreatePin] = useState(false)
+  const [showCreatePassword, setShowCreatePassword] = useState(false)
 
   useEffect(() => {
     return subscribeStaffProfiles(() => {
@@ -82,6 +91,10 @@ export function PersonnelView({ currentProfileId }: Props) {
     for (const p of profiles) rows[p.role] += 1
     return rows
   }, [profiles])
+  const currentProfile = useMemo(
+    () => profiles.find((p) => p.id === currentProfileId) ?? null,
+    [profiles, currentProfileId],
+  )
 
   const handleCreate = (e: React.FormEvent) => {
     e.preventDefault()
@@ -108,6 +121,34 @@ export function PersonnelView({ currentProfileId }: Props) {
     }
   }
 
+  const handlePasswordChange = (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!currentProfile) {
+      toast.error('Profil actif introuvable')
+      return
+    }
+    if (newPassword.trim() !== confirmPassword.trim()) {
+      toast.error('Confirmation invalide', 'Les deux mots de passe diffèrent.')
+      return
+    }
+    try {
+      changeStaffPassword({
+        profileId: currentProfile.id,
+        currentSecret,
+        nextPassword: newPassword,
+      })
+      setCurrentSecret('')
+      setNewPassword('')
+      setConfirmPassword('')
+      toast.success('Mot de passe mis à jour')
+    } catch (error) {
+      toast.error(
+        'Changement impossible',
+        error instanceof Error ? error.message : String(error),
+      )
+    }
+  }
+
   return (
     <div className="space-y-5 pb-6">
       <PageHeader
@@ -121,6 +162,103 @@ export function PersonnelView({ currentProfileId }: Props) {
         <Kpi label="Gérants" value={String(totalByRole.gerant)} tone="violet" />
         <Kpi label="Administrateurs" value={String(totalByRole.admin)} tone="accent" />
       </div>
+
+      <Card>
+        <CardContent>
+          <h2 className="text-[14px] font-semibold text-zinc-900">
+            Changer mon mot de passe
+          </h2>
+          <p className="mt-0.5 text-[12px] text-zinc-500">
+            Le PIN reste valide pour la connexion caisse. Le mot de passe est
+            personnel au profil actif.
+          </p>
+          <form
+            onSubmit={handlePasswordChange}
+            className="mt-3 grid gap-3 md:grid-cols-3"
+          >
+            <Field label="Secret actuel (PIN ou mot de passe)" required>
+              <div className="flex items-center gap-2">
+                <Input
+                  type={showCurrentSecret ? 'text' : 'password'}
+                  value={currentSecret}
+                  onChange={(e) => setCurrentSecret(e.target.value)}
+                  placeholder="Actuel"
+                  autoComplete="current-password"
+                  required
+                />
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="ghost"
+                  aria-label={
+                    showCurrentSecret
+                      ? 'Masquer le secret actuel'
+                      : 'Afficher le secret actuel'
+                  }
+                  onClick={() => setShowCurrentSecret((v) => !v)}
+                >
+                  {showCurrentSecret ? <IconEyeOff /> : <IconEye />}
+                </Button>
+              </div>
+            </Field>
+            <Field label="Nouveau mot de passe" required>
+              <div className="flex items-center gap-2">
+                <Input
+                  type={showNewPassword ? 'text' : 'password'}
+                  value={newPassword}
+                  onChange={(e) => setNewPassword(e.target.value)}
+                  placeholder="Nouveau"
+                  autoComplete="new-password"
+                  required
+                />
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="ghost"
+                  aria-label={
+                    showNewPassword
+                      ? 'Masquer le nouveau mot de passe'
+                      : 'Afficher le nouveau mot de passe'
+                  }
+                  onClick={() => setShowNewPassword((v) => !v)}
+                >
+                  {showNewPassword ? <IconEyeOff /> : <IconEye />}
+                </Button>
+              </div>
+            </Field>
+            <Field label="Confirmer le mot de passe" required>
+              <div className="flex items-center gap-2">
+                <Input
+                  type={showConfirmPassword ? 'text' : 'password'}
+                  value={confirmPassword}
+                  onChange={(e) => setConfirmPassword(e.target.value)}
+                  placeholder="Confirmation"
+                  autoComplete="new-password"
+                  required
+                />
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="ghost"
+                  aria-label={
+                    showConfirmPassword
+                      ? 'Masquer la confirmation'
+                      : 'Afficher la confirmation'
+                  }
+                  onClick={() => setShowConfirmPassword((v) => !v)}
+                >
+                  {showConfirmPassword ? <IconEyeOff /> : <IconEye />}
+                </Button>
+              </div>
+            </Field>
+            <div className="md:col-span-3">
+              <Button type="submit" variant="primary">
+                Mettre à jour le mot de passe
+              </Button>
+            </div>
+          </form>
+        </CardContent>
+      </Card>
 
       <Card>
         <CardContent>
@@ -153,23 +291,49 @@ export function PersonnelView({ currentProfileId }: Props) {
               </Select>
             </Field>
             <Field label="PIN (4-8 chiffres)" required>
-              <Input
-                type="password"
-                value={pin}
-                onChange={(e) => setPin(e.target.value)}
-                inputMode="numeric"
-                placeholder="1234"
-                required
-                className="font-mono-nums"
-              />
+              <div className="flex items-center gap-2">
+                <Input
+                  type={showCreatePin ? 'text' : 'password'}
+                  value={pin}
+                  onChange={(e) => setPin(e.target.value)}
+                  inputMode="numeric"
+                  placeholder="1234"
+                  required
+                  className="font-mono-nums"
+                />
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="ghost"
+                  aria-label={showCreatePin ? 'Masquer le PIN' : 'Afficher le PIN'}
+                  onClick={() => setShowCreatePin((v) => !v)}
+                >
+                  {showCreatePin ? <IconEyeOff /> : <IconEye />}
+                </Button>
+              </div>
             </Field>
             <Field label="Mot de passe (optionnel)">
-              <Input
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                placeholder="Mot de passe"
-              />
+              <div className="flex items-center gap-2">
+                <Input
+                  type={showCreatePassword ? 'text' : 'password'}
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  placeholder="Mot de passe"
+                />
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="ghost"
+                  aria-label={
+                    showCreatePassword
+                      ? 'Masquer le mot de passe'
+                      : 'Afficher le mot de passe'
+                  }
+                  onClick={() => setShowCreatePassword((v) => !v)}
+                >
+                  {showCreatePassword ? <IconEyeOff /> : <IconEye />}
+                </Button>
+              </div>
             </Field>
             <div className="md:col-span-2 lg:col-span-5">
               <Button type="submit" variant="accent">

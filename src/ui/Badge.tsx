@@ -11,12 +11,12 @@ export type BadgeTone =
   | 'violet'
 
 const TONE: Record<BadgeTone, string> = {
-  neutral: 'bg-zinc-100 text-zinc-700 border-zinc-200',
+  neutral: 'bg-[color:var(--color-surface-sunken)] text-[color:var(--color-ink-muted)] border-[color:var(--color-border)]',
   success: 'bg-emerald-50 text-emerald-700 border-emerald-200',
   warning: 'bg-amber-50 text-amber-800 border-amber-200',
   danger: 'bg-rose-50 text-rose-700 border-rose-200',
   info: 'bg-sky-50 text-sky-700 border-sky-200',
-  accent: 'bg-emerald-600/10 text-emerald-700 border-emerald-200',
+  accent: 'bg-[color:var(--color-accent-soft)] text-[color:var(--color-accent-strong)] border-[color:var(--color-accent)]/20',
   violet: 'bg-violet-50 text-violet-700 border-violet-200',
 }
 

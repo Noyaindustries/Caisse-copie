@@ -9,7 +9,7 @@ import {
 } from '../lib/money'
 import { MOBILE_OPERATOR_LABELS } from '../lib/paymentDisplay'
 import { Button, IconButton } from '../ui/Button'
-import { Field, Input } from '../ui/Input'
+import { Field, Input, Select } from '../ui/Input'
 import { Switch } from '../ui/Switch'
 import { Tabs } from '../ui/Tabs'
 import { cn } from '../ui/cn'
@@ -37,6 +37,8 @@ type Props = {
   payment: CheckoutPaymentState
   onPaymentPatch: (patch: Partial<CheckoutPaymentState>) => void
   online: boolean
+  canPayElectronic?: boolean
+  receiptPrinterEnabled?: boolean
   onInc: (productId: string) => void
   onDec: (productId: string) => void
   onRemove: (productId: string) => void
@@ -49,6 +51,16 @@ type Props = {
   onClose?: () => void
   /** Cible pour animation « ajout au panier » (compteur dans l’en-tête). */
   countBadgeRef?: Ref<HTMLSpanElement | null>
+  tableOptions?: { id: string; name: string; status?: string }[]
+  selectedTableId?: string
+  onSelectedTableIdChange?: (tableId: string) => void
+  loyaltyPhone?: string
+  onLoyaltyPhoneChange?: (value: string) => void
+  loyaltyPointsAvailable?: number
+  loyaltyRedeemPoints?: string
+  onLoyaltyRedeemPointsChange?: (value: string) => void
+  loyaltyRedeemAmountTTC?: number
+  payableTotalTTC?: number
 }
 
 function stockFor(
@@ -71,6 +83,8 @@ export function CartPanel({
   payment,
   onPaymentPatch,
   online,
+  canPayElectronic = online,
+  receiptPrinterEnabled = true,
   onInc,
   onDec,
   onRemove,
@@ -80,13 +94,22 @@ export function CartPanel({
   checkoutBusy,
   onClose,
   countBadgeRef,
+  tableOptions = [],
+  selectedTableId = '',
+  onSelectedTableIdChange,
+  loyaltyPhone = '',
+  onLoyaltyPhoneChange,
+  loyaltyPointsAvailable = 0,
+  loyaltyRedeemPoints = '',
+  onLoyaltyRedeemPointsChange,
+  loyaltyRedeemAmountTTC = 0,
+  payableTotalTTC,
 }: Props) {
   const totals = totalsFromLinesTTC(lines, discountPct)
   const vatSlices = vatSlicesFromLinesTTC(lines, discountPct)
   const count = lines.reduce((s, l) => s + l.qty, 0)
-  const canPayElectronic = online
-  const totalRounded = Math.round(totals.totalTTC)
-  const validation = validateCheckoutPayment(payment, totalRounded, online)
+  const totalRounded = Math.round(payableTotalTTC ?? totals.totalTTC)
+  const validation = validateCheckoutPayment(payment, totalRounded, canPayElectronic)
   const checkoutDisabled =
     lines.length === 0 || checkoutBusy || !validation.ok
 
@@ -203,7 +226,7 @@ export function CartPanel({
                       >
                         <IconMinus className="h-3 w-3" />
                       </button>
-                      <span className="min-w-[1.5rem] text-center font-mono-nums text-[12px] font-semibold text-zinc-900">
+                      <span className="min-w-6 text-center font-mono-nums text-[12px] font-semibold text-zinc-900">
                         {line.qty}
                       </span>
                       <button
@@ -229,6 +252,52 @@ export function CartPanel({
 
       {/* Footer (sticky) */}
       <div className="border-t border-zinc-100 bg-zinc-50/40 px-4 py-3">
+        {/* Promo */}
+        {tableOptions.length > 0 && onSelectedTableIdChange ? (
+          <div className="mb-2">
+            <Field label="Affecter à une table">
+              <Select
+                value={selectedTableId}
+                onChange={(e) => onSelectedTableIdChange(e.target.value)}
+              >
+                <option value="">Aucune table</option>
+                {tableOptions.map((table) => (
+                  <option key={table.id} value={table.id}>
+                    {table.name}
+                    {table.status ? ` (${table.status})` : ''}
+                  </option>
+                ))}
+              </Select>
+            </Field>
+          </div>
+        ) : null}
+
+        {/* Fidélité */}
+        {onLoyaltyPhoneChange ? (
+          <div className="mb-2 grid gap-1.5 sm:grid-cols-2">
+            <Field label="Client fidélité (téléphone)">
+              <Input
+                value={loyaltyPhone}
+                onChange={(e) => onLoyaltyPhoneChange(e.target.value)}
+                placeholder="07 00 00 00 00"
+              />
+            </Field>
+            <Field label={`Points à utiliser (solde: ${loyaltyPointsAvailable})`}>
+              <Input
+                inputMode="numeric"
+                value={loyaltyRedeemPoints}
+                onChange={(e) => onLoyaltyRedeemPointsChange?.(e.target.value)}
+                placeholder="0"
+              />
+            </Field>
+            {loyaltyRedeemAmountTTC > 0 ? (
+              <p className="sm:col-span-2 rounded-md bg-emerald-50 px-2 py-1 text-[11px] text-emerald-800">
+                Réduction fidélité: {formatFCFA(loyaltyRedeemAmountTTC)}
+              </p>
+            ) : null}
+          </div>
+        ) : null}
+
         {/* Promo */}
         <div className="flex gap-1.5">
           <Input
@@ -272,6 +341,14 @@ export function CartPanel({
               {formatFCFA(totals.totalTTC)}
             </span>
           </div>
+          {(payableTotalTTC ?? totals.totalTTC) < totals.totalTTC ? (
+            <div className="flex items-baseline justify-between pt-1">
+              <span className="text-[12px] font-semibold text-zinc-700">A payer</span>
+              <span className="font-mono-nums text-[16px] font-bold text-emerald-700">
+                {formatFCFA(payableTotalTTC ?? totals.totalTTC)}
+              </span>
+            </div>
+          ) : null}
         </div>
 
         {/* Payment */}
@@ -340,7 +417,7 @@ export function CartPanel({
                   onPaymentPatch({ method: id })
                 }
               }}
-              className="w-full [&>*]:flex-1"
+              className="w-full *:flex-1"
             />
           ) : (
             <div className="space-y-2 rounded-lg border border-zinc-200 bg-white p-2">
@@ -505,7 +582,9 @@ export function CartPanel({
           {checkoutBusy ? 'Traitement…' : `Encaisser · ${formatFCFA(totalRounded)}`}
         </Button>
         <p className="mt-1.5 text-center text-[10px] text-zinc-400">
-          Reçu généré et imprimé automatiquement
+          {receiptPrinterEnabled
+            ? 'Reçu généré et imprimé automatiquement'
+            : 'Reçu généré sans impression auto (imprimante désactivée)'}
         </p>
       </div>
 

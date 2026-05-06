@@ -139,13 +139,6 @@ export function LoginScreen({ onSuccess }: Props) {
                 </button>
               ))}
 
-              <p className="mt-4 rounded-lg bg-zinc-100 p-3 text-[11px] text-zinc-600">
-                <strong className="font-semibold text-zinc-800">Démo :</strong>{' '}
-                caissier <code className="ui-kbd">1234</code>{' '}
-                <code className="ui-kbd">caisse</code> · gérant{' '}
-                <code className="ui-kbd">4321</code> · admin{' '}
-                <code className="ui-kbd">5678</code>
-              </p>
             </div>
           ) : (
             <form

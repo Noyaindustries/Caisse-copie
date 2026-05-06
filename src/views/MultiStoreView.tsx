@@ -16,7 +16,7 @@ import { Table, TBody, Td, Th, THead, Tr } from '../ui/Table'
 import { useToast } from '../ui/Toast'
 import { IconNetwork, IconPlus, IconStore, IconTruck } from '../ui/icons'
 
-type Tab = 'consolidated' | 'transfers' | 'stores'
+type Tab = 'consolidated' | 'transfers' | 'stores' | 'terminals'
 
 type Props = {
   canConfigureStores: boolean
@@ -40,6 +40,12 @@ export function MultiStoreView({
   const transfers =
     useLiveQuery(
       () => db.stockTransfers.orderBy('createdAt').reverse().toArray(),
+      [],
+      [],
+    ) ?? []
+  const terminals =
+    useLiveQuery(
+      () => db.terminalNodes.orderBy('lastSeenAt').reverse().toArray(),
       [],
       [],
     ) ?? []
@@ -206,6 +212,7 @@ export function MultiStoreView({
     const arr: Array<{ id: Tab; label: string }> = [
       { id: 'consolidated', label: 'Vue consolidée' },
       { id: 'transfers', label: 'Transferts' },
+      { id: 'terminals', label: 'Terminaux sync' },
     ]
     if (canConfigureStores) arr.push({ id: 'stores', label: 'Magasins' })
     return arr
@@ -360,7 +367,7 @@ export function MultiStoreView({
             />
           ) : (
             <Card>
-              <CardContent className="!p-0">
+              <CardContent className="p-0!">
                 <ul className="divide-y divide-zinc-100">
                   {transfers.slice(0, 40).map((tr) => {
                     const p = products.find((x) => x.id === tr.productId)
@@ -369,7 +376,7 @@ export function MultiStoreView({
                     return (
                       <li
                         key={tr.id}
-                        className="flex flex-wrap items-center justify-between gap-2 px-4 py-2.5 text-[13px]"
+                        className="flex flex-wrap items-start justify-between gap-2 px-4 py-2.5 text-[13px] sm:flex-nowrap sm:items-center"
                       >
                         <div className="min-w-0">
                           <p className="truncate font-medium text-zinc-900">
@@ -380,7 +387,7 @@ export function MultiStoreView({
                             {tr.note ? ` · ${tr.note}` : ''}
                           </p>
                         </div>
-                        <span className="font-mono-nums text-[11px] text-zinc-500">
+                        <span className="shrink-0 whitespace-nowrap font-mono-nums text-[11px] text-zinc-500">
                           {new Date(tr.createdAt).toLocaleString('fr-FR')}
                         </span>
                       </li>
@@ -399,7 +406,7 @@ export function MultiStoreView({
           <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
             {stores.map((s) => (
               <Card key={s.id}>
-                <CardContent className="flex items-center justify-between gap-3">
+                <CardContent className="flex flex-wrap items-center justify-between gap-3 sm:flex-nowrap">
                   <div className="flex min-w-0 items-center gap-3">
                     <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-zinc-100 text-zinc-500">
                       <IconStore className="h-4 w-4" />
@@ -413,7 +420,7 @@ export function MultiStoreView({
                       </p>
                     </div>
                   </div>
-                  <Badge tone="neutral">Actif</Badge>
+                  <Badge tone="neutral" className="shrink-0">Actif</Badge>
                 </CardContent>
               </Card>
             ))}
@@ -450,12 +457,73 @@ export function MultiStoreView({
                   iconLeft={<IconPlus />}
                   loading={storeBusy}
                   onClick={() => void addStore()}
+                  className="w-full sm:w-auto"
                 >
                   Ajouter
                 </Button>
               </div>
             </CardContent>
           </Card>
+        </div>
+      ) : null}
+
+      {tab === 'terminals' ? (
+        <div className="space-y-5">
+          <SectionHeader
+            title="Terminaux synchronisés"
+            subtitle="Présence, file de sync et santé des caisses actives"
+          />
+          {terminals.length === 0 ? (
+            <EmptyState
+              title="Aucun terminal détecté"
+              description="Les terminaux apparaissent automatiquement dès qu’une session est active."
+              variant="flat"
+            />
+          ) : (
+            <Table minWidth={860}>
+              <THead>
+                <Tr hover={false}>
+                  <Th>Terminal</Th>
+                  <Th>Magasin</Th>
+                  <Th>Utilisateur</Th>
+                  <Th>Statut</Th>
+                  <Th align="right">File sync</Th>
+                  <Th>Dernière synchro</Th>
+                  <Th>Dernière activité</Th>
+                </Tr>
+              </THead>
+              <TBody>
+                {terminals.map((t) => (
+                  <Tr key={t.id}>
+                    <Td>
+                      <span className="font-medium text-zinc-900">{t.label}</span>
+                      <span className="block font-mono-nums text-[11px] text-zinc-500">
+                        {t.id}
+                      </span>
+                    </Td>
+                    <Td>{t.storeName ?? t.storeId ?? '—'}</Td>
+                    <Td>{t.profileDisplayName ?? '—'}</Td>
+                    <Td>
+                      <Badge tone={t.online ? 'success' : 'warning'}>
+                        {t.online ? 'En ligne' : 'Inactif'}
+                      </Badge>
+                    </Td>
+                    <Td align="right" mono>
+                      {t.pendingSyncCount}
+                    </Td>
+                    <Td className="text-[12px] text-zinc-600">
+                      {t.lastSyncAt
+                        ? new Date(t.lastSyncAt).toLocaleString('fr-FR')
+                        : 'Jamais'}
+                    </Td>
+                    <Td className="text-[12px] text-zinc-600">
+                      {new Date(t.lastSeenAt).toLocaleString('fr-FR')}
+                    </Td>
+                  </Tr>
+                ))}
+              </TBody>
+            </Table>
+          )}
         </div>
       ) : null}
     </div>

@@ -19,6 +19,10 @@ import { ProductImage } from '../components/ProductImage'
 import { ProductDetailModal } from '../components/ProductDetailModal'
 import { storeStockRowId } from '../lib/storeStockId'
 import { BRAND_LOGO_SRC, BRAND_NAME } from '../brand'
+import {
+  getDeliveryProviderDemo,
+  isDeliveryModuleDemoOn,
+} from '../lib/integrationsConfig'
 
 type Props = {
   online: boolean
@@ -36,10 +40,6 @@ type FlyToCartAnim = {
   active: boolean
 }
 
-const PROMO_CODES: Record<string, number> = {
-  PROMO5: 5,
-  PROMO10: 10,
-}
 const FREE_DELIVERY_THRESHOLD = 15000
 
 function CartIcon({ className }: { className?: string }) {
@@ -74,6 +74,8 @@ export function LuxuryStorefrontView({
   const [customerName, setCustomerName] = useState('')
   const [customerPhone, setCustomerPhone] = useState('')
   const [customerAddress, setCustomerAddress] = useState('')
+  const [customerNote, setCustomerNote] = useState('')
+  const [desiredTimeSlot, setDesiredTimeSlot] = useState('')
   const [fulfillmentMode, setFulfillmentMode] = useState<'pickup' | 'delivery'>(
     'pickup',
   )
@@ -89,6 +91,7 @@ export function LuxuryStorefrontView({
   const [detailProduct, setDetailProduct] = useState<ProductWithStock | null>(
     null,
   )
+  const promotions = useLiveQuery(() => db.promotions.toArray(), [], []) ?? []
   const productsSectionRef = useRef<HTMLElement | null>(null)
   const cartPanelRef = useRef<HTMLElement | null>(null)
   const checkoutFormRef = useRef<HTMLDivElement | null>(null)
@@ -419,15 +422,49 @@ export function LuxuryStorefrontView({
       setPromoFeedback(null)
       return
     }
-    const pct = PROMO_CODES[code]
-    if (!pct) {
+    const now = Date.now()
+    const promo = promotions.find((p) => p.code.toUpperCase() === code)
+    if (!promo) {
       setDiscountPct(0)
       setPromoFeedback('Code promo non reconnu')
       return
     }
-    setDiscountPct(pct)
-    setPromoFeedback(`Code ${code} appliqué (${pct}%)`)
-  }, [promoCode])
+    if (!promo.active) {
+      setDiscountPct(0)
+      setPromoFeedback('Promotion inactive')
+      return
+    }
+    if (promo.storeId && promo.storeId !== activeStoreId) {
+      setDiscountPct(0)
+      setPromoFeedback('Code non valable pour ce magasin')
+      return
+    }
+    if (promo.startAt != null && now < promo.startAt) {
+      setDiscountPct(0)
+      setPromoFeedback('Promotion pas encore active')
+      return
+    }
+    if (promo.endAt != null && now > promo.endAt) {
+      setDiscountPct(0)
+      setPromoFeedback('Promotion expirée')
+      return
+    }
+    if (promo.maxUsage != null && promo.usageCount >= promo.maxUsage) {
+      setDiscountPct(0)
+      setPromoFeedback('Limite d’utilisation atteinte')
+      return
+    }
+    const grossTotal = Math.round(totalsFromLinesTTC(cart, 0).totalTTC)
+    if (promo.minCartTTC != null && grossTotal < promo.minCartTTC) {
+      setDiscountPct(0)
+      setPromoFeedback(
+        `Panier minimum requis: ${formatFCFA(promo.minCartTTC)}`,
+      )
+      return
+    }
+    setDiscountPct(promo.discountPct)
+    setPromoFeedback(`Code ${code} appliqué (${promo.discountPct}%)`)
+  }, [activeStoreId, cart, promoCode, promotions])
 
   const handleCheckout = useCallback(async () => {
     if (cart.length === 0) {
@@ -464,6 +501,8 @@ export function LuxuryStorefrontView({
         customerName: customerLabel,
         customerPhone: customerPhone.trim() || undefined,
         customerAddress: customerAddress.trim() || undefined,
+        customerNote: customerNote.trim() || undefined,
+        desiredTimeSlot: desiredTimeSlot.trim() || undefined,
         paymentMethod,
         lines: cart.map((line) => ({
           productId: line.productId,
@@ -481,6 +520,18 @@ export function LuxuryStorefrontView({
         deliveryFeeTTC: deliveryFeeTTC || undefined,
         fulfillmentMode,
         status: 'pending',
+        deliveryStatus:
+          fulfillmentMode === 'delivery' && isDeliveryModuleDemoOn()
+            ? 'queued'
+            : undefined,
+        deliveryProvider:
+          fulfillmentMode === 'delivery' && isDeliveryModuleDemoOn()
+            ? getDeliveryProviderDemo()
+            : undefined,
+        deliveryUpdatedAt:
+          fulfillmentMode === 'delivery' && isDeliveryModuleDemoOn()
+            ? Date.now()
+            : undefined,
       }
 
       for (const line of cart) {
@@ -504,6 +555,8 @@ export function LuxuryStorefrontView({
       setCustomerName('')
       setCustomerPhone('')
       setCustomerAddress('')
+      setCustomerNote('')
+      setDesiredTimeSlot('')
       setPromoCode('')
       setPromoFeedback(null)
       setDiscountPct(0)
@@ -526,8 +579,10 @@ export function LuxuryStorefrontView({
     activeStoreId,
     cart,
     customerAddress,
+    customerNote,
     customerName,
     customerPhone,
+    desiredTimeSlot,
     deliveryFeeTTC,
     discountPct,
     fulfillmentMode,
@@ -541,21 +596,30 @@ export function LuxuryStorefrontView({
     <div className="min-h-svh bg-linear-to-b from-[#090f1d] via-[#0f172a] to-premium-navy text-slate-100">
       {!online ? <OfflineBanner /> : null}
       <div className="mx-auto flex w-full max-w-7xl flex-col px-2 pb-16 pt-6 sm:px-5 lg:px-7">
-        <header className="premium-dark-card rounded-3xl bg-linear-to-r from-slate-900 via-slate-900 to-amber-950/70 p-6 shadow-2xl shadow-amber-900/20">
-          <div className="mb-4 flex items-center gap-2 px-1 py-1">
+        <header className="premium-dark-card sticky top-3 z-20 rounded-3xl bg-linear-to-r from-slate-900 via-slate-900 to-amber-950/70 p-3 shadow-2xl shadow-amber-900/20 sm:p-4">
+          <div className="mb-3 flex flex-wrap items-center gap-2 rounded-2xl border border-white/10 bg-black/20 px-3 py-2 text-[11px] text-slate-300">
+            <p className="truncate">
+              Boutique officielle {BRAND_NAME} · Commande rapide et livraison locale
+            </p>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2 px-1 py-1">
             <button
               type="button"
-              onDoubleClick={onOpenStaffLogin}
-              title="Double-clic pour accéder à la gestion"
+              onClick={() => {
+                setIsCartOpen(false)
+                window.scrollTo({ top: 0, behavior: 'smooth' })
+              }}
+              title="Retour à l'accueil"
               className="shrink-0 rounded-xl border border-amber-200/35 bg-white/5 p-1 ring-1 ring-emerald-200/25"
             >
               <img
                 src={BRAND_LOGO_SRC}
                 alt={BRAND_NAME}
-                className="h-8 max-h-9 w-auto max-w-[min(52vw,200px)] object-contain object-left sm:h-9 sm:max-h-10 lg:max-w-[240px]"
+                className="h-8 max-h-9 w-auto max-w-[min(50vw,190px)] object-contain object-left sm:h-9 sm:max-h-10 lg:max-w-[240px]"
               />
             </button>
-            <nav className="flex min-w-0 flex-1 items-center gap-1.5 overflow-x-auto whitespace-nowrap lg:justify-center">
+            <nav className="ui-scroll flex min-w-0 flex-1 items-center gap-1.5 overflow-x-auto whitespace-nowrap lg:justify-center">
               <button
                 type="button"
                 onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
@@ -569,6 +633,13 @@ export function LuxuryStorefrontView({
                 className="shrink-0 rounded-lg border border-white/15 px-2.5 py-1 text-[11px] font-semibold text-slate-100 transition hover:border-amber-200/45 hover:text-amber-100"
               >
                 Produits
+              </button>
+              <button
+                type="button"
+                onClick={() => checkoutFormRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })}
+                className="shrink-0 rounded-lg border border-white/15 px-2.5 py-1 text-[11px] font-semibold text-slate-100 transition hover:border-amber-200/45 hover:text-amber-100"
+              >
+                Commander
               </button>
               <button
                 type="button"
@@ -869,6 +940,19 @@ export function LuxuryStorefrontView({
                 value={customerAddress}
                 onChange={(e) => setCustomerAddress(e.target.value)}
                 placeholder="Adresse de livraison (optionnelle)"
+                rows={2}
+                className="premium-input w-full resize-none rounded-xl bg-slate-950/80 px-3 py-2 text-sm text-slate-100"
+              />
+              <input
+                value={desiredTimeSlot}
+                onChange={(e) => setDesiredTimeSlot(e.target.value)}
+                placeholder="Créneau souhaité (ex: 18h30 - 19h00)"
+                className="premium-input w-full rounded-xl bg-slate-950/80 px-3 py-2 text-sm text-slate-100"
+              />
+              <textarea
+                value={customerNote}
+                onChange={(e) => setCustomerNote(e.target.value)}
+                placeholder="Note client (code portail, instruction de livraison...)"
                 rows={2}
                 className="premium-input w-full resize-none rounded-xl bg-slate-950/80 px-3 py-2 text-sm text-slate-100"
               />

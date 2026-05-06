@@ -316,8 +316,11 @@ export function DashboardView({ onOpenOnlineOrders }: DashboardProps) {
         <Card className="xl:col-span-8">
           <CardHeader
             eyebrow={
-              <span className="inline-flex items-center gap-1.5">
-                <IconCalendar className="h-3 w-3" /> 14 derniers jours
+              <span className="inline-flex items-center gap-1.5 text-emerald-700">
+                <span className="inline-flex h-5 w-5 items-center justify-center rounded-md bg-emerald-100 text-emerald-700">
+                  <IconCalendar className="h-3 w-3" />
+                </span>
+                14 derniers jours
               </span>
             }
             title="Chiffre d’affaires"
@@ -400,8 +403,11 @@ export function DashboardView({ onOpenOnlineOrders }: DashboardProps) {
         <Card className="xl:col-span-4">
           <CardHeader
             eyebrow={
-              <span className="inline-flex items-center gap-1.5">
-                <IconShield className="h-3 w-3" /> 7 derniers jours
+              <span className="inline-flex items-center gap-1.5 text-violet-700">
+                <span className="inline-flex h-5 w-5 items-center justify-center rounded-md bg-violet-100 text-violet-700">
+                  <IconShield className="h-3 w-3" />
+                </span>
+                7 derniers jours
               </span>
             }
             title="Mix paiements"
@@ -476,8 +482,11 @@ export function DashboardView({ onOpenOnlineOrders }: DashboardProps) {
         <Card className="xl:col-span-5">
           <CardHeader
             eyebrow={
-              <span className="inline-flex items-center gap-1.5">
-                <IconClock className="h-3 w-3" /> 7 derniers jours
+              <span className="inline-flex items-center gap-1.5 text-sky-700">
+                <span className="inline-flex h-5 w-5 items-center justify-center rounded-md bg-sky-100 text-sky-700">
+                  <IconClock className="h-3 w-3" />
+                </span>
+                7 derniers jours
               </span>
             }
             title="Rythme horaire"
@@ -541,8 +550,11 @@ export function DashboardView({ onOpenOnlineOrders }: DashboardProps) {
         <Card className="xl:col-span-7">
           <CardHeader
             eyebrow={
-              <span className="inline-flex items-center gap-1.5">
-                <IconTag className="h-3 w-3" /> 30 derniers jours
+              <span className="inline-flex items-center gap-1.5 text-rose-700">
+                <span className="inline-flex h-5 w-5 items-center justify-center rounded-md bg-rose-100 text-rose-700">
+                  <IconTag className="h-3 w-3" />
+                </span>
+                30 derniers jours
               </span>
             }
             title="Top articles"

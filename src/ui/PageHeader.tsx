@@ -17,21 +17,21 @@ export function PageHeader({
   return (
     <div
       className={cn(
-        'flex flex-col gap-3 pb-5 pt-1 sm:gap-4 sm:pb-6 lg:flex-row lg:items-end lg:justify-between',
+        'flex flex-col gap-3 pb-6 pt-1 sm:gap-4 sm:pb-7 lg:flex-row lg:items-end lg:justify-between',
         className,
       )}
     >
       <div className="min-w-0">
         {eyebrow ? <p className="ui-eyebrow mb-1.5">{eyebrow}</p> : null}
-        <h1 className="ui-h1 truncate text-2xl sm:text-3xl">{title}</h1>
+        <h1 className="ui-h1 text-2xl leading-tight sm:text-3xl">{title}</h1>
         {subtitle ? (
-          <p className="ui-muted mt-1.5 max-w-2xl text-[13px] leading-relaxed sm:text-sm">
+          <p className="ui-muted mt-2 max-w-2xl text-[13px] leading-[1.55] sm:text-sm">
             {subtitle}
           </p>
         ) : null}
       </div>
       {actions ? (
-        <div className="ui-scroll -mx-1 flex flex-nowrap items-center gap-2 overflow-x-auto px-1 pb-1 lg:flex-wrap lg:justify-end lg:overflow-visible lg:pb-0">
+        <div className="ui-scroll -mx-1 flex flex-nowrap items-center gap-2.5 overflow-x-auto px-1 pb-1 lg:flex-wrap lg:justify-end lg:overflow-visible lg:pb-0">
           {actions}
         </div>
       ) : null}
@@ -53,18 +53,18 @@ export function SectionHeader({
   return (
     <div
       className={cn(
-        'mb-3 flex flex-wrap items-end justify-between gap-3',
+        'mb-4 flex flex-wrap items-end justify-between gap-3',
         className,
       )}
     >
       <div className="min-w-0">
         <h2 className="ui-h2">{title}</h2>
         {subtitle ? (
-          <p className="ui-muted mt-0.5 text-[13px]">{subtitle}</p>
+          <p className="ui-muted mt-1 text-[13px] leading-relaxed">{subtitle}</p>
         ) : null}
       </div>
       {actions ? (
-        <div className="flex flex-wrap items-center gap-2">{actions}</div>
+        <div className="flex flex-wrap items-center gap-2.5">{actions}</div>
       ) : null}
     </div>
   )

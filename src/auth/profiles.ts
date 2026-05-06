@@ -32,6 +32,7 @@ const BUILTIN_STAFF_PROFILES: readonly StaffProfile[] = [
 ] as const
 
 const STORAGE_KEY = 'caisseci-custom-staff-profiles-v1'
+const PASSWORD_OVERRIDES_KEY = 'caisseci-staff-password-overrides-v1'
 const CHANGE_EVENT = 'caisseci-staff-profiles-changed'
 
 function isStaffProfile(value: unknown): value is StaffProfile {
@@ -60,14 +61,43 @@ function readCustomProfiles(): StaffProfile[] {
   }
 }
 
+function readPasswordOverrides(): Record<string, string> {
+  if (typeof window === 'undefined') return {}
+  try {
+    const raw = localStorage.getItem(PASSWORD_OVERRIDES_KEY)
+    if (!raw) return {}
+    const parsed = JSON.parse(raw) as unknown
+    if (typeof parsed !== 'object' || parsed === null) return {}
+    const out: Record<string, string> = {}
+    for (const [k, v] of Object.entries(parsed as Record<string, unknown>)) {
+      if (typeof k === 'string' && typeof v === 'string' && v.trim() !== '') {
+        out[k] = v
+      }
+    }
+    return out
+  } catch {
+    return {}
+  }
+}
+
 function writeCustomProfiles(profiles: StaffProfile[]): void {
   if (typeof window === 'undefined') return
   localStorage.setItem(STORAGE_KEY, JSON.stringify(profiles))
   window.dispatchEvent(new Event(CHANGE_EVENT))
 }
 
+function writePasswordOverrides(overrides: Record<string, string>): void {
+  if (typeof window === 'undefined') return
+  localStorage.setItem(PASSWORD_OVERRIDES_KEY, JSON.stringify(overrides))
+  window.dispatchEvent(new Event(CHANGE_EVENT))
+}
+
 export function listStaffProfiles(): StaffProfile[] {
-  return [...BUILTIN_STAFF_PROFILES, ...readCustomProfiles()]
+  const overrides = readPasswordOverrides()
+  return [...BUILTIN_STAFF_PROFILES, ...readCustomProfiles()].map((p) => ({
+    ...p,
+    password: overrides[p.id] ?? p.password,
+  }))
 }
 
 export function subscribeStaffProfiles(onChange: () => void): () => void {
@@ -122,6 +152,35 @@ export function createStaffProfile(input: {
   custom.push(created)
   writeCustomProfiles(custom)
   return created
+}
+
+export function changeStaffPassword(input: {
+  profileId: string
+  currentSecret: string
+  nextPassword: string
+}): void {
+  const profile = profileById(input.profileId)
+  if (!profile) {
+    throw new Error('Profil introuvable.')
+  }
+  const current = input.currentSecret.trim()
+  const next = input.nextPassword.trim()
+  if (current.length === 0) {
+    throw new Error('Saisissez votre mot de passe (ou PIN) actuel.')
+  }
+  const currentOk = current === profile.pin || current === (profile.password ?? '')
+  if (!currentOk) {
+    throw new Error('Mot de passe actuel incorrect.')
+  }
+  if (next.length < 4) {
+    throw new Error('Le nouveau mot de passe doit contenir au moins 4 caractères.')
+  }
+  if (next === profile.pin) {
+    throw new Error('Le mot de passe ne doit pas être identique au PIN.')
+  }
+  const overrides = readPasswordOverrides()
+  overrides[profile.id] = next
+  writePasswordOverrides(overrides)
 }
 
 export function profileById(id: string): StaffProfile | undefined {

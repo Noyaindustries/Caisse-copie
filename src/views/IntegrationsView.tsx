@@ -1,9 +1,25 @@
 import { useCallback, useMemo, useState } from 'react'
 import {
+  getConnectedPlatformsDemo,
+  getDeviceConnectivityDemo,
+  getDeliveryProviderDemo,
+  getDeliveryWebhookDemo,
+  getKitchenStationDemo,
+  getOnlineSyncModeDemo,
   getOrCreateDemoApiKey,
   isComptaModuleDemoOn,
+  isDeliveryModuleDemoOn,
+  isKitchenModuleDemoOn,
   isEcomModuleDemoOn,
+  setConnectedPlatformsDemo,
+  setDeviceConnectivityDemo,
   setComptaModuleDemo,
+  setOnlineSyncModeDemo,
+  setDeliveryModuleDemo,
+  setDeliveryProviderDemo,
+  setDeliveryWebhookDemo,
+  setKitchenModuleDemo,
+  setKitchenStationDemo,
   setEcomModuleDemo,
 } from '../lib/integrationsConfig'
 import { Badge } from '../ui/Badge'
@@ -11,6 +27,7 @@ import { Button } from '../ui/Button'
 import { Card, CardContent } from '../ui/Card'
 import { PageHeader } from '../ui/PageHeader'
 import { Switch } from '../ui/Switch'
+import { Field, Input, Select } from '../ui/Input'
 import { Tabs } from '../ui/Tabs'
 import { useToast } from '../ui/Toast'
 import {
@@ -21,6 +38,7 @@ import {
   IconSpreadsheet,
   IconTag,
   IconTruck,
+  IconFile,
 } from '../ui/icons'
 
 type TabId = 'marketplace' | 'api' | 'mobile'
@@ -67,6 +85,26 @@ export function IntegrationsView() {
   const [apiKey] = useState(() => getOrCreateDemoApiKey())
   const [comptaOn, setComptaOn] = useState(() => isComptaModuleDemoOn())
   const [ecomOn, setEcomOn] = useState(() => isEcomModuleDemoOn())
+  const [deliveryOn, setDeliveryOn] = useState(() => isDeliveryModuleDemoOn())
+  const [deliveryProvider, setDeliveryProvider] = useState(() =>
+    getDeliveryProviderDemo(),
+  )
+  const [deliveryWebhook, setDeliveryWebhook] = useState(() =>
+    getDeliveryWebhookDemo(),
+  )
+  const [kitchenOn, setKitchenOn] = useState(() => isKitchenModuleDemoOn())
+  const [kitchenStation, setKitchenStation] = useState(() =>
+    getKitchenStationDemo(),
+  )
+  const [connectedPlatforms, setConnectedPlatforms] = useState(() =>
+    getConnectedPlatformsDemo(),
+  )
+  const [onlineSyncMode, setOnlineSyncMode] = useState<'webhook' | 'pull'>(() =>
+    getOnlineSyncModeDemo(),
+  )
+  const [deviceConnectivity, setDeviceConnectivity] = useState(() =>
+    getDeviceConnectivityDemo(),
+  )
 
   const webhookUrl = useMemo(
     () =>
@@ -229,6 +267,207 @@ export function IntegrationsView() {
           </Card>
 
           <Card>
+            <CardContent className="space-y-3">
+              <div className="mb-1 flex items-center gap-2">
+                <IconIntegrations className="h-4 w-4 text-zinc-500" />
+                <h3 className="text-[14px] font-semibold text-zinc-900">
+                  Connexions plateformes commandes
+                </h3>
+              </div>
+              <div className="grid gap-2 sm:grid-cols-2">
+                {[
+                  { id: 'shopify', label: 'Shopify' },
+                  { id: 'glovo', label: 'Glovo' },
+                  { id: 'ubereats', label: 'Uber Eats' },
+                  { id: 'jumia', label: 'Jumia Food' },
+                  { id: 'whatsapp', label: 'WhatsApp Business' },
+                ].map((p) => {
+                  const active = connectedPlatforms.includes(
+                    p.id as (typeof connectedPlatforms)[number],
+                  )
+                  return (
+                    <label
+                      key={p.id}
+                      className="flex items-center justify-between rounded-lg border border-zinc-100 p-2.5"
+                    >
+                      <span className="text-[12px] font-medium text-zinc-700">{p.label}</span>
+                      <Switch
+                        checked={active}
+                        onChange={(e) => {
+                          const next = e.target.checked
+                            ? [...new Set([...connectedPlatforms, p.id as (typeof connectedPlatforms)[number]])]
+                            : connectedPlatforms.filter((x) => x !== p.id)
+                          setConnectedPlatforms(next)
+                          setConnectedPlatformsDemo(next)
+                        }}
+                      />
+                    </label>
+                  )
+                })}
+              </div>
+              <Field label="Mode de synchronisation commandes">
+                <Select
+                  value={onlineSyncMode}
+                  onChange={(e) => {
+                    const mode = e.target.value as 'webhook' | 'pull'
+                    setOnlineSyncMode(mode)
+                    setOnlineSyncModeDemo(mode)
+                  }}
+                >
+                  <option value="webhook">Webhook temps réel</option>
+                  <option value="pull">Pull planifié</option>
+                </Select>
+              </Field>
+              <p className="text-[11px] text-zinc-500">
+                Les plateformes actives alimentent le module « Commandes en ligne » avec import distant et suivi livraison.
+              </p>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardContent className="space-y-3">
+              <div className="mb-1 flex items-center gap-2">
+                <IconIntegrations className="h-4 w-4 text-zinc-500" />
+                <h3 className="text-[14px] font-semibold text-zinc-900">
+                  Équipements de caisse
+                </h3>
+              </div>
+              <div className="grid gap-2 sm:grid-cols-2">
+                {[
+                  {
+                    key: 'orderTerminals' as const,
+                    label:
+                      'Terminaux de prise de commande (tablette, POS tactile, borne)',
+                  },
+                  { key: 'receiptPrinters' as const, label: 'Imprimantes tickets' },
+                  { key: 'kitchenScreens' as const, label: 'Écrans cuisine (KDS)' },
+                  { key: 'cashDrawer' as const, label: 'Tiroir-caisse' },
+                  {
+                    key: 'paymentTerminals' as const,
+                    label: 'Terminaux de paiement',
+                  },
+                ].map((device) => (
+                  <label
+                    key={device.key}
+                    className="flex items-center justify-between rounded-lg border border-zinc-100 p-2.5"
+                  >
+                    <span className="pr-2 text-[12px] font-medium text-zinc-700">
+                      {device.label}
+                    </span>
+                    <Switch
+                      checked={deviceConnectivity[device.key]}
+                      onChange={(e) => {
+                        const next = {
+                          ...deviceConnectivity,
+                          [device.key]: e.target.checked,
+                        }
+                        setDeviceConnectivity(next)
+                        setDeviceConnectivityDemo(next)
+                      }}
+                    />
+                  </label>
+                ))}
+              </div>
+              <p className="text-[11px] text-zinc-500">
+                Active les équipements présents en boutique pour préparer le
+                couplage matériel (USB, réseau local, Bluetooth ou cloud).
+              </p>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardContent className="space-y-3">
+              <div className="mb-1 flex items-center gap-2">
+                <IconTruck className="h-4 w-4 text-zinc-500" />
+                <h3 className="text-[14px] font-semibold text-zinc-900">
+                  Intégration livraison
+                </h3>
+              </div>
+              <div className="flex items-center justify-between rounded-lg border border-zinc-100 p-2.5">
+                <span className="text-[12px] font-medium text-zinc-700">
+                  Connecteur logistique actif
+                </span>
+                <Switch
+                  checked={deliveryOn}
+                  onChange={(e) => {
+                    const v = e.target.checked
+                    setDeliveryOn(v)
+                    setDeliveryModuleDemo(v)
+                  }}
+                />
+              </div>
+              <div className="grid gap-2 sm:grid-cols-2">
+                <Field label="Prestataire">
+                  <Select
+                    value={deliveryProvider}
+                    onChange={(e) => {
+                      setDeliveryProvider(e.target.value)
+                      setDeliveryProviderDemo(e.target.value)
+                    }}
+                  >
+                    <option value="Coursier interne">Coursier interne</option>
+                    <option value="Yango Delivery">Yango Delivery</option>
+                    <option value="Glovo">Glovo</option>
+                    <option value="Uber Direct">Uber Direct</option>
+                  </Select>
+                </Field>
+                <Field label="Webhook sortant livraison">
+                  <Input
+                    value={deliveryWebhook}
+                    onChange={(e) => {
+                      setDeliveryWebhook(e.target.value)
+                      setDeliveryWebhookDemo(e.target.value)
+                    }}
+                    placeholder="https://partner.example.com/webhooks/orders"
+                  />
+                </Field>
+              </div>
+              <p className="text-[11px] text-zinc-500">
+                Les commandes livraison validées pourront être suivies avec
+                statuts, livreur et code de tracking.
+              </p>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardContent className="space-y-3">
+              <div className="mb-1 flex items-center gap-2">
+                <IconFile className="h-4 w-4 text-zinc-500" />
+                <h3 className="text-[14px] font-semibold text-zinc-900">
+                  Intégration cuisine
+                </h3>
+              </div>
+              <div className="flex items-center justify-between rounded-lg border border-zinc-100 p-2.5">
+                <span className="text-[12px] font-medium text-zinc-700">
+                  Kitchen display / tickets actifs
+                </span>
+                <Switch
+                  checked={kitchenOn}
+                  onChange={(e) => {
+                    const v = e.target.checked
+                    setKitchenOn(v)
+                    setKitchenModuleDemo(v)
+                  }}
+                />
+              </div>
+              <Field label="Station cuisine">
+                <Input
+                  value={kitchenStation}
+                  onChange={(e) => {
+                    setKitchenStation(e.target.value)
+                    setKitchenStationDemo(e.target.value)
+                  }}
+                  placeholder="Cuisine principale"
+                />
+              </Field>
+              <p className="text-[11px] text-zinc-500">
+                Les commandes validées seront routées vers la station cuisine
+                avec suivi: en file, en préparation, prêt, servi.
+              </p>
+            </CardContent>
+          </Card>
+
+          <Card>
             <CardContent>
               <div className="mb-3 flex items-center gap-2">
                 <IconPlug className="h-4 w-4 text-zinc-500" />
@@ -241,6 +480,9 @@ export function IntegrationsView() {
               </p>
               <code className="ui-card-flat block break-all rounded-lg px-3 py-2 font-mono-nums text-[12px] text-zinc-700">
                 POST {webhookUrl}
+              </code>
+              <code className="ui-card-flat mt-2 block break-all rounded-lg px-3 py-2 font-mono-nums text-[12px] text-zinc-700">
+                POST {webhookUrl.replace('/caisseci', '/orders')} (x-platform + x-webhook-token)
               </code>
             </CardContent>
           </Card>
@@ -318,7 +560,7 @@ export function IntegrationsView() {
                   'Notifications push rupture & seuils',
                   'Validation workflow remises (PIN gérant)',
                   'État file synchronisation cloud & retry manuel',
-                  'Authentification alignée sur les profils CaisseCI',
+                  'Authentification alignée sur les profils Infinitecore Système',
                 ].map((it) => (
                   <li key={it} className="flex items-start gap-2">
                     <IconCheck className="mt-0.5 h-3.5 w-3.5 shrink-0 text-emerald-600" />

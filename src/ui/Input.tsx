@@ -21,7 +21,7 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(function Input(
     return (
       <div className="relative">
         {iconLeft ? (
-          <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-zinc-400 [&_svg]:h-4 [&_svg]:w-4">
+          <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-ink-subtle [&_svg]:h-4 [&_svg]:w-4">
             {iconLeft}
           </span>
         ) : null}
@@ -29,15 +29,16 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(function Input(
           ref={ref}
           className={cn(
             'ui-input',
-            iconLeft ? 'pl-9' : null,
-            iconRight ? 'pr-9' : null,
+            // Espace suffisant pour éviter que le placeholder touche l'icône.
+            iconLeft ? 'pl-11' : null,
+            iconRight ? 'pr-11' : null,
             invalid ? 'border-rose-400 focus:border-rose-500' : null,
             className,
           )}
           {...rest}
         />
         {iconRight ? (
-          <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-zinc-400 [&_svg]:h-4 [&_svg]:w-4">
+          <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-ink-subtle [&_svg]:h-4 [&_svg]:w-4">
             {iconRight}
           </span>
         ) : null}
@@ -90,7 +91,7 @@ export const Select = forwardRef<
       >
         {children}
       </select>
-      <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-zinc-400">
+      <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-ink-subtle">
         <svg
           width="14"
           height="14"
@@ -122,7 +123,7 @@ export function Label({
   return (
     <label
       className={cn(
-        'mb-1.5 flex items-center justify-between text-[12px] font-semibold text-zinc-700',
+        'mb-1.5 flex items-center justify-between text-[12px] font-semibold text-ink-muted',
         className,
       )}
     >
@@ -131,7 +132,7 @@ export function Label({
         {required ? <span className="ml-1 text-rose-500">*</span> : null}
       </span>
       {hint ? (
-        <span className="text-[11px] font-normal text-zinc-400">{hint}</span>
+        <span className="text-[11px] font-normal text-ink-subtle">{hint}</span>
       ) : null}
     </label>
   )

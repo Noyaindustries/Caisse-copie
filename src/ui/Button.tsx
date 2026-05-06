@@ -20,9 +20,9 @@ type Props = ButtonHTMLAttributes<HTMLButtonElement> & {
 }
 
 const SIZE: Record<ButtonSize, string> = {
-  sm: 'h-8 px-2.5 text-[12px]',
-  md: 'h-9 px-3.5 text-[13px]',
-  lg: 'h-11 px-5 text-sm',
+  sm: 'h-8 min-h-8 px-2.5 text-[12px] tracking-tight',
+  md: 'h-9 min-h-9 px-3.5 text-[13px] tracking-tight',
+  lg: 'h-11 min-h-11 px-5 text-sm tracking-tight',
 }
 
 const VARIANT: Record<ButtonVariant, string> = {

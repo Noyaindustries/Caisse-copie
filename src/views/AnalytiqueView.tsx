@@ -62,6 +62,11 @@ const COLORS = {
   webRejected: '#e11d48',
 }
 
+function pctDelta(current: number, previous: number): number | null {
+  if (previous <= 0) return null
+  return Math.round(((current - previous) / previous) * 1000) / 10
+}
+
 export function AnalytiqueView() {
   const sales = useLiveQuery(() => db.sales.toArray(), [], []) ?? []
   const products = useLiveQuery(() => db.products.toArray(), [], []) ?? []
@@ -80,6 +85,13 @@ export function AnalytiqueView() {
       const d = String(ymd.getDate()).padStart(2, '0')
       return `${y}-${m}-${d}` >= firstYmd
     })
+  }, [sales, period])
+  const previousRangeSales = useMemo(() => {
+    const now = Date.now()
+    const shiftMs = period * 24 * 60 * 60 * 1000
+    const startPrev = now - shiftMs * 2
+    const endPrev = now - shiftMs
+    return sales.filter((s) => s.createdAt >= startPrev && s.createdAt < endPrev)
   }, [sales, period])
 
   const buckets = useMemo(
@@ -120,7 +132,12 @@ export function AnalytiqueView() {
     }
   }, [rangeWebOrders])
   const caPeriod = useMemo(() => sumTotalTTC(rangeSales), [rangeSales])
+  const caPreviousPeriod = useMemo(
+    () => sumTotalTTC(previousRangeSales),
+    [previousRangeSales],
+  )
   const tickets = rangeSales.length
+  const previousTickets = previousRangeSales.length
   const breakdown = useMemo(() => paymentBreakdown(rangeSales), [rangeSales])
   const payKeys = useMemo(() => {
     const keys: PaymentMethod[] = ['cash', 'card', 'mobile']
@@ -151,6 +168,28 @@ export function AnalytiqueView() {
     () => periodMarginTotals(rangeSales, products),
     [rangeSales, products],
   )
+  const previousMarginTotals = useMemo(
+    () => periodMarginTotals(previousRangeSales, products),
+    [previousRangeSales, products],
+  )
+  const deltas = useMemo(
+    () => ({
+      caPct: pctDelta(caPeriod, caPreviousPeriod),
+      ticketsPct: pctDelta(tickets, previousTickets),
+      marginPct: pctDelta(
+        marginTotals.marginOnKnownTTC,
+        previousMarginTotals.marginOnKnownTTC,
+      ),
+    }),
+    [
+      caPeriod,
+      caPreviousPeriod,
+      tickets,
+      previousTickets,
+      marginTotals.marginOnKnownTTC,
+      previousMarginTotals.marginOnKnownTTC,
+    ],
+  )
 
   const periodLabel = `${period} jours`
   const periodTabs = useMemo(
@@ -165,7 +204,7 @@ export function AnalytiqueView() {
 
   const exportSummaryCsv = useCallback(() => {
     const rows: string[][] = [
-      ['Rapport analytique CaisseCI'],
+      ['Rapport analytique Infinitecore Système'],
       ['Période', periodLabel],
       ['CA net TTC', String(caPeriod)],
       ['Tickets', String(tickets)],
@@ -227,7 +266,7 @@ export function AnalytiqueView() {
 
   const exportWebOrdersCsv = useCallback(() => {
     const rows: string[][] = [
-      ['Analytique — commandes web CaisseCI'],
+      ['Analytique — commandes web Infinitecore Système'],
       ['Période (date de création)', periodLabel],
       ['Commandes créées', String(webStats.created)],
       ['En attente (état actuel)', String(webStats.pending)],
@@ -369,7 +408,7 @@ export function AnalytiqueView() {
   )
 
   return (
-    <div className="space-y-6 pb-6">
+    <div className="space-y-5 pb-6 sm:space-y-6">
       <PageHeader
         eyebrow="Analytique"
         title="Performance commerciale"
@@ -388,6 +427,7 @@ export function AnalytiqueView() {
               variant="secondary"
               iconLeft={<IconDownload />}
               onClick={exportSummaryCsv}
+              className="w-full sm:w-auto"
             >
               Résumé
             </Button>
@@ -396,6 +436,7 @@ export function AnalytiqueView() {
               variant="secondary"
               iconLeft={<IconFile />}
               onClick={exportDailyCsv}
+              className="w-full sm:w-auto"
             >
               Ventes / jour
             </Button>
@@ -404,6 +445,7 @@ export function AnalytiqueView() {
               variant="secondary"
               iconLeft={<IconFile />}
               onClick={exportPeaksCsv}
+              className="w-full sm:w-auto"
             >
               Heures
             </Button>
@@ -412,6 +454,7 @@ export function AnalytiqueView() {
               variant="secondary"
               iconLeft={<IconFile />}
               onClick={exportTopCsv}
+              className="w-full sm:w-auto"
             >
               Top
             </Button>
@@ -420,6 +463,7 @@ export function AnalytiqueView() {
               variant="secondary"
               iconLeft={<IconOnlineOrders />}
               onClick={exportWebOrdersCsv}
+              className="w-full sm:w-auto"
             >
               Web
             </Button>
@@ -428,6 +472,7 @@ export function AnalytiqueView() {
               variant="secondary"
               iconLeft={<IconSpreadsheet />}
               onClick={exportExcelWorkbook}
+              className="w-full sm:w-auto"
             >
               Excel
             </Button>
@@ -436,6 +481,7 @@ export function AnalytiqueView() {
               variant="primary"
               iconLeft={<IconPrinter />}
               onClick={() => window.print()}
+              className="w-full sm:w-auto"
             >
               PDF
             </Button>
@@ -444,11 +490,11 @@ export function AnalytiqueView() {
       />
 
       <div id="print-analytique" className="space-y-6">
-        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        <div className="grid gap-2.5 sm:grid-cols-2 xl:grid-cols-4">
           <Kpi
             label="CA net période"
             value={formatFCFA(caPeriod)}
-            hint={`${tickets} ticket${tickets > 1 ? 's' : ''}`}
+            hint={`${tickets} ticket${tickets > 1 ? 's' : ''}${deltas.caPct != null ? ` · ${deltas.caPct >= 0 ? '+' : ''}${deltas.caPct}% vs période précédente` : ''}`}
             tone="accent"
           />
           <Kpi
@@ -461,7 +507,7 @@ export function AnalytiqueView() {
             value={formatFCFA(marginTotals.marginOnKnownTTC)}
             hint={
               marginTotals.marginPctOnKnown != null
-                ? `Taux ${marginTotals.marginPctOnKnown} %`
+                ? `Taux ${marginTotals.marginPctOnKnown} %${deltas.marginPct != null ? ` · ${deltas.marginPct >= 0 ? '+' : ''}${deltas.marginPct}%` : ''}`
                 : 'Renseignez le revient'
             }
             tone="amber"
@@ -469,10 +515,91 @@ export function AnalytiqueView() {
           <Kpi
             label="Coût d’achat estimé"
             value={formatFCFA(marginTotals.costTTC)}
-            hint="Sur articles avec revient"
+            hint={`Sur articles avec revient${deltas.ticketsPct != null ? ` · ${deltas.ticketsPct >= 0 ? '+' : ''}${deltas.ticketsPct}% tickets` : ''}`}
             tone="neutral"
           />
         </div>
+
+        <Card>
+          <CardHeader
+            title="Comparaison période précédente"
+            subtitle={`${periodLabel} en cours vs ${periodLabel} précédent`}
+          />
+          <CardContent>
+            <Table minWidth={520}>
+              <THead>
+                <Tr hover={false}>
+                  <Th>Indicateur</Th>
+                  <Th align="right">Période en cours</Th>
+                  <Th align="right">Période précédente</Th>
+                  <Th align="right">Évolution</Th>
+                </Tr>
+              </THead>
+              <TBody>
+                <Tr>
+                  <Td>CA net TTC</Td>
+                  <Td align="right" mono>{formatFCFA(caPeriod)}</Td>
+                  <Td align="right" mono>{formatFCFA(caPreviousPeriod)}</Td>
+                  <Td
+                    align="right"
+                    mono
+                    className={
+                      deltas.caPct == null
+                        ? 'text-zinc-500'
+                        : deltas.caPct >= 0
+                          ? 'text-emerald-700'
+                          : 'text-rose-700'
+                    }
+                  >
+                    {deltas.caPct == null ? '—' : `${deltas.caPct >= 0 ? '+' : ''}${deltas.caPct} %`}
+                  </Td>
+                </Tr>
+                <Tr>
+                  <Td>Tickets</Td>
+                  <Td align="right" mono>{tickets}</Td>
+                  <Td align="right" mono>{previousTickets}</Td>
+                  <Td
+                    align="right"
+                    mono
+                    className={
+                      deltas.ticketsPct == null
+                        ? 'text-zinc-500'
+                        : deltas.ticketsPct >= 0
+                          ? 'text-emerald-700'
+                          : 'text-rose-700'
+                    }
+                  >
+                    {deltas.ticketsPct == null
+                      ? '—'
+                      : `${deltas.ticketsPct >= 0 ? '+' : ''}${deltas.ticketsPct} %`}
+                  </Td>
+                </Tr>
+                <Tr>
+                  <Td>Marge TTC connue</Td>
+                  <Td align="right" mono>{formatFCFA(marginTotals.marginOnKnownTTC)}</Td>
+                  <Td align="right" mono>
+                    {formatFCFA(previousMarginTotals.marginOnKnownTTC)}
+                  </Td>
+                  <Td
+                    align="right"
+                    mono
+                    className={
+                      deltas.marginPct == null
+                        ? 'text-zinc-500'
+                        : deltas.marginPct >= 0
+                          ? 'text-emerald-700'
+                          : 'text-rose-700'
+                    }
+                  >
+                    {deltas.marginPct == null
+                      ? '—'
+                      : `${deltas.marginPct >= 0 ? '+' : ''}${deltas.marginPct} %`}
+                  </Td>
+                </Tr>
+              </TBody>
+            </Table>
+          </CardContent>
+        </Card>
 
         <Card>
           <CardHeader
