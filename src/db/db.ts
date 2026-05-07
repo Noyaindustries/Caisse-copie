@@ -26,6 +26,10 @@ import type {
   LocationStock,
   StockLocationTransfer,
   TableReservation,
+  KitchenIngredient,
+  KitchenIngredientStock,
+  ProductRecipeIngredient,
+  OnlineOrderMessage,
 } from './types'
 import { DEFAULT_PRODUCT_CATEGORIES } from './types'
 import { SEED_INITIAL_STOCK_MAIN, SEED_PRODUCTS } from './seed'
@@ -56,6 +60,10 @@ export class CaisseDB extends Dexie {
   ticketInvoices!: Table<TicketInvoice, string>
   terminalNodes!: Table<TerminalNode, string>
   tableReservations!: Table<TableReservation, string>
+  kitchenIngredients!: Table<KitchenIngredient, string>
+  kitchenIngredientStocks!: Table<KitchenIngredientStock, string>
+  productRecipeIngredients!: Table<ProductRecipeIngredient, string>
+  onlineOrderMessages!: Table<OnlineOrderMessage, string>
 
   constructor() {
     super('caisseci')
@@ -412,6 +420,73 @@ export class CaisseDB extends Dexie {
       terminalNodes: 'id, storeId, online, lastSeenAt, [storeId+lastSeenAt]',
       tableReservations:
         'id, storeId, tableId, status, startAt, endAt, [storeId+startAt], [tableId+startAt]',
+    })
+    this.version(18).stores({
+      products: 'id, barcode, category, archived',
+      sales: 'id, createdAt, synced, storeId',
+      syncQueue: '++id, createdAt',
+      stores: 'id, sortOrder',
+      storeStocks: 'id, storeId, productId, [storeId+productId]',
+      stockLocations: 'id, storeId, active, sortOrder, [storeId+sortOrder]',
+      locationStocks:
+        'id, storeId, locationId, productId, [storeId+productId], [storeId+locationId]',
+      locationTransfers: 'id, createdAt, storeId, productId, fromLocationId, toLocationId',
+      stockTransfers: 'id, createdAt, fromStoreId, toStoreId',
+      dayClosures: 'dateYmd',
+      refunds: 'id, saleId, createdAt',
+      auditEvents: 'id, createdAt, kind',
+      onlineOrders:
+        'id, createdAt, status, storeId, sourcePlatform, externalOrderRef, [storeId+createdAt]',
+      productCategories: 'id, sortOrder',
+      timePunches: 'id, profileId, storeId, createdAt',
+      diningTables: 'id, storeId, status, sortOrder, [storeId+sortOrder]',
+      promotions: 'id, code, active, storeId, [active+code]',
+      loyaltyCustomers: 'id, phone, updatedAt',
+      loyaltyTransactions: 'id, customerId, createdAt, type',
+      hrRequests: 'id, createdAt, staffProfileId, status, type, [staffProfileId+createdAt]',
+      crmInteractions:
+        'id, createdAt, customerId, customerPhone, kind, [customerId+createdAt]',
+      ticketInvoices: 'id, createdAt, updatedAt, kind, status, storeId, reference, [storeId+createdAt]',
+      terminalNodes: 'id, storeId, online, lastSeenAt, [storeId+lastSeenAt]',
+      tableReservations:
+        'id, storeId, tableId, status, startAt, endAt, [storeId+startAt], [tableId+startAt]',
+      kitchenIngredients: 'id, name, archived',
+      kitchenIngredientStocks: 'id, storeId, ingredientId, [storeId+ingredientId]',
+      productRecipeIngredients: 'id, productId, ingredientId, [productId+ingredientId]',
+    })
+    this.version(19).stores({
+      products: 'id, barcode, category, archived',
+      sales: 'id, createdAt, synced, storeId',
+      syncQueue: '++id, createdAt',
+      stores: 'id, sortOrder',
+      storeStocks: 'id, storeId, productId, [storeId+productId]',
+      stockLocations: 'id, storeId, active, sortOrder, [storeId+sortOrder]',
+      locationStocks:
+        'id, storeId, locationId, productId, [storeId+productId], [storeId+locationId]',
+      locationTransfers: 'id, createdAt, storeId, productId, fromLocationId, toLocationId',
+      stockTransfers: 'id, createdAt, fromStoreId, toStoreId',
+      dayClosures: 'dateYmd',
+      refunds: 'id, saleId, createdAt',
+      auditEvents: 'id, createdAt, kind',
+      onlineOrders:
+        'id, createdAt, status, storeId, sourcePlatform, externalOrderRef, [storeId+createdAt]',
+      onlineOrderMessages: 'id, orderId, createdAt',
+      productCategories: 'id, sortOrder',
+      timePunches: 'id, profileId, storeId, createdAt',
+      diningTables: 'id, storeId, status, sortOrder, [storeId+sortOrder]',
+      promotions: 'id, code, active, storeId, [active+code]',
+      loyaltyCustomers: 'id, phone, updatedAt',
+      loyaltyTransactions: 'id, customerId, createdAt, type',
+      hrRequests: 'id, createdAt, staffProfileId, status, type, [staffProfileId+createdAt]',
+      crmInteractions:
+        'id, createdAt, customerId, customerPhone, kind, [customerId+createdAt]',
+      ticketInvoices: 'id, createdAt, updatedAt, kind, status, storeId, reference, [storeId+createdAt]',
+      terminalNodes: 'id, storeId, online, lastSeenAt, [storeId+lastSeenAt]',
+      tableReservations:
+        'id, storeId, tableId, status, startAt, endAt, [storeId+startAt], [tableId+startAt]',
+      kitchenIngredients: 'id, name, archived',
+      kitchenIngredientStocks: 'id, storeId, ingredientId, [storeId+ingredientId]',
+      productRecipeIngredients: 'id, productId, ingredientId, [productId+ingredientId]',
     })
   }
 }

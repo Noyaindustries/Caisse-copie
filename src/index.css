@@ -502,24 +502,34 @@ body {
 
 /* Reçu et rapport journalier à l’impression */
 @media print {
+  @page {
+    margin: 8mm;
+  }
+
+  html,
+  body {
+    background: #fff !important;
+  }
+
   body * {
     visibility: hidden;
   }
   #print-journal,
   #print-journal *,
-  #print-receipt,
-  #print-receipt *,
   #print-analytique,
   #print-analytique * {
     visibility: visible;
   }
   #print-journal,
-  #print-receipt,
   #print-analytique {
     position: absolute;
     left: 0;
     top: 0;
     width: 100%;
+    background: #fff !important;
+    color: #000 !important;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
   }
 
   /* Pendant l’impression, le Modal a `overflow-hidden` + une hauteur max.
@@ -527,6 +537,9 @@ body {
   [role='dialog'] {
     overflow: visible !important;
     max-height: none !important;
+    box-shadow: none !important;
+    border: 0 !important;
+    background: transparent !important;
   }
   .ui-scroll {
     overflow: visible !important;

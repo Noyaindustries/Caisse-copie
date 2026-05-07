@@ -21,7 +21,9 @@ import { storeStockRowId } from '../lib/storeStockId'
 import { BRAND_LOGO_SRC, BRAND_NAME } from '../brand'
 import {
   getDeliveryProviderDemo,
+  getKitchenStationDemo,
   isDeliveryModuleDemoOn,
+  isKitchenModuleDemoOn,
 } from '../lib/integrationsConfig'
 
 type Props = {
@@ -41,6 +43,20 @@ type FlyToCartAnim = {
 }
 
 const FREE_DELIVERY_THRESHOLD = 15000
+const DESIRED_TIME_SLOTS: string[] = (() => {
+  const slots = ['ASAP (des que possible)']
+  const startMin = 7 * 60
+  const endMin = 23 * 60
+  for (let t = startMin; t < endMin; t += 15) {
+    const next = t + 15
+    const hh = String(Math.floor(t / 60)).padStart(2, '0')
+    const mm = String(t % 60).padStart(2, '0')
+    const hhNext = String(Math.floor(next / 60)).padStart(2, '0')
+    const mmNext = String(next % 60).padStart(2, '0')
+    slots.push(`${hh}h${mm} - ${hhNext}h${mmNext}`)
+  }
+  return slots
+})()
 
 function CartIcon({ className }: { className?: string }) {
   return (
@@ -59,6 +75,51 @@ function CartIcon({ className }: { className?: string }) {
       />
       <circle cx="10" cy="19" r="1.5" fill="currentColor" />
       <circle cx="17" cy="19" r="1.5" fill="currentColor" />
+    </svg>
+  )
+}
+
+function StatusIcon({
+  tone,
+  className,
+}: {
+  tone: 'success' | 'error'
+  className?: string
+}) {
+  if (tone === 'success') {
+    return (
+      <svg
+        viewBox="0 0 24 24"
+        fill="none"
+        aria-hidden
+        className={className ?? 'h-5 w-5'}
+      >
+        <circle cx="12" cy="12" r="9" stroke="currentColor" strokeWidth="1.8" />
+        <path
+          d="m8.5 12.3 2.2 2.3 4.8-5.1"
+          stroke="currentColor"
+          strokeWidth="1.9"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+      </svg>
+    )
+  }
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      aria-hidden
+      className={className ?? 'h-5 w-5'}
+    >
+      <circle cx="12" cy="12" r="9" stroke="currentColor" strokeWidth="1.8" />
+      <path
+        d="M12 7.5v5.5"
+        stroke="currentColor"
+        strokeWidth="1.9"
+        strokeLinecap="round"
+      />
+      <circle cx="12" cy="16.8" r="1.1" fill="currentColor" />
     </svg>
   )
 }
@@ -85,6 +146,9 @@ export function LuxuryStorefrontView({
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('mobile')
   const [submitting, setSubmitting] = useState(false)
   const [confirmation, setConfirmation] = useState<string | null>(null)
+  const [confirmationTone, setConfirmationTone] = useState<'success' | 'error'>(
+    'success',
+  )
   const [cartBadgePulse, setCartBadgePulse] = useState(false)
   const [isCartOpen, setIsCartOpen] = useState(false)
   const [flyToCart, setFlyToCart] = useState<FlyToCartAnim | null>(null)
@@ -468,18 +532,22 @@ export function LuxuryStorefrontView({
 
   const handleCheckout = useCallback(async () => {
     if (cart.length === 0) {
+      setConfirmationTone('error')
       setConfirmation('Ajoutez au moins un article pour valider la commande.')
       return
     }
     if (!customerName.trim()) {
+      setConfirmationTone('error')
       setConfirmation('Merci de renseigner votre nom pour finaliser la commande.')
       return
     }
     if (fulfillmentMode === 'delivery' && !customerAddress.trim()) {
+      setConfirmationTone('error')
       setConfirmation('Adresse requise pour une livraison.')
       return
     }
     if (!online && paymentMethod !== 'cash') {
+      setConfirmationTone('error')
       setConfirmation(
         'Mode hors ligne : utilisez le paiement à la livraison en espèces.',
       )
@@ -492,6 +560,7 @@ export function LuxuryStorefrontView({
       const createdAt = Date.now()
       const total = totalsFromLinesTTC(cart, discountPct)
       const customerLabel = customerName.trim()
+      const kitchenEnabled = isKitchenModuleDemoOn()
 
       const orderRecord: OnlineOrder = {
         id: orderId,
@@ -520,6 +589,17 @@ export function LuxuryStorefrontView({
         deliveryFeeTTC: deliveryFeeTTC || undefined,
         fulfillmentMode,
         status: 'pending',
+        kitchenStatus: kitchenEnabled ? 'queued' : undefined,
+        kitchenPriority: kitchenEnabled
+          ? fulfillmentMode === 'delivery'
+            ? 'high'
+            : 'normal'
+          : undefined,
+        kitchenStation: kitchenEnabled ? getKitchenStationDemo() : undefined,
+        kitchenTicketCode: kitchenEnabled
+          ? `K-${orderId.slice(0, 6).toUpperCase()}`
+          : undefined,
+        kitchenUpdatedAt: kitchenEnabled ? createdAt : undefined,
         deliveryStatus:
           fulfillmentMode === 'delivery' && isDeliveryModuleDemoOn()
             ? 'queued'
@@ -560,12 +640,14 @@ export function LuxuryStorefrontView({
       setPromoCode('')
       setPromoFeedback(null)
       setDiscountPct(0)
+      setConfirmationTone('success')
       setConfirmation(
         `Commande envoyée pour validation. Référence: ${orderId
           .slice(0, 8)
           .toUpperCase()}.`,
       )
     } catch (error) {
+      setConfirmationTone('error')
       setConfirmation(
         error instanceof Error
           ? error.message
@@ -667,6 +749,23 @@ export function LuxuryStorefrontView({
             </button>
           </div>
         </header>
+
+        {confirmation ? (
+          <div className="mt-3 flex justify-center">
+            <div
+              className={`inline-flex max-w-3xl items-center justify-center gap-2 rounded-xl border px-4 py-2 text-center text-sm ${
+                confirmationTone === 'success'
+                  ? 'border-emerald-200/40 bg-emerald-100/10 text-emerald-100'
+                  : 'border-rose-200/40 bg-rose-100/10 text-rose-100'
+              }`}
+            >
+              <span className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-white/10">
+                <StatusIcon tone={confirmationTone} className="h-4 w-4" />
+              </span>
+              <span>{confirmation}</span>
+            </div>
+          </div>
+        ) : null}
 
         {isCartOpen ? (
           <>
@@ -943,12 +1042,19 @@ export function LuxuryStorefrontView({
                 rows={2}
                 className="premium-input w-full resize-none rounded-xl bg-slate-950/80 px-3 py-2 text-sm text-slate-100"
               />
-              <input
+              <select
                 value={desiredTimeSlot}
                 onChange={(e) => setDesiredTimeSlot(e.target.value)}
-                placeholder="Créneau souhaité (ex: 18h30 - 19h00)"
+                aria-label="Creneau souhaite"
                 className="premium-input w-full rounded-xl bg-slate-950/80 px-3 py-2 text-sm text-slate-100"
-              />
+              >
+                <option value="">Choisir un creneau horaire</option>
+                {DESIRED_TIME_SLOTS.map((slot) => (
+                  <option key={slot} value={slot}>
+                    {slot}
+                  </option>
+                ))}
+              </select>
               <textarea
                 value={customerNote}
                 onChange={(e) => setCustomerNote(e.target.value)}
@@ -987,11 +1093,6 @@ export function LuxuryStorefrontView({
               </button>
             </div>
 
-          {confirmation ? (
-            <p className="mt-3 max-w-md rounded-xl border border-amber-200/30 bg-amber-100/10 px-3 py-2 text-xs text-amber-100">
-              {confirmation}
-            </p>
-          ) : null}
             </aside>
           </>
         ) : null}

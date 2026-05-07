@@ -2,6 +2,8 @@ import { useLiveQuery } from 'dexie-react-hooks'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { db } from '../db/db'
 import type { KitchenPriority, KitchenStatus, OnlineOrder } from '../db/types'
+import { formatFCFA } from '../lib/money'
+import { storeStockRowId } from '../lib/storeStockId'
 import {
   getDeviceConnectivityDemo,
   getKitchenStationDemo,
@@ -18,6 +20,7 @@ import { IconBell, IconCheck, IconClose, IconCollapse, IconExpand, IconFile } fr
 
 type Props = {
   activeStoreId: string
+  canManageKitchenActions?: boolean
 }
 
 type KitchenCol = {
@@ -67,7 +70,24 @@ function prevStatus(status: KitchenStatus): KitchenStatus {
   return 'queued'
 }
 
-export function KitchenView({ activeStoreId }: Props) {
+function orderStatusLabel(status: OnlineOrder['status']): string {
+  if (status === 'pending') return 'En attente validation'
+  if (status === 'approved') return 'Validée'
+  return 'Rejetée'
+}
+
+function orderSourceLabel(order: OnlineOrder): string {
+  if (order.externalOrderRef?.startsWith('onsite-')) return 'Caisse'
+  if (order.sourcePlatform === 'native') return 'Direct'
+  if (order.sourcePlatform === 'shopify') return 'Shopify'
+  if (order.sourcePlatform === 'glovo') return 'Glovo'
+  if (order.sourcePlatform === 'ubereats') return 'Uber Eats'
+  if (order.sourcePlatform === 'jumia') return 'Jumia'
+  if (order.sourcePlatform === 'whatsapp') return 'WhatsApp'
+  return 'Web'
+}
+
+export function KitchenView({ activeStoreId, canManageKitchenActions = true }: Props) {
   const toast = useToast()
   const [kdsMode, setKdsMode] = useState(false)
   const [soundOn, setSoundOn] = useState(true)
@@ -92,10 +112,18 @@ export function KitchenView({ activeStoreId }: Props) {
       [activeStoreId],
       [],
     ) ?? []
+  const kitchenIngredients = useLiveQuery(() => db.kitchenIngredients.toArray(), [], []) ?? []
+  const kitchenIngredientStocks =
+    useLiveQuery(
+      () => db.kitchenIngredientStocks.where('storeId').equals(activeStoreId).toArray(),
+      [activeStoreId],
+      [],
+    ) ?? []
+  const recipeRows = useLiveQuery(() => db.productRecipeIngredients.toArray(), [], []) ?? []
 
   const activeKitchenOrders = useMemo(() => {
     return orders
-      .filter((o) => o.status === 'approved' && o.kitchenStatus !== 'cancelled')
+      .filter((o) => o.status !== 'rejected' && o.kitchenStatus !== 'cancelled')
       .sort((a, b) => {
         const byPriority = priorityWeight(b.kitchenPriority) - priorityWeight(a.kitchenPriority)
         if (byPriority !== 0) return byPriority
@@ -262,6 +290,23 @@ export function KitchenView({ activeStoreId }: Props) {
       served: byStatus.get('served')?.length ?? 0,
     }
   }, [byStatus])
+  const lowKitchenIngredients = useMemo(() => {
+    const stockByIngredient = new Map(
+      kitchenIngredientStocks.map((row) => [row.ingredientId, row.stock]),
+    )
+    return kitchenIngredients
+      .filter((ing) => !ing.archived)
+      .filter((ing) => (stockByIngredient.get(ing.id) ?? 0) <= ing.lowStockThreshold)
+      .map((ing) => ({
+        ...ing,
+        stock: stockByIngredient.get(ing.id) ?? 0,
+      }))
+      .sort((a, b) => a.stock - b.stock)
+  }, [kitchenIngredientStocks, kitchenIngredients])
+  const lowKitchenIngredientIdSet = useMemo(
+    () => new Set(lowKitchenIngredients.map((ing) => ing.id)),
+    [lowKitchenIngredients],
+  )
 
   const patchKitchen = useCallback(
     async (order: OnlineOrder, status: KitchenStatus) => {
@@ -276,14 +321,66 @@ export function KitchenView({ activeStoreId }: Props) {
     [stationDefault],
   )
 
+  const ensureKitchenStockDeducted = useCallback(
+    async (order: OnlineOrder) => {
+      if (order.stockDeductedAt) return
+      await db.transaction('rw', [db.onlineOrders, db.products, db.storeStocks], async () => {
+        const fresh = await db.onlineOrders.get(order.id)
+        if (!fresh || fresh.stockDeductedAt) return
+        if (fresh.status === 'approved' && fresh.reviewedAt) {
+          await db.onlineOrders.update(fresh.id, {
+            stockDeductedAt: fresh.reviewedAt,
+          })
+          return
+        }
+        for (const line of fresh.lines) {
+          const product = await db.products.get(line.productId)
+          if (!product || product.archived) {
+            throw new Error(`Produit indisponible: « ${line.name} ».`)
+          }
+          const stockId = storeStockRowId(fresh.storeId, line.productId)
+          const row = await db.storeStocks.get(stockId)
+          const currentStock = row?.stock ?? 0
+          if (currentStock < line.qty) {
+            throw new Error(`Stock insuffisant pour « ${line.name} » (disponible: ${currentStock}).`)
+          }
+        }
+        for (const line of fresh.lines) {
+          const stockId = storeStockRowId(fresh.storeId, line.productId)
+          const row = await db.storeStocks.get(stockId)
+          const currentStock = row?.stock ?? 0
+          await db.storeStocks.put({
+            id: stockId,
+            storeId: fresh.storeId,
+            productId: line.productId,
+            stock: currentStock - line.qty,
+          })
+        }
+        await db.onlineOrders.update(fresh.id, { stockDeductedAt: Date.now() })
+      })
+    },
+    [],
+  )
+
   const moveNext = useCallback(
     async (order: OnlineOrder) => {
       const curr = order.kitchenStatus ?? 'queued'
       const next = nextStatus(curr)
+      if (curr === 'queued' && next === 'preparing') {
+        try {
+          await ensureKitchenStockDeducted(order)
+        } catch (e) {
+          toast.error(
+            'Stock cuisine insuffisant',
+            e instanceof Error ? e.message : String(e),
+          )
+          return
+        }
+      }
       await patchKitchen(order, next)
       toast.success(`Ticket ${order.id.slice(0, 8).toUpperCase()} -> ${next}`)
     },
-    [patchKitchen, toast],
+    [ensureKitchenStockDeducted, patchKitchen, toast],
   )
 
   const movePrev = useCallback(
@@ -437,11 +534,27 @@ export function KitchenView({ activeStoreId }: Props) {
           tone="neutral"
         />
       </div>
+      {lowKitchenIngredients.length > 0 ? (
+        <Card>
+          <CardContent>
+            <p className="text-[12px] font-semibold text-rose-700">
+              Alerte stock cuisine ({lowKitchenIngredients.length})
+            </p>
+            <div className="mt-2 flex flex-wrap gap-1.5">
+              {lowKitchenIngredients.slice(0, 8).map((ing) => (
+                <Badge key={ing.id} tone="danger">
+                  {ing.name}: {ing.stock} {ing.unit}
+                </Badge>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      ) : null}
 
       {activeKitchenOrders.length === 0 ? (
         <EmptyState
           title="Aucun ticket cuisine"
-          description="Les commandes validées apparaissent automatiquement ici."
+          description="Les commandes arrivent automatiquement ici avant encaissement."
           variant="flat"
         />
       ) : (
@@ -460,6 +573,16 @@ export function KitchenView({ activeStoreId }: Props) {
                   ) : (
                     <div className="space-y-2">
                       {rows.map((order) => {
+                        const recipeIngredientsForOrder = new Set(
+                          recipeRows
+                            .filter((row) =>
+                              order.lines.some((line) => line.productId === row.productId),
+                            )
+                            .map((row) => row.ingredientId),
+                        )
+                        const hasLowIngredient = [...recipeIngredientsForOrder].some((id) =>
+                          lowKitchenIngredientIdSet.has(id),
+                        )
                         const waitingMin = Math.max(
                           0,
                           Math.floor((nowTick - order.createdAt) / 60_000),
@@ -479,6 +602,8 @@ export function KitchenView({ activeStoreId }: Props) {
                                 ? 'animate-pulse rounded-lg border-2 border-rose-500 bg-rose-100 p-2 shadow-sm shadow-rose-200'
                                 : slaExceeded
                                   ? 'rounded-lg border-2 border-rose-500 bg-rose-100 p-2 shadow-sm shadow-rose-200'
+                                : hasLowIngredient
+                                  ? 'rounded-lg border border-amber-300 bg-amber-50 p-2'
                                 : isPriority
                                   ? 'rounded-lg border border-rose-300 bg-rose-50 p-2'
                                   : 'rounded-lg border border-zinc-200 p-2'
@@ -494,10 +619,41 @@ export function KitchenView({ activeStoreId }: Props) {
                               {order.lines.length} ligne(s) ·{' '}
                               {order.kitchenStation ?? stationDefault}
                             </p>
+                            <p className="mt-0.5 text-[11px] text-zinc-500">
+                              Statut commande : {orderStatusLabel(order.status)}
+                            </p>
+                            <ul className="mt-1 space-y-0.5 text-[11px] text-zinc-700">
+                              {order.lines.map((line) => (
+                                <li key={`${order.id}-${line.productId}-${line.name}`}>
+                                  {line.qty} x {line.name}
+                                  <span className="text-zinc-500"> · {formatFCFA(line.unitPriceTTC)}</span>
+                                </li>
+                              ))}
+                            </ul>
+                            {order.customerPhone || order.customerAddress || order.desiredTimeSlot ? (
+                              <p className="mt-1 text-[11px] text-zinc-500">
+                                {order.customerPhone ? `Tél ${order.customerPhone}` : null}
+                                {order.customerPhone && order.customerAddress ? ' · ' : null}
+                                {order.customerAddress ? order.customerAddress : null}
+                                {(order.customerPhone || order.customerAddress) && order.desiredTimeSlot
+                                  ? ' · '
+                                  : null}
+                                {order.desiredTimeSlot ? `Créneau ${order.desiredTimeSlot}` : null}
+                              </p>
+                            ) : null}
+                            {order.customerNote ? (
+                              <p className="mt-1 text-[11px] italic text-zinc-600">
+                                Note: {order.customerNote}
+                              </p>
+                            ) : null}
                             <div className="mt-1 flex items-center gap-1.5">
+                              <Badge tone="info">{orderSourceLabel(order)}</Badge>
                               <Badge tone={priorityTone(order.kitchenPriority)}>
                                 Priorité {priorityLabel(order.kitchenPriority)}
                               </Badge>
+                              {hasLowIngredient ? (
+                                <Badge tone="warning">Ingrédients bas</Badge>
+                              ) : null}
                               {slaExceeded ? <Badge tone="danger">SLA dépassé</Badge> : null}
                               {order.fulfillmentMode === 'delivery' ? (
                                 <Badge tone="info">Livraison</Badge>
@@ -512,54 +668,60 @@ export function KitchenView({ activeStoreId }: Props) {
                             >
                               Attente: {waitingMin} min
                             </p>
-                            <div className="mt-2 flex flex-wrap gap-1">
-                              <Button
-                                size="sm"
-                                variant="ghost"
-                                onClick={() => void movePrev(order)}
-                                disabled={(order.kitchenStatus ?? 'queued') === 'queued'}
-                              >
-                                Reculer
-                              </Button>
-                              <Button
-                                size="sm"
-                                variant="secondary"
-                                iconLeft={<IconCheck />}
-                                onClick={() => void moveNext(order)}
-                                disabled={(order.kitchenStatus ?? 'queued') === 'served'}
-                              >
-                                Avancer
-                              </Button>
-                              <Button
-                                size="sm"
-                                variant="ghost"
-                                iconLeft={<IconClose />}
-                                onClick={() => void cancelTicket(order)}
-                              >
-                                Annuler
-                              </Button>
-                              <Button
-                                size="sm"
-                                variant="ghost"
-                                onClick={() => void setPriority(order, 'high')}
-                              >
-                                Priorité haute
-                              </Button>
-                              <Button
-                                size="sm"
-                                variant="ghost"
-                                onClick={() => void setPriority(order, 'normal')}
-                              >
-                                Priorité normale
-                              </Button>
-                              <Button
-                                size="sm"
-                                variant="ghost"
-                                onClick={() => void setPriority(order, 'low')}
-                              >
-                                Priorité basse
-                              </Button>
-                            </div>
+                            {canManageKitchenActions ? (
+                              <div className="mt-2 flex flex-wrap gap-1">
+                                <Button
+                                  size="sm"
+                                  variant="ghost"
+                                  onClick={() => void movePrev(order)}
+                                  disabled={(order.kitchenStatus ?? 'queued') === 'queued'}
+                                >
+                                  Reculer
+                                </Button>
+                                <Button
+                                  size="sm"
+                                  variant="secondary"
+                                  iconLeft={<IconCheck />}
+                                  onClick={() => void moveNext(order)}
+                                  disabled={(order.kitchenStatus ?? 'queued') === 'served'}
+                                >
+                                  Avancer
+                                </Button>
+                                <Button
+                                  size="sm"
+                                  variant="ghost"
+                                  iconLeft={<IconClose />}
+                                  onClick={() => void cancelTicket(order)}
+                                >
+                                  Annuler
+                                </Button>
+                                <Button
+                                  size="sm"
+                                  variant="ghost"
+                                  onClick={() => void setPriority(order, 'high')}
+                                >
+                                  Priorité haute
+                                </Button>
+                                <Button
+                                  size="sm"
+                                  variant="ghost"
+                                  onClick={() => void setPriority(order, 'normal')}
+                                >
+                                  Priorité normale
+                                </Button>
+                                <Button
+                                  size="sm"
+                                  variant="ghost"
+                                  onClick={() => void setPriority(order, 'low')}
+                                >
+                                  Priorité basse
+                                </Button>
+                              </div>
+                            ) : (
+                              <p className="mt-2 text-[11px] text-zinc-500">
+                                Lecture seule : suivi de l'état cuisine uniquement.
+                              </p>
+                            )}
                           </div>
                         )
                       })}

@@ -12,6 +12,7 @@ import { Button } from '../ui/Button'
 import { Card, CardContent } from '../ui/Card'
 import { EmptyState } from '../ui/EmptyState'
 import { Field, Input, Select } from '../ui/Input'
+import { Kpi } from '../ui/Kpi'
 import { PageHeader } from '../ui/PageHeader'
 import { useToast } from '../ui/Toast'
 import { IconClock, IconPlus, IconStore, IconUser } from '../ui/icons'
@@ -21,6 +22,9 @@ type Props = {
   activeStoreLabel: string
   canManageTables: boolean
 }
+
+const AUTO_RELEASE_ENABLED_KEY = 'caisseci-tables-auto-release-enabled'
+const AUTO_RELEASE_MINUTES_KEY = 'caisseci-tables-auto-release-minutes'
 
 const STATUS_LABELS: Record<DiningTableStatus, string> = {
   free: 'Libre',
@@ -112,6 +116,11 @@ function mergeDateTimeToTs(dateInput: string, timeInput: string): number | null 
   return Number.isFinite(ts) ? ts : null
 }
 
+function startOfDayTs(ts: number): number {
+  const d = new Date(ts)
+  return new Date(d.getFullYear(), d.getMonth(), d.getDate(), 0, 0, 0, 0).getTime()
+}
+
 export function TablesManagementView({
   activeStoreId,
   activeStoreLabel,
@@ -160,6 +169,8 @@ export function TablesManagementView({
   const [resTime, setResTime] = useState(toLocalTimeInput(defaultStart.getTime()))
   const [resDurationMin, setResDurationMin] = useState('90')
   const [resNotes, setResNotes] = useState('')
+  const [autoReleaseEnabled, setAutoReleaseEnabled] = useState(true)
+  const [autoReleaseMinutes, setAutoReleaseMinutes] = useState('120')
 
   const summary = useMemo(() => {
     const out: Record<DiningTableStatus, number> = {
@@ -204,6 +215,98 @@ export function TablesManagementView({
     const occupied = tables.filter((t) => t.status === 'occupied').length
     return Math.round((occupied / tables.length) * 100)
   }, [tables])
+
+  const stats = useMemo(() => {
+    const nowTs = Date.now()
+    const dayStart = startOfDayTs(nowTs)
+    const dayEnd = dayStart + 24 * 60 * 60 * 1000 - 1
+    const weekStart = dayStart - 6 * 24 * 60 * 60 * 1000
+
+    const todayReservations = reservations.filter(
+      (r) => r.startAt >= dayStart && r.startAt <= dayEnd,
+    )
+    const todayPending = todayReservations.filter((r) => r.status === 'pending').length
+    const todayConfirmed = todayReservations.filter((r) => r.status === 'confirmed').length
+    const todaySeated = todayReservations.filter((r) => r.status === 'seated').length
+    const todayCompleted = todayReservations.filter((r) => r.status === 'completed').length
+    const todayCancelled = todayReservations.filter((r) => r.status === 'cancelled').length
+    const todayNoShow = todayReservations.filter((r) => r.status === 'no_show').length
+    const noShowRate =
+      todayReservations.length > 0
+        ? Math.round((todayNoShow / todayReservations.length) * 100)
+        : 0
+
+    const avgPlannedDurationMin =
+      todayReservations.length > 0
+        ? Math.round(
+            todayReservations.reduce(
+              (sum, r) => sum + Math.max(0, Math.round((r.endAt - r.startAt) / 60000)),
+              0,
+            ) / todayReservations.length,
+          )
+        : 0
+
+    const occupiedDurations = tables
+      .filter((t) => t.status === 'occupied' && !!t.occupiedSince)
+      .map((t) => Math.max(0, nowTs - (t.occupiedSince ?? nowTs)))
+    const avgCurrentOccupancyMin =
+      occupiedDurations.length > 0
+        ? Math.round(
+            occupiedDurations.reduce((sum, ms) => sum + ms, 0) /
+              occupiedDurations.length /
+              60000,
+          )
+        : 0
+
+    const weekReservations = reservations.filter(
+      (r) =>
+        r.startAt >= weekStart &&
+        r.startAt <= dayEnd &&
+        (r.status === 'seated' || r.status === 'completed'),
+    )
+    const weeklyTurnoverPerTable =
+      tables.length > 0
+        ? Number((weekReservations.length / tables.length).toFixed(1))
+        : 0
+
+    const dailyTrend = Array.from({ length: 7 }, (_, idx) => {
+      const dayTs = weekStart + idx * 24 * 60 * 60 * 1000
+      const nextDayTs = dayTs + 24 * 60 * 60 * 1000
+      return reservations.filter((r) => r.startAt >= dayTs && r.startAt < nextDayTs)
+        .length
+    })
+
+    const hourBuckets = new Map<number, number>()
+    for (const r of todayReservations) {
+      const hour = new Date(r.startAt).getHours()
+      hourBuckets.set(hour, (hourBuckets.get(hour) ?? 0) + 1)
+    }
+    let peakHourLabel = '—'
+    let peakHourCount = 0
+    for (const [hour, count] of hourBuckets.entries()) {
+      if (count > peakHourCount) {
+        peakHourCount = count
+        peakHourLabel = `${String(hour).padStart(2, '0')}:00`
+      }
+    }
+
+    return {
+      todayReservations: todayReservations.length,
+      todayPending,
+      todayConfirmed,
+      todaySeated,
+      todayCompleted,
+      todayCancelled,
+      todayNoShow,
+      noShowRate,
+      avgPlannedDurationMin,
+      avgCurrentOccupancyMin,
+      weeklyTurnoverPerTable,
+      dailyTrend,
+      peakHourLabel,
+      peakHourCount,
+    }
+  }, [reservations, tables])
   const selectedTable = useMemo(
     () => tables.find((t) => t.id === selectedTableId) ?? null,
     [tables, selectedTableId],
@@ -231,6 +334,56 @@ export function TablesManagementView({
       setSelectedTableId(tables[0]?.id ?? '')
     }
   }, [tables, selectedTableId])
+
+  useEffect(() => {
+    try {
+      const rawEnabled = localStorage.getItem(AUTO_RELEASE_ENABLED_KEY)
+      const rawMinutes = localStorage.getItem(AUTO_RELEASE_MINUTES_KEY)
+      if (rawEnabled != null) setAutoReleaseEnabled(rawEnabled === '1')
+      if (rawMinutes != null) setAutoReleaseMinutes(rawMinutes)
+    } catch {
+      // ignore
+    }
+  }, [])
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(AUTO_RELEASE_ENABLED_KEY, autoReleaseEnabled ? '1' : '0')
+      localStorage.setItem(AUTO_RELEASE_MINUTES_KEY, autoReleaseMinutes)
+    } catch {
+      // ignore
+    }
+  }, [autoReleaseEnabled, autoReleaseMinutes])
+
+  useEffect(() => {
+    if (!canManageTables || !autoReleaseEnabled) return
+    const ttlMin = Number.parseInt(autoReleaseMinutes.trim(), 10)
+    if (!Number.isFinite(ttlMin) || ttlMin < 15) return
+    const intervalId = window.setInterval(() => {
+      const thresholdTs = Date.now() - ttlMin * 60_000
+      void db.transaction('rw', db.diningTables, async () => {
+        const occupied = await db.diningTables
+          .where('storeId')
+          .equals(activeStoreId)
+          .filter(
+            (table) =>
+              table.status === 'occupied' &&
+              !!table.occupiedSince &&
+              table.occupiedSince <= thresholdTs,
+          )
+          .toArray()
+        if (occupied.length === 0) return
+        for (const table of occupied) {
+          await db.diningTables.update(table.id, {
+            status: 'free',
+            occupiedSince: undefined,
+            note: undefined,
+          })
+        }
+      })
+    }, 60_000)
+    return () => window.clearInterval(intervalId)
+  }, [activeStoreId, autoReleaseEnabled, autoReleaseMinutes, canManageTables])
 
   const createTable = async () => {
     const cleanName = name.trim()
@@ -470,6 +623,46 @@ export function TablesManagementView({
         </CardContent>
       </Card>
 
+      <div className="grid gap-2.5 sm:grid-cols-2 xl:grid-cols-4">
+        <Kpi
+          label="Réservations du jour"
+          value={String(stats.todayReservations)}
+          hint={`${stats.todayConfirmed} confirmées · ${stats.todayPending} en attente`}
+          tone="accent"
+          spark={stats.dailyTrend}
+        />
+        <Kpi
+          label="No-show du jour"
+          value={`${stats.noShowRate}%`}
+          hint={`${stats.todayNoShow} absent(s) · ${stats.todayCancelled} annulée(s)`}
+          tone={stats.noShowRate >= 20 ? 'rose' : 'amber'}
+        />
+        <Kpi
+          label="Durée moyenne"
+          value={
+            stats.avgCurrentOccupancyMin > 0
+              ? `${stats.avgCurrentOccupancyMin} min`
+              : `${stats.avgPlannedDurationMin} min`
+          }
+          hint={
+            stats.avgCurrentOccupancyMin > 0
+              ? 'Occupation en cours'
+              : 'Durée planifiée des réservations'
+          }
+          tone="violet"
+        />
+        <Kpi
+          label="Rotation sur 7 jours"
+          value={`${stats.weeklyTurnoverPerTable} / table`}
+          hint={
+            stats.peakHourCount > 0
+              ? `Heure de pointe: ${stats.peakHourLabel} (${stats.peakHourCount})`
+              : 'Aucune pointe détectée'
+          }
+          tone="sky"
+        />
+      </div>
+
       {canManageTables ? (
         <Card>
           <CardContent>
@@ -676,6 +869,35 @@ export function TablesManagementView({
                     Descendre
                   </Button>
                 </div>
+              </div>
+            ) : null}
+            {canManageTables ? (
+              <div className="space-y-2 rounded-lg border border-zinc-200 bg-zinc-50 p-2.5">
+                <p className="text-[12px] font-semibold text-zinc-800">
+                  Libération automatique
+                </p>
+                <div className="grid gap-2 sm:grid-cols-[1fr_120px] sm:items-end">
+                  <Field label="Activée">
+                    <Select
+                      value={autoReleaseEnabled ? 'on' : 'off'}
+                      onChange={(e) => setAutoReleaseEnabled(e.target.value === 'on')}
+                    >
+                      <option value="on">Oui</option>
+                      <option value="off">Non</option>
+                    </Select>
+                  </Field>
+                  <Field label="Après (min)">
+                    <Input
+                      inputMode="numeric"
+                      value={autoReleaseMinutes}
+                      onChange={(e) => setAutoReleaseMinutes(e.target.value)}
+                      disabled={!autoReleaseEnabled}
+                    />
+                  </Field>
+                </div>
+                <p className="text-[11px] text-zinc-500">
+                  Les tables occupées depuis plus longtemps que ce délai passent automatiquement en libre.
+                </p>
               </div>
             ) : null}
           </CardContent>

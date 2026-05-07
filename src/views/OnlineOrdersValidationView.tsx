@@ -1,9 +1,16 @@
 import { useLiveQuery } from 'dexie-react-hooks'
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import { OnlineOrderMessageModal } from '../components/OnlineOrderMessageModal'
 import { db } from '../db/db'
-import type { OnlineOrder, OnlineOrderPlatform, Sale } from '../db/types'
+import type {
+  OnlineOrder,
+  OnlineOrderMessage,
+  OnlineOrderPlatform,
+  Sale,
+} from '../db/types'
 import { downloadTextFile, toCsvSemicolon } from '../lib/analyticsExport'
 import { formatFCFA } from '../lib/money'
+import { sendOrderApprovedSms } from '../lib/onlineOrderSms'
 import { storeStockRowId } from '../lib/storeStockId'
 import { flushSyncQueue } from '../lib/sync'
 import {
@@ -25,6 +32,8 @@ import {
   IconCheck,
   IconClose,
   IconDownload,
+  IconEdit,
+  IconInfo,
   IconOnlineOrders,
   IconPrinter,
   IconSearch,
@@ -145,6 +154,7 @@ export function OnlineOrdersValidationView({
   const [importFulfillment, setImportFulfillment] = useState<'pickup' | 'delivery'>(
     'delivery',
   )
+  const [messageOrderId, setMessageOrderId] = useState<string | null>(null)
 
   const scopedOrders = useMemo(() => {
     const list = orders ?? []
@@ -200,6 +210,23 @@ export function OnlineOrdersValidationView({
     () => reviewedSorted.filter((o) => o.status === 'approved'),
     [reviewedSorted],
   )
+  const messageOrder = useMemo(
+    () => scopedOrders.find((o) => o.id === messageOrderId) ?? null,
+    [scopedOrders, messageOrderId],
+  )
+  const messageHistory =
+    useLiveQuery(
+      async () => {
+        if (!messageOrderId) return [] as OnlineOrderMessage[]
+        const rows = await db.onlineOrderMessages
+          .where('orderId')
+          .equals(messageOrderId)
+          .toArray()
+        return rows.sort((a, b) => b.createdAt - a.createdAt)
+      },
+      [messageOrderId],
+      [],
+    ) ?? []
 
   const hasMoreReviewed = reviewedSorted.length > reviewedLimit
   const platformBreakdown = useMemo(() => {
@@ -231,6 +258,10 @@ export function OnlineOrdersValidationView({
         'Paiement',
         'Mode retrait',
         'Note client',
+        'Message client',
+        'Message interne',
+        'Message MAJ le',
+        'Message MAJ par',
         'Statut livraison',
         'Tracking',
         'Livreur',
@@ -257,6 +288,10 @@ export function OnlineOrdersValidationView({
         paymentLabel(o.paymentMethod),
         o.fulfillmentMode === 'delivery' ? 'Livraison' : 'Retrait',
         o.customerNote ?? '',
+        o.customerMessage ?? '',
+        o.internalMessage ?? '',
+        o.messageUpdatedAt ? new Date(o.messageUpdatedAt).toLocaleString('fr-FR') : '',
+        o.messageUpdatedByDisplayName ?? '',
         deliveryStatusLabel(o.deliveryStatus),
         o.deliveryTrackingCode ?? '',
         o.deliveryRiderName ?? '',
@@ -292,6 +327,7 @@ export function OnlineOrdersValidationView({
     const now = Date.now()
     const id = crypto.randomUUID()
     const externalRef = importExternalRef.trim() || `${importPlatform}-${id.slice(0, 8)}`
+    const kitchenEnabled = isKitchenModuleDemoOn()
     await db.onlineOrders.add({
       id,
       createdAt: now,
@@ -318,6 +354,11 @@ export function OnlineOrdersValidationView({
       tva,
       totalTTC: total,
       status: 'pending',
+      kitchenStatus: kitchenEnabled ? 'queued' : undefined,
+      kitchenPriority: kitchenEnabled ? 'normal' : undefined,
+      kitchenStation: kitchenEnabled ? getKitchenStationDemo() : undefined,
+      kitchenTicketCode: kitchenEnabled ? `K-${id.slice(0, 6).toUpperCase()}` : undefined,
+      kitchenUpdatedAt: kitchenEnabled ? now : undefined,
       deliveryStatus: importFulfillment === 'delivery' ? 'queued' : undefined,
       deliveryUpdatedAt: importFulfillment === 'delivery' ? now : undefined,
     })
@@ -345,6 +386,7 @@ export function OnlineOrdersValidationView({
       if (busyOrderId) return
       setBusyOrderId(order.id)
       try {
+        let approvedOrderId: string | null = null
         await db.transaction(
           'rw',
           [
@@ -359,33 +401,35 @@ export function OnlineOrdersValidationView({
             const fresh = await db.onlineOrders.get(order.id)
             if (!fresh || fresh.status !== 'pending') return
 
-            for (const line of fresh.lines) {
-              const product = await db.products.get(line.productId)
-              if (!product || product.archived) {
-                throw new Error(
-                  `Produit indisponible: « ${line.name} ».`,
-                )
+            if (!fresh.stockDeductedAt) {
+              for (const line of fresh.lines) {
+                const product = await db.products.get(line.productId)
+                if (!product || product.archived) {
+                  throw new Error(
+                    `Produit indisponible: « ${line.name} ».`,
+                  )
+                }
+                const stockId = storeStockRowId(fresh.storeId, line.productId)
+                const row = await db.storeStocks.get(stockId)
+                const currentStock = row?.stock ?? 0
+                if (currentStock < line.qty) {
+                  throw new Error(
+                    `Stock insuffisant pour « ${line.name} » (disponible: ${currentStock}).`,
+                  )
+                }
               }
-              const stockId = storeStockRowId(fresh.storeId, line.productId)
-              const row = await db.storeStocks.get(stockId)
-              const currentStock = row?.stock ?? 0
-              if (currentStock < line.qty) {
-                throw new Error(
-                  `Stock insuffisant pour « ${line.name} » (disponible: ${currentStock}).`,
-                )
-              }
-            }
 
-            for (const line of fresh.lines) {
-              const stockId = storeStockRowId(fresh.storeId, line.productId)
-              const row = await db.storeStocks.get(stockId)
-              const currentStock = row?.stock ?? 0
-              await db.storeStocks.put({
-                id: stockId,
-                storeId: fresh.storeId,
-                productId: line.productId,
-                stock: currentStock - line.qty,
-              })
+              for (const line of fresh.lines) {
+                const stockId = storeStockRowId(fresh.storeId, line.productId)
+                const row = await db.storeStocks.get(stockId)
+                const currentStock = row?.stock ?? 0
+                await db.storeStocks.put({
+                  id: stockId,
+                  storeId: fresh.storeId,
+                  productId: line.productId,
+                  stock: currentStock - line.qty,
+                })
+              }
             }
 
             const saleId = crypto.randomUUID()
@@ -438,7 +482,7 @@ export function OnlineOrdersValidationView({
               createdAt: Date.now(),
             })
 
-            await db.onlineOrders.put({
+            const approvedRecord: OnlineOrder = {
               ...fresh,
               status: 'approved',
               reviewedAt: Date.now(),
@@ -468,14 +512,42 @@ export function OnlineOrdersValidationView({
                 ? `K-${fresh.id.slice(0, 6).toUpperCase()}`
                 : undefined,
               kitchenUpdatedAt: isKitchenModuleDemoOn() ? Date.now() : undefined,
-            })
+              stockDeductedAt: fresh.stockDeductedAt ?? Date.now(),
+            }
+            approvedOrderId = approvedRecord.id
+            await db.onlineOrders.put(approvedRecord)
           },
         )
 
         if (online) {
           await flushSyncQueue()
         }
-        toast.success('Commande validée', order.customerName)
+        toast.success('Commande validée avec succès', order.customerName)
+        if (approvedOrderId) {
+          const approvedSnapshot = await db.onlineOrders.get(approvedOrderId)
+          if (!approvedSnapshot) return
+          const sms = await sendOrderApprovedSms(approvedSnapshot)
+          if (sms.ok) {
+            await db.onlineOrders.update(approvedOrderId, {
+              customerNotifiedAt: Date.now(),
+              customerNotificationStatus: 'sent',
+              customerNotificationError: undefined,
+            })
+            toast.info(
+              'SMS client envoyé',
+              sms.mode === 'webhook'
+                ? 'Notification transmise au prestataire SMS.'
+                : 'Mode démo: SMS journalisé localement.',
+            )
+          } else {
+            await db.onlineOrders.update(approvedOrderId, {
+              customerNotifiedAt: Date.now(),
+              customerNotificationStatus: 'failed',
+              customerNotificationError: sms.error,
+            })
+            toast.warning('SMS non envoyé', sms.error)
+          }
+        }
       } catch (e) {
         toast.error(
           'Validation impossible',
@@ -506,6 +578,179 @@ export function OnlineOrdersValidationView({
           reviewNote: reason.trim() || undefined,
         })
         toast.info('Commande rejetée', order.customerName)
+      } finally {
+        setBusyOrderId(null)
+      }
+    },
+    [busyOrderId, reviewer.displayName, reviewer.id, toast],
+  )
+
+  const editOrder = useCallback(
+    async (order: OnlineOrder) => {
+      if (busyOrderId) return
+      setBusyOrderId(order.id)
+      try {
+        const fresh = await db.onlineOrders.get(order.id)
+        if (!fresh) return
+
+        const customerNameRaw =
+          window.prompt('Nom client', fresh.customerName) ?? fresh.customerName
+        const customerName = customerNameRaw.trim()
+        if (!customerName) {
+          toast.error('Nom client requis')
+          return
+        }
+        const customerPhoneRaw =
+          window.prompt(
+            'Téléphone (laisser vide pour supprimer)',
+            fresh.customerPhone ?? '',
+          ) ?? (fresh.customerPhone ?? '')
+        const customerAddressRaw =
+          window.prompt(
+            'Adresse (laisser vide pour supprimer)',
+            fresh.customerAddress ?? '',
+          ) ?? (fresh.customerAddress ?? '')
+        const desiredTimeSlotRaw =
+          window.prompt(
+            'Créneau souhaité (laisser vide pour supprimer)',
+            fresh.desiredTimeSlot ?? '',
+          ) ?? (fresh.desiredTimeSlot ?? '')
+        const customerNoteRaw =
+          window.prompt(
+            'Note client (laisser vide pour supprimer)',
+            fresh.customerNote ?? '',
+          ) ?? (fresh.customerNote ?? '')
+
+        await db.onlineOrders.put({
+          ...fresh,
+          customerName,
+          customerPhone: customerPhoneRaw.trim() || undefined,
+          customerAddress: customerAddressRaw.trim() || undefined,
+          desiredTimeSlot: desiredTimeSlotRaw.trim() || undefined,
+          customerNote: customerNoteRaw.trim() || undefined,
+        })
+        toast.success('Commande corrigée', customerName)
+      } finally {
+        setBusyOrderId(null)
+      }
+    },
+    [busyOrderId, toast],
+  )
+
+  const editOrderLines = useCallback(
+    async (order: OnlineOrder) => {
+      if (busyOrderId) return
+      setBusyOrderId(order.id)
+      try {
+        const fresh = await db.onlineOrders.get(order.id)
+        if (!fresh) return
+        const nextLines = [...fresh.lines]
+        const lineChoices = nextLines
+          .map((line, idx) => `${idx + 1}. ${line.name} (${line.qty} x ${formatFCFA(line.unitPriceTTC)})`)
+          .join('\n')
+        const rawIndex =
+          window.prompt(
+            `Choisissez la ligne à corriger (numéro) :\n${lineChoices}`,
+            '1',
+          ) ?? ''
+        const index = Number.parseInt(rawIndex.trim(), 10) - 1
+        if (!Number.isFinite(index) || index < 0 || index >= nextLines.length) {
+          toast.error('Ligne invalide')
+          return
+        }
+        const selected = nextLines[index]
+        const qtyRaw =
+          window.prompt(`Nouvelle quantité pour "${selected.name}"`, String(selected.qty)) ??
+          String(selected.qty)
+        const qty = Number.parseInt(qtyRaw.trim(), 10)
+        if (!Number.isFinite(qty) || qty <= 0) {
+          toast.error('Quantité invalide')
+          return
+        }
+        const priceRaw =
+          window.prompt(
+            `Nouveau prix TTC (FCFA) pour "${selected.name}"`,
+            String(selected.unitPriceTTC),
+          ) ?? String(selected.unitPriceTTC)
+        const unitPriceTTC = Number.parseInt(priceRaw.trim(), 10)
+        if (!Number.isFinite(unitPriceTTC) || unitPriceTTC <= 0) {
+          toast.error('Prix TTC invalide')
+          return
+        }
+        nextLines[index] = {
+          ...selected,
+          qty,
+          unitPriceTTC,
+        }
+        const subtotalHT = Math.round(
+          nextLines.reduce(
+            (sum, line) =>
+              sum + (line.qty * line.unitPriceTTC * 100) / (100 + (line.vatRatePct ?? 18)),
+            0,
+          ),
+        )
+        const totalTTC = nextLines.reduce((sum, line) => sum + line.qty * line.unitPriceTTC, 0)
+        const tva = totalTTC - subtotalHT
+        await db.onlineOrders.put({
+          ...fresh,
+          lines: nextLines,
+          subtotalHT,
+          tva,
+          totalTTC,
+          netProductsTTC: totalTTC,
+        })
+        toast.success('Lignes corrigées', fresh.customerName)
+      } finally {
+        setBusyOrderId(null)
+      }
+    },
+    [busyOrderId, toast],
+  )
+
+  const editOrderMessages = useCallback(
+    async (order: OnlineOrder) => {
+      if (busyOrderId) return
+      setMessageOrderId(order.id)
+    },
+    [busyOrderId],
+  )
+
+  const saveOrderMessages = useCallback(
+    async (order: OnlineOrder, payload: { customerMessage?: string; internalMessage?: string }) => {
+      if (busyOrderId) return
+      setBusyOrderId(order.id)
+      try {
+        const fresh = await db.onlineOrders.get(order.id)
+        if (!fresh) return
+        const hasMessage = !!(payload.customerMessage || payload.internalMessage)
+        const previousCustomer = fresh.customerMessage ?? ''
+        const previousInternal = fresh.internalMessage ?? ''
+        const nextCustomer = payload.customerMessage ?? ''
+        const nextInternal = payload.internalMessage ?? ''
+        const changed =
+          previousCustomer !== nextCustomer || previousInternal !== nextInternal
+        await db.onlineOrders.put({
+          ...fresh,
+          customerMessage: payload.customerMessage,
+          internalMessage: payload.internalMessage,
+          messageUpdatedAt: hasMessage ? Date.now() : undefined,
+          messageUpdatedByProfileId: hasMessage ? reviewer.id : undefined,
+          messageUpdatedByDisplayName: hasMessage ? reviewer.displayName : undefined,
+        })
+        if (changed) {
+          await db.onlineOrderMessages.add({
+            id: crypto.randomUUID(),
+            orderId: fresh.id,
+            createdAt: Date.now(),
+            authorProfileId: reviewer.id,
+            authorDisplayName: reviewer.displayName,
+            customerMessage: payload.customerMessage,
+            internalMessage: payload.internalMessage,
+          })
+        }
+        if (hasMessage) toast.success('Messages enregistrés', fresh.customerName)
+        else toast.info('Messages supprimés', fresh.customerName)
+        setMessageOrderId(null)
       } finally {
         setBusyOrderId(null)
       }
@@ -824,6 +1069,41 @@ export function OnlineOrdersValidationView({
                         {order.customerNote}
                       </p>
                     ) : null}
+                    {order.customerMessage ? (
+                      <p>
+                        <span className="text-zinc-500">Message client :</span>{' '}
+                        {order.customerMessage}
+                      </p>
+                    ) : null}
+                    {order.internalMessage ? (
+                      <p>
+                        <span className="text-zinc-500">Note interne :</span>{' '}
+                        {order.internalMessage}
+                      </p>
+                    ) : null}
+                    {order.messageUpdatedAt ? (
+                      <p className="text-[11px] text-zinc-500">
+                        Messages MAJ le {formatDateTime(order.messageUpdatedAt)}
+                        {order.messageUpdatedByDisplayName
+                          ? ` · ${order.messageUpdatedByDisplayName}`
+                          : ''}
+                      </p>
+                    ) : null}
+                    {order.customerNotificationStatus ? (
+                      <p className="text-[11px] text-zinc-500">
+                        Notification client:{' '}
+                        {order.customerNotificationStatus === 'sent'
+                          ? 'SMS envoye'
+                          : 'echec envoi SMS'}
+                        {order.customerNotifiedAt
+                          ? ` · ${formatDateTime(order.customerNotifiedAt)}`
+                          : ''}
+                        {order.customerNotificationError &&
+                        order.customerNotificationStatus === 'failed'
+                          ? ` · ${order.customerNotificationError}`
+                          : ''}
+                      </p>
+                    ) : null}
                     <p className="mt-1 flex items-center gap-1.5 text-[11px] text-zinc-500">
                       <IconTruck className="h-3 w-3" />
                       {order.fulfillmentMode === 'delivery'
@@ -866,6 +1146,39 @@ export function OnlineOrdersValidationView({
                     >
                       Reçu
                     </Button>
+                    {canValidateOnlineOrders ? (
+                      <Button
+                        variant="ghost"
+                        iconLeft={<IconInfo />}
+                        disabled={busy}
+                        onClick={() => void editOrderMessages(order)}
+                        className="w-full sm:w-auto"
+                      >
+                        Message
+                      </Button>
+                    ) : null}
+                    {canValidateOnlineOrders ? (
+                      <Button
+                        variant="ghost"
+                        iconLeft={<IconEdit />}
+                        disabled={busy}
+                        onClick={() => void editOrder(order)}
+                        className="w-full sm:w-auto"
+                      >
+                        Corriger
+                      </Button>
+                    ) : null}
+                    {canValidateOnlineOrders ? (
+                      <Button
+                        variant="ghost"
+                        iconLeft={<IconEdit />}
+                        disabled={busy}
+                        onClick={() => void editOrderLines(order)}
+                        className="w-full sm:w-auto"
+                      >
+                        Corriger lignes
+                      </Button>
+                    ) : null}
                     {canValidateOnlineOrders ? (
                       <>
                         <Button
@@ -1067,6 +1380,25 @@ export function OnlineOrdersValidationView({
                     <span className="ml-2 font-mono-nums text-zinc-500">
                       {formatFCFA(order.totalTTC)}
                     </span>
+                    {order.customerMessage || order.internalMessage ? (
+                      <span className="ml-2 text-[11px] text-zinc-500">
+                        · Message
+                      </span>
+                    ) : null}
+                    {order.customerNotificationStatus ? (
+                      <span
+                        className={`ml-2 text-[11px] ${
+                          order.customerNotificationStatus === 'sent'
+                            ? 'text-emerald-600'
+                            : 'text-amber-600'
+                        }`}
+                      >
+                        · SMS{' '}
+                        {order.customerNotificationStatus === 'sent'
+                          ? 'envoye'
+                          : 'echec'}
+                      </span>
+                    ) : null}
                   </span>
                   <span className="flex shrink-0 items-center gap-2">
                     <Button
@@ -1078,6 +1410,39 @@ export function OnlineOrdersValidationView({
                     >
                       Reçu
                     </Button>
+                    {canValidateOnlineOrders ? (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        iconLeft={<IconInfo />}
+                        onClick={() => void editOrderMessages(order)}
+                        aria-label="Modifier les messages"
+                      >
+                        Message
+                      </Button>
+                    ) : null}
+                    {canValidateOnlineOrders ? (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        iconLeft={<IconEdit />}
+                        onClick={() => void editOrder(order)}
+                        aria-label="Corriger la commande"
+                      >
+                        Corriger
+                      </Button>
+                    ) : null}
+                    {canValidateOnlineOrders ? (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        iconLeft={<IconEdit />}
+                        onClick={() => void editOrderLines(order)}
+                        aria-label="Corriger les lignes"
+                      >
+                        Corriger lignes
+                      </Button>
+                    ) : null}
                     <Badge tone={order.status === 'approved' ? 'success' : 'danger'}>
                       {order.status === 'approved' ? 'Validée' : 'Rejetée'}
                     </Badge>
@@ -1104,6 +1469,15 @@ export function OnlineOrdersValidationView({
           </CardContent>
         </Card>
       )}
+      {messageOrder ? (
+        <OnlineOrderMessageModal
+          order={messageOrder}
+          history={messageHistory}
+          busy={busyOrderId === messageOrder.id}
+          onClose={() => setMessageOrderId(null)}
+          onSave={(payload) => saveOrderMessages(messageOrder, payload)}
+        />
+      ) : null}
     </div>
   )
 }

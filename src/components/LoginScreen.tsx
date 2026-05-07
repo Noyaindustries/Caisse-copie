@@ -6,6 +6,8 @@ import {
   subscribeStaffProfiles,
 } from '../auth/profiles'
 import type { StaffAuthMethod, StaffProfile } from '../auth/types'
+import { db } from '../db/db'
+import { useLiveQuery } from 'dexie-react-hooks'
 import { BRAND_LOGO_SRC, BRAND_NAME } from '../brand'
 import { Button } from '../ui/Button'
 import { Field, Input } from '../ui/Input'
@@ -22,6 +24,8 @@ export function LoginScreen({ onSuccess }: Props) {
   const [selected, setSelected] = useState<StaffProfile | null>(null)
   const [secret, setSecret] = useState('')
   const [error, setError] = useState<string | null>(null)
+  const stores = useLiveQuery(() => db.stores.orderBy('sortOrder').toArray(), [], []) ?? []
+  const storeNameById = new Map(stores.map((store) => [store.id, store.name]))
 
   useEffect(() => {
     return subscribeStaffProfiles(() => {
@@ -133,6 +137,7 @@ export function LoginScreen({ onSuccess }: Props) {
                     </span>
                     <span className="text-[11px] text-zinc-500">
                       {roleLabel(p.role)}
+                      {p.storeId ? ` · ${storeNameById.get(p.storeId) ?? p.storeId}` : ''}
                     </span>
                   </span>
                   <IconArrowRight className="h-4 w-4 text-zinc-400 transition group-hover:translate-x-0.5 group-hover:text-zinc-900" />

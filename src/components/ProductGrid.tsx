@@ -126,6 +126,18 @@ export function ProductGrid({
                 >
                   {formatFCFA(p.priceTTC)}
                 </p>
+                <p
+                  className={cn(
+                    'mt-0.5 font-mono-nums text-[11px]',
+                    state === 'rupture'
+                      ? 'text-rose-600'
+                      : state === 'faible'
+                        ? 'text-amber-700'
+                        : 'text-zinc-500',
+                  )}
+                >
+                  Stock : {p.stock}
+                </p>
               </button>
             )
           })}

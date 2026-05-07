@@ -42,6 +42,7 @@ function isStaffProfile(value: unknown): value is StaffProfile {
     typeof v.id === 'string' &&
     typeof v.displayName === 'string' &&
     typeof v.initials === 'string' &&
+    (v.storeId === undefined || typeof v.storeId === 'string') &&
     (v.role === 'admin' || v.role === 'gerant' || v.role === 'caissier') &&
     typeof v.pin === 'string' &&
     (v.password === undefined || typeof v.password === 'string')
@@ -124,10 +125,12 @@ function computeInitials(displayName: string): string {
 export function createStaffProfile(input: {
   displayName: string
   role: StaffProfile['role']
+  storeId?: string
   pin: string
   password?: string
 }): StaffProfile {
   const displayName = input.displayName.trim()
+  const storeId = input.storeId?.trim() || undefined
   const pin = input.pin.trim()
   const password = input.password?.trim() || undefined
   if (displayName.length < 3) {
@@ -145,6 +148,7 @@ export function createStaffProfile(input: {
     displayName,
     initials: computeInitials(displayName),
     role: input.role,
+    ...(storeId ? { storeId } : {}),
     pin,
     ...(password ? { password } : {}),
   }

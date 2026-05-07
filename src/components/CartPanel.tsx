@@ -51,7 +51,7 @@ type Props = {
   onClose?: () => void
   /** Cible pour animation « ajout au panier » (compteur dans l’en-tête). */
   countBadgeRef?: Ref<HTMLSpanElement | null>
-  tableOptions?: { id: string; name: string; status?: string }[]
+  tableOptions?: { id: string; name: string; status?: string; statusCode?: string }[]
   selectedTableId?: string
   onSelectedTableIdChange?: (tableId: string) => void
   loyaltyPhone?: string
@@ -61,6 +61,8 @@ type Props = {
   onLoyaltyRedeemPointsChange?: (value: string) => void
   loyaltyRedeemAmountTTC?: number
   payableTotalTTC?: number
+  dayClosed?: boolean
+  dayClosedLabel?: string
 }
 
 function stockFor(
@@ -68,6 +70,18 @@ function stockFor(
   productId: string,
 ): number {
   return products.find((p) => p.id === productId)?.stock ?? 0
+}
+
+function quickCashSuggestions(amountDue: number): number[] {
+  if (!Number.isFinite(amountDue) || amountDue <= 0) return []
+  const fixedDenominations = [1000, 2000, 5000, 10000, 15000, 20000]
+  const nearestHigherFixed =
+    fixedDenominations.find((v) => v >= amountDue) ?? Math.ceil(amountDue / 5000) * 5000
+  const candidates = [amountDue, nearestHigherFixed, ...fixedDenominations]
+  return [...new Set(candidates)]
+    .filter((v) => v >= amountDue)
+    .sort((a, b) => a - b)
+    .slice(0, 6)
 }
 
 export function CartPanel({
@@ -104,14 +118,23 @@ export function CartPanel({
   onLoyaltyRedeemPointsChange,
   loyaltyRedeemAmountTTC = 0,
   payableTotalTTC,
+  dayClosed = false,
+  dayClosedLabel,
 }: Props) {
   const totals = totalsFromLinesTTC(lines, discountPct)
   const vatSlices = vatSlicesFromLinesTTC(lines, discountPct)
   const count = lines.reduce((s, l) => s + l.qty, 0)
   const totalRounded = Math.round(payableTotalTTC ?? totals.totalTTC)
   const validation = validateCheckoutPayment(payment, totalRounded, canPayElectronic)
+  const selectedTable = tableOptions.find((table) => table.id === selectedTableId)
+  const selectedTableIsUnavailable =
+    selectedTable?.statusCode === 'occupied' || selectedTable?.statusCode === 'reserved'
   const checkoutDisabled =
-    lines.length === 0 || checkoutBusy || !validation.ok
+    lines.length === 0 ||
+    checkoutBusy ||
+    !validation.ok ||
+    selectedTableIsUnavailable ||
+    dayClosed
 
   const showMobileOperators =
     (!payment.mixed && payment.method === 'mobile') || payment.mixed
@@ -127,6 +150,8 @@ export function CartPanel({
     Number.parseInt(payment.splitCard.replace(/\s/g, '') || '0', 10)
   const cashSplit =
     Number.parseInt(payment.splitCash.replace(/\s/g, '') || '0', 10)
+  const cashDue = payment.mixed ? Math.max(0, cashSplit) : totalRounded
+  const quickAmounts = quickCashSuggestions(cashDue)
 
   return (
     <aside className="flex h-full w-full min-w-0 shrink-0 flex-col border-l border-zinc-200 bg-white lg:w-[360px]">
@@ -269,6 +294,11 @@ export function CartPanel({
                 ))}
               </Select>
             </Field>
+            {selectedTableIsUnavailable ? (
+              <p className="mt-1 rounded-md bg-rose-50 px-2 py-1 text-[11px] text-rose-700">
+                Encaissement bloqué : la table sélectionnée est occupée ou réservée.
+              </p>
+            ) : null}
           </div>
         ) : null}
 
@@ -505,6 +535,25 @@ export function CartPanel({
                   className="font-mono-nums"
                 />
               </Field>
+              {quickAmounts.length > 0 ? (
+                <div className="flex flex-wrap gap-1.5">
+                  {quickAmounts.map((value) => (
+                    <button
+                      key={`quick-cash-${value}`}
+                      type="button"
+                      onClick={() => onPaymentPatch({ cashReceived: String(value) })}
+                      className={cn(
+                        'rounded-md border px-2 py-1 text-[11px] font-mono-nums font-semibold transition',
+                        payment.cashReceived.replace(/\s/g, '') === String(value)
+                          ? 'border-emerald-700 bg-emerald-700 text-white'
+                          : 'border-zinc-200 bg-white text-zinc-700 hover:border-zinc-300',
+                      )}
+                    >
+                      {formatFCFA(value)}
+                    </button>
+                  ))}
+                </div>
+              ) : null}
               {changePreview !== null ? (
                 <p className="rounded-md bg-emerald-50 px-2 py-1 text-[12px] font-semibold text-emerald-800">
                   Monnaie à rendre :{' '}
@@ -528,6 +577,25 @@ export function CartPanel({
                   className="font-mono-nums"
                 />
               </Field>
+              {quickAmounts.length > 0 ? (
+                <div className="flex flex-wrap gap-1.5">
+                  {quickAmounts.map((value) => (
+                    <button
+                      key={`quick-mixed-cash-${value}`}
+                      type="button"
+                      onClick={() => onPaymentPatch({ cashReceived: String(value) })}
+                      className={cn(
+                        'rounded-md border px-2 py-1 text-[11px] font-mono-nums font-semibold transition',
+                        payment.cashReceived.replace(/\s/g, '') === String(value)
+                          ? 'border-emerald-700 bg-emerald-700 text-white'
+                          : 'border-zinc-200 bg-white text-zinc-700 hover:border-zinc-300',
+                      )}
+                    >
+                      {formatFCFA(value)}
+                    </button>
+                  ))}
+                </div>
+              ) : null}
               {changePreview !== null ? (
                 <p className="rounded-md bg-emerald-50 px-2 py-1 text-[12px] font-semibold text-emerald-800">
                   Monnaie à rendre :{' '}
@@ -581,6 +649,12 @@ export function CartPanel({
         >
           {checkoutBusy ? 'Traitement…' : `Encaisser · ${formatFCFA(totalRounded)}`}
         </Button>
+        {dayClosed ? (
+          <p className="mt-2 rounded-md bg-amber-50 px-2 py-1 text-center text-[11px] font-medium text-amber-800">
+            {dayClosedLabel ??
+              'Journée clôturée : encaissement bloqué. Réouvrez la journée depuis le journal.'}
+          </p>
+        ) : null}
         <p className="mt-1.5 text-center text-[10px] text-zinc-400">
           {receiptPrinterEnabled
             ? 'Reçu généré et imprimé automatiquement'

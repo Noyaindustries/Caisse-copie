@@ -106,6 +106,89 @@ function isAuthorized(reqToken: string | undefined): boolean {
   return reqToken != null && reqToken === expected
 }
 
+type SmsWebhookPayload = {
+  to: string
+  message: string
+  orderId?: string
+  storeId?: string
+  customerName?: string
+}
+
+function normalizePhone(raw: string): string {
+  return raw.replace(/\D/g, '')
+}
+
+webhookRouter.post('/webhooks/sms', async (req, res) => {
+  try {
+    const payload = asObject(req.body) as Partial<SmsWebhookPayload>
+    const to = asString(payload.to)
+    const message = asString(payload.message)
+    if (!to || !message) {
+      return res.status(400).json({
+        ok: false,
+        message: 'Payload invalide: "to" et "message" sont requis.',
+      })
+    }
+    const normalizedTo = normalizePhone(to)
+    if (normalizedTo.length < 8) {
+      return res.status(400).json({
+        ok: false,
+        message: 'Numero de telephone invalide.',
+      })
+    }
+
+    const providerUrl = process.env.SMS_PROVIDER_URL?.trim()
+    const providerToken = process.env.SMS_PROVIDER_TOKEN?.trim()
+    if (!providerUrl) {
+      console.info('[sms:webhook:demo]', {
+        to: normalizedTo,
+        message,
+        orderId: asString(payload.orderId),
+        storeId: asString(payload.storeId),
+        customerName: asString(payload.customerName),
+      })
+      return res.status(202).json({
+        ok: true,
+        mode: 'demo',
+        message: 'SMS journalise en mode demo (provider non configure).',
+      })
+    }
+
+    const providerRes = await fetch(providerUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(providerToken ? { Authorization: `Bearer ${providerToken}` } : {}),
+      },
+      body: JSON.stringify({
+        to: normalizedTo,
+        message,
+        orderId: asString(payload.orderId),
+        storeId: asString(payload.storeId),
+        customerName: asString(payload.customerName),
+      }),
+    })
+    if (!providerRes.ok) {
+      return res.status(502).json({
+        ok: false,
+        message: `Provider SMS en erreur (${providerRes.status}).`,
+      })
+    }
+
+    return res.status(202).json({
+      ok: true,
+      mode: 'provider',
+      message: 'SMS transmis au provider.',
+    })
+  } catch (error) {
+    console.error('[webhook:sms] erreur', error)
+    return res.status(500).json({
+      ok: false,
+      message: 'Erreur serveur lors de lenvoi SMS',
+    })
+  }
+})
+
 webhookRouter.post('/webhooks/orders', async (req, res) => {
   try {
     const token = req.header('x-webhook-token') ?? undefined

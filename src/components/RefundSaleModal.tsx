@@ -27,6 +27,7 @@ export function RefundSaleModal({ sale, actor, onClose, onDone }: Props) {
   const [qtyByProduct, setQtyByProduct] = useState<LineRefundQtyMap>({})
   const [reason, setReason] = useState('')
   const [busy, setBusy] = useState(false)
+  const [pendingConfirmUntil, setPendingConfirmUntil] = useState(0)
 
   const initFullRefund = useCallback(() => {
     const next: LineRefundQtyMap = {}
@@ -56,11 +57,13 @@ export function RefundSaleModal({ sale, actor, onClose, onDone }: Props) {
       toast.error('Remboursement invalide', computed.message)
       return
     }
-    if (
-      !window.confirm(
-        `Confirmer le remboursement de ${formatFCFA(computed.amountTTC)} ?`,
+    const now = new Date().getTime()
+    if (now > pendingConfirmUntil) {
+      setPendingConfirmUntil(now + 7000)
+      toast.warning(
+        'Confirmer le remboursement',
+        `Cliquez encore sur "Valider" pour ${formatFCFA(computed.amountTTC)} (7s).`,
       )
-    ) {
       return
     }
     setBusy(true)
@@ -78,6 +81,7 @@ export function RefundSaleModal({ sale, actor, onClose, onDone }: Props) {
         'Remboursement enregistré',
         formatFCFA(computed.amountTTC),
       )
+      setPendingConfirmUntil(0)
       onDone()
       onClose()
     } catch (e) {
@@ -88,7 +92,7 @@ export function RefundSaleModal({ sale, actor, onClose, onDone }: Props) {
     } finally {
       setBusy(false)
     }
-  }, [actor, onClose, onDone, qtyByProduct, reason, sale, toast])
+  }, [actor, onClose, onDone, pendingConfirmUntil, qtyByProduct, reason, sale, toast])
 
   if (saleFullyRefunded(sale)) {
     return (

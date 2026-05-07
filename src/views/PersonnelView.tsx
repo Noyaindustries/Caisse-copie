@@ -1,3 +1,4 @@
+import { useLiveQuery } from 'dexie-react-hooks'
 import { useEffect, useMemo, useState } from 'react'
 import {
   changeStaffPassword,
@@ -7,6 +8,7 @@ import {
   subscribeStaffProfiles,
 } from '../auth/profiles'
 import type { UserRole } from '../auth/types'
+import { db } from '../db/db'
 import { Badge } from '../ui/Badge'
 import { Button } from '../ui/Button'
 import { Card, CardContent } from '../ui/Card'
@@ -71,6 +73,7 @@ export function PersonnelView({ currentProfileId }: Props) {
   const [role, setRole] = useState<UserRole>('caissier')
   const [pin, setPin] = useState('')
   const [password, setPassword] = useState('')
+  const [createStoreId, setCreateStoreId] = useState('')
   const [currentSecret, setCurrentSecret] = useState('')
   const [newPassword, setNewPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
@@ -79,6 +82,11 @@ export function PersonnelView({ currentProfileId }: Props) {
   const [showConfirmPassword, setShowConfirmPassword] = useState(false)
   const [showCreatePin, setShowCreatePin] = useState(false)
   const [showCreatePassword, setShowCreatePassword] = useState(false)
+  const stores = useLiveQuery(() => db.stores.orderBy('sortOrder').toArray(), [], []) ?? []
+  const storeNameById = useMemo(
+    () => new Map(stores.map((store) => [store.id, store.name])),
+    [stores],
+  )
 
   useEffect(() => {
     return subscribeStaffProfiles(() => {
@@ -102,6 +110,7 @@ export function PersonnelView({ currentProfileId }: Props) {
       const created = createStaffProfile({
         displayName,
         role,
+        storeId: createStoreId || undefined,
         pin,
         password,
       })
@@ -111,6 +120,7 @@ export function PersonnelView({ currentProfileId }: Props) {
       )
       setDisplayName('')
       setRole('caissier')
+      setCreateStoreId('')
       setPin('')
       setPassword('')
     } catch (error) {
@@ -290,6 +300,19 @@ export function PersonnelView({ currentProfileId }: Props) {
                 <option value="admin">Administrateur</option>
               </Select>
             </Field>
+            <Field label="Magasin assigné">
+              <Select
+                value={createStoreId}
+                onChange={(e) => setCreateStoreId(e.target.value)}
+              >
+                <option value="">Tous magasins</option>
+                {stores.map((store) => (
+                  <option key={store.id} value={store.id}>
+                    {store.name}
+                  </option>
+                ))}
+              </Select>
+            </Field>
             <Field label="PIN (4-8 chiffres)" required>
               <div className="flex items-center gap-2">
                 <Input
@@ -407,6 +430,9 @@ export function PersonnelView({ currentProfileId }: Props) {
                       </p>
                       <p className="text-[11px] text-zinc-500">
                         {roleLabel(p.role)}
+                      </p>
+                      <p className="text-[11px] text-zinc-500">
+                        Magasin : {p.storeId ? (storeNameById.get(p.storeId) ?? p.storeId) : 'Tous'}
                       </p>
                     </div>
                   </div>

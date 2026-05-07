@@ -85,6 +85,8 @@ export function CatalogueView({
   const [showArchived, setShowArchived] = useState(false)
   const [newCategoryName, setNewCategoryName] = useState('')
   const [categoryAddBusy, setCategoryAddBusy] = useState(false)
+  const [pendingArchiveId, setPendingArchiveId] = useState<string | null>(null)
+  const [pendingArchiveUntil, setPendingArchiveUntil] = useState(0)
   const fileRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
@@ -168,14 +170,19 @@ export function CatalogueView({
   }
 
   const handleArchive = async (p: ProductWithStock) => {
-    if (
-      !window.confirm(
-        `Archiver « ${p.name} » ? L’article disparaîtra de la caisse mais restera dans le catalogue.`,
+    const now = new Date().getTime()
+    if (pendingArchiveId !== p.id || now > pendingArchiveUntil) {
+      setPendingArchiveId(p.id)
+      setPendingArchiveUntil(now + 7000)
+      toast.warning(
+        'Confirmer archivage',
+        `Cliquez encore sur "Archiver" pour ${p.name} (7s).`,
       )
-    ) {
       return
     }
     await db.products.update(p.id, { archived: true })
+    setPendingArchiveId(null)
+    setPendingArchiveUntil(0)
     toast.info('Article archivé', p.name)
   }
 
@@ -199,9 +206,7 @@ export function CatalogueView({
         toast.warning('Import CSV', 'Aucune ligne valide dans le fichier.')
         return
       }
-      const merge = window.confirm(
-        'Mettre à jour les articles dont le code-barres existe déjà ?\n\nOK = fusion par code-barres\nAnnuler = ignorer les doublons',
-      )
+      const merge = true
       const r = await applyProductsCsvImport(parsed, {
         updateExistingByBarcode: merge,
       })
@@ -210,13 +215,11 @@ export function CatalogueView({
         allErr.length ? ` · ${allErr.length} erreur(s)` : ''
       }.`
       if (allErr.length) {
-        toast.warning('Import partiel', summary)
-        window.alert(
-          allErr
-            .slice(0, 12)
-            .map((x) => `Ligne ${x.line}: ${x.message}`)
-            .join('\n') + (allErr.length > 12 ? '\n…' : ''),
-        )
+        const details = allErr
+          .slice(0, 4)
+          .map((x) => `L${x.line}: ${x.message}`)
+          .join(' | ')
+        toast.warning('Import partiel', `${summary} ${details}`)
       } else {
         toast.success('Import CSV', summary)
       }

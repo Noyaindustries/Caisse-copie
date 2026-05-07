@@ -28,6 +28,8 @@ export interface StaffProfile {
   displayName: string
   initials: string
   role: UserRole
+  /** Magasin assigné (optionnel). */
+  storeId?: string
   /** PIN court (caisse). */
   pin: string
   /** Mot de passe optionnel (même champ de saisie à la connexion). */

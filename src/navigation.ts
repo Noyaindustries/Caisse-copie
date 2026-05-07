@@ -250,6 +250,8 @@ const NAV_SECTIONS_CAISSIER: readonly NavSection[] = [
     title: 'Ventes',
     items: [
       { id: 'caisse', label: 'Caisse' },
+      { id: 'kitchen', label: 'Cuisine' },
+      { id: 'ticketsFactures', label: 'Tickets & factures' },
       { id: 'onlineOrders', label: 'Commandes en ligne' },
       { id: 'journal', label: 'Rapport journalier' },
     ],

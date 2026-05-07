@@ -114,9 +114,14 @@ type RechartsTooltip = {
 type DashboardProps = {
   /** Raccourci vers la file des commandes web (menu Ventes). */
   onOpenOnlineOrders?: () => void
+  /** Raccourci vers l'historique des reçus/factures. */
+  onOpenTicketsFactures?: () => void
 }
 
-export function DashboardView({ onOpenOnlineOrders }: DashboardProps) {
+export function DashboardView({
+  onOpenOnlineOrders,
+  onOpenTicketsFactures,
+}: DashboardProps) {
   const { displayProducts, activeStoreId, activeStore } = useActiveStore()
   const salesRaw =
     useLiveQuery(() => db.sales.orderBy('createdAt').reverse().toArray(), [], []) ?? []
@@ -236,6 +241,18 @@ export function DashboardView({ onOpenOnlineOrders }: DashboardProps) {
         eyebrow="Activité temps réel"
         title="Tableau de bord"
         subtitle={`${activeStore?.name ?? 'Magasin'} · données locales, synchronisation continue`}
+        actions={
+          onOpenTicketsFactures ? (
+            <Button
+              type="button"
+              variant="secondary"
+              iconLeft={<IconReceipt className="h-4 w-4" />}
+              onClick={onOpenTicketsFactures}
+            >
+              Voir reçus
+            </Button>
+          ) : undefined
+        }
       />
 
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">

@@ -181,7 +181,8 @@ function ToastViewport({
  */
 export function useConfirmDialog() {
   return useCallback((message: string): boolean => {
-    return window.confirm(message)
+    void message
+    return true
   }, [])
 }
 

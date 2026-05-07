@@ -8,7 +8,10 @@ import {
 } from 'react'
 import { useActiveStore } from '../context/ActiveStoreContext'
 import { db } from '../db/db'
-import type { ProductWithStock } from '../db/types'
+import type {
+  KitchenStockUnit,
+  ProductWithStock,
+} from '../db/types'
 import { downloadTextFile, toCsvSemicolon } from '../lib/analyticsExport'
 import { formatFCFA } from '../lib/money'
 import { productIsActive } from '../lib/productFilters'
@@ -94,6 +97,21 @@ export function StocksView({ isAdmin, auditActor }: Props) {
   const [quickBusy, setQuickBusy] = useState(false)
   const [bulkQty, setBulkQty] = useState('10')
   const [bulkBusy, setBulkBusy] = useState(false)
+  const kitchenIngredients = useLiveQuery(() => db.kitchenIngredients.toArray(), [], []) ?? []
+  const kitchenIngredientStocks =
+    useLiveQuery(
+      () => db.kitchenIngredientStocks.where('storeId').equals(activeStoreId).toArray(),
+      [activeStoreId],
+      [],
+    ) ?? []
+  const recipeRows = useLiveQuery(() => db.productRecipeIngredients.toArray(), [], []) ?? []
+  const [ingredientName, setIngredientName] = useState('')
+  const [ingredientUnit, setIngredientUnit] = useState<KitchenStockUnit>('piece')
+  const [ingredientStock, setIngredientStock] = useState('0')
+  const [ingredientThreshold, setIngredientThreshold] = useState('0')
+  const [recipeProductId, setRecipeProductId] = useState('')
+  const [recipeIngredientId, setRecipeIngredientId] = useState('')
+  const [recipeQtyPerUnit, setRecipeQtyPerUnit] = useState('')
   const auditRows = useLiveQuery(
     () => db.auditEvents.orderBy('createdAt').reverse().limit(200).toArray(),
     [],
@@ -187,6 +205,27 @@ export function StocksView({ isAdmin, auditActor }: Props) {
       .filter((x): x is NonNullable<typeof x> => x !== null)
       .slice(0, 20)
   }, [auditRows, activeStoreId])
+
+  const kitchenRows = useMemo(() => {
+    const stockByIngredient = new Map(
+      kitchenIngredientStocks.map((row) => [row.ingredientId, row.stock]),
+    )
+    return kitchenIngredients
+      .filter((x) => !x.archived)
+      .map((ing) => ({
+        ...ing,
+        stock: stockByIngredient.get(ing.id) ?? 0,
+      }))
+      .sort((a, b) => a.name.localeCompare(b.name, 'fr'))
+  }, [kitchenIngredients, kitchenIngredientStocks])
+  const productNameById = useMemo(
+    () => new Map(products.map((p) => [p.id, p.name])),
+    [products],
+  )
+  const ingredientNameById = useMemo(
+    () => new Map(kitchenIngredients.map((i) => [i.id, i.name])),
+    [kitchenIngredients],
+  )
 
   const pushStockCloud = useCallback(
     async (p: ProductWithStock) => {
@@ -477,6 +516,106 @@ export function StocksView({ isAdmin, auditActor }: Props) {
     toast,
   ])
 
+  const addKitchenIngredient = useCallback(async () => {
+    const name = ingredientName.trim()
+    const stock = Number.parseFloat(ingredientStock.replace(',', '.'))
+    const threshold = Number.parseFloat(ingredientThreshold.replace(',', '.'))
+    if (!name) {
+      toast.error('Nom ingrédient requis')
+      return
+    }
+    if (!Number.isFinite(stock) || stock < 0) {
+      toast.error('Stock ingrédient invalide')
+      return
+    }
+    if (!Number.isFinite(threshold) || threshold < 0) {
+      toast.error('Seuil ingrédient invalide')
+      return
+    }
+    const id = crypto.randomUUID()
+    await db.kitchenIngredients.put({
+      id,
+      name,
+      unit: ingredientUnit,
+      lowStockThreshold: threshold,
+      archived: false,
+    })
+    await db.kitchenIngredientStocks.put({
+      id: `${activeStoreId}:${id}`,
+      storeId: activeStoreId,
+      ingredientId: id,
+      stock,
+    })
+    setIngredientName('')
+    setIngredientStock('0')
+    setIngredientThreshold('0')
+    toast.success('Ingrédient ajouté', name)
+  }, [activeStoreId, ingredientName, ingredientStock, ingredientThreshold, ingredientUnit, toast])
+
+  const adjustKitchenIngredient = useCallback(
+    async (ingredientId: string, delta: number) => {
+      const row = kitchenRows.find((x) => x.id === ingredientId)
+      if (!row) return
+      const next = Math.max(0, Math.round((row.stock + delta) * 1000) / 1000)
+      await db.kitchenIngredientStocks.put({
+        id: `${activeStoreId}:${ingredientId}`,
+        storeId: activeStoreId,
+        ingredientId,
+        stock: next,
+      })
+    },
+    [activeStoreId, kitchenRows],
+  )
+
+  const addRecipeRow = useCallback(async () => {
+    const qty = Number.parseFloat(recipeQtyPerUnit.replace(',', '.'))
+    if (!recipeProductId || !recipeIngredientId) {
+      toast.error('Produit et ingrédient requis')
+      return
+    }
+    if (!Number.isFinite(qty) || qty <= 0) {
+      toast.error('Quantité recette invalide')
+      return
+    }
+    const existing = recipeRows.find(
+      (row) =>
+        row.productId === recipeProductId &&
+        row.ingredientId === recipeIngredientId,
+    )
+    if (existing) {
+      await db.productRecipeIngredients.update(existing.id, { qtyPerUnit: qty })
+      toast.success('Recette mise à jour')
+    } else {
+      await db.productRecipeIngredients.add({
+        id: crypto.randomUUID(),
+        productId: recipeProductId,
+        ingredientId: recipeIngredientId,
+        qtyPerUnit: qty,
+      })
+      toast.success('Recette ajoutée')
+    }
+    setRecipeQtyPerUnit('')
+  }, [recipeIngredientId, recipeProductId, recipeQtyPerUnit, recipeRows, toast])
+
+  const removeRecipeRow = useCallback(
+    async (id: string) => {
+      await db.productRecipeIngredients.delete(id)
+      toast.info('Recette supprimée')
+    },
+    [toast],
+  )
+
+  const startEditRecipeRow = useCallback(
+    (id: string) => {
+      const row = recipeRows.find((x) => x.id === id)
+      if (!row) return
+      setRecipeProductId(row.productId)
+      setRecipeIngredientId(row.ingredientId)
+      setRecipeQtyPerUnit(String(row.qtyPerUnit))
+    },
+    [recipeRows],
+  )
+
   const exportStockCsv = useCallback(() => {
     const rows: string[][] = [
       ['Article', 'Code-barres', 'Catégorie', 'Stock', 'Seuil', 'Prix TTC'],
@@ -634,6 +773,168 @@ export function StocksView({ isAdmin, auditActor }: Props) {
                 Enregistrer
               </Button>
             </div>
+          </CardContent>
+        </Card>
+      ) : null}
+
+      {isAdmin ? (
+        <Card>
+          <CardContent className="space-y-3">
+            <h2 className="text-[14px] font-semibold text-ink">
+              Stock cuisine (ingrédients)
+            </h2>
+            <div className="grid gap-2 md:grid-cols-5">
+              <Input
+                value={ingredientName}
+                onChange={(e) => setIngredientName(e.target.value)}
+                placeholder="Nom ingrédient"
+              />
+              <Select
+                value={ingredientUnit}
+                onChange={(e) => setIngredientUnit(e.target.value as KitchenStockUnit)}
+              >
+                <option value="kg">kg</option>
+                <option value="g">g</option>
+                <option value="l">L</option>
+                <option value="ml">ml</option>
+                <option value="piece">pièce</option>
+              </Select>
+              <Input
+                inputMode="decimal"
+                value={ingredientStock}
+                onChange={(e) => setIngredientStock(e.target.value)}
+                placeholder="Stock initial"
+              />
+              <Input
+                inputMode="decimal"
+                value={ingredientThreshold}
+                onChange={(e) => setIngredientThreshold(e.target.value)}
+                placeholder="Seuil alerte"
+              />
+              <Button variant="accent" onClick={() => void addKitchenIngredient()}>
+                Ajouter
+              </Button>
+            </div>
+            {kitchenRows.length === 0 ? (
+              <p className="text-[12px] text-ink-subtle">
+                Aucun ingrédient cuisine configuré.
+              </p>
+            ) : (
+              <div className="space-y-2">
+                {kitchenRows.map((row) => (
+                  <div
+                    key={row.id}
+                    className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-zinc-200 px-3 py-2 text-[12px]"
+                  >
+                    <span className="font-medium text-zinc-800">
+                      {row.name} · {row.stock} {row.unit}
+                    </span>
+                    <div className="flex gap-1">
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => void adjustKitchenIngredient(row.id, -0.1)}
+                      >
+                        -0.1
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => void adjustKitchenIngredient(row.id, 0.1)}
+                      >
+                        +0.1
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => void adjustKitchenIngredient(row.id, -1)}
+                      >
+                        -1
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => void adjustKitchenIngredient(row.id, 1)}
+                      >
+                        +1
+                      </Button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      ) : null}
+
+      {isAdmin ? (
+        <Card>
+          <CardContent className="space-y-3">
+            <h2 className="text-[14px] font-semibold text-ink">
+              Recettes (plat {'->'} ingrédients)
+            </h2>
+            <div className="grid gap-2 md:grid-cols-[1.5fr_1.5fr_1fr_auto]">
+              <Select
+                value={recipeProductId}
+                onChange={(e) => setRecipeProductId(e.target.value)}
+              >
+                <option value="">Choisir un produit</option>
+                {products
+                  .filter((p) => !p.archived)
+                  .map((p) => (
+                    <option key={p.id} value={p.id}>
+                      {p.name}
+                    </option>
+                  ))}
+              </Select>
+              <Select
+                value={recipeIngredientId}
+                onChange={(e) => setRecipeIngredientId(e.target.value)}
+              >
+                <option value="">Choisir un ingrédient</option>
+                {kitchenRows.map((row) => (
+                  <option key={row.id} value={row.id}>
+                    {row.name}
+                  </option>
+                ))}
+              </Select>
+              <Input
+                inputMode="decimal"
+                value={recipeQtyPerUnit}
+                onChange={(e) => setRecipeQtyPerUnit(e.target.value)}
+                placeholder="Qté / plat"
+              />
+              <Button variant="accent" onClick={() => void addRecipeRow()}>
+                Enregistrer
+              </Button>
+            </div>
+            {recipeRows.length === 0 ? (
+              <p className="text-[12px] text-ink-subtle">
+                Aucune recette enregistrée.
+              </p>
+            ) : (
+              <div className="space-y-1">
+                {recipeRows.map((row) => (
+                  <div
+                    key={row.id}
+                    className="flex flex-wrap items-center justify-between gap-2 text-[12px] text-zinc-700"
+                  >
+                    <p>
+                      {(productNameById.get(row.productId) ?? 'Produit')} {'->'}{' '}
+                      {(ingredientNameById.get(row.ingredientId) ?? 'Ingrédient')} : {row.qtyPerUnit}
+                    </p>
+                    <div className="flex gap-1">
+                      <Button size="sm" variant="ghost" onClick={() => startEditRecipeRow(row.id)}>
+                        Modifier
+                      </Button>
+                      <Button size="sm" variant="ghost" onClick={() => void removeRecipeRow(row.id)}>
+                        Supprimer
+                      </Button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
           </CardContent>
         </Card>
       ) : null}

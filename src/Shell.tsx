@@ -37,6 +37,7 @@ import type {
   Product,
   ProductWithStock,
   Sale,
+  TicketInvoice,
   DiningTableStatus,
 } from './db/types'
 import {
@@ -61,12 +62,46 @@ import {
   formatLastSyncRelative,
   getLastSyncTimestamp,
 } from './lib/syncMeta'
+import { saleLocalYmd } from './lib/salesStats'
 import { flushSyncQueue } from './lib/sync'
-import { getDeviceConnectivityDemo } from './lib/integrationsConfig'
+import {
+  getDeviceConnectivityDemo,
+  getKitchenStationDemo,
+  isKitchenModuleDemoOn,
+} from './lib/integrationsConfig'
 import { Tabs } from './ui/Tabs'
 import { Button } from './ui/Button'
 import { useToast } from './ui/Toast'
 import { IconArrowRight, IconReceipt, IconShield } from './ui/icons'
+
+const DEBUG_LOG_ENDPOINT =
+  'http://127.0.0.1:27772/ingest/cd30ae75-d94c-4f4b-a62c-8232a969c0d0'
+
+function debugLog(
+  location: string,
+  message: string,
+  hypothesisId: string,
+  data: Record<string, unknown>,
+): void {
+  // #region agent log
+  fetch(DEBUG_LOG_ENDPOINT, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'X-Debug-Session-Id': '5007b8',
+    },
+    body: JSON.stringify({
+      sessionId: '5007b8',
+      runId: 'run1',
+      hypothesisId,
+      location,
+      message,
+      data,
+      timestamp: Date.now(),
+    }),
+  }).catch(() => {})
+  // #endregion
+}
 
 type Props = {
   staff: StaffProfile
@@ -224,10 +259,15 @@ export function Shell({ staff, online, onLogout }: Props) {
   const [receiptOpen, setReceiptOpen] = useState<
     | { type: 'sale'; sale: Sale; autoPrint: boolean }
     | { type: 'onlineOrder'; order: OnlineOrder; autoPrint: boolean }
+    | { type: 'ticketInvoice'; ticketInvoice: TicketInvoice; autoPrint: boolean }
     | null
   >(null)
   const [syncMetaTick, setSyncMetaTick] = useState(0)
   const [syncBusy, setSyncBusy] = useState(false)
+  const [pendingLeaveCartUntil, setPendingLeaveCartUntil] = useState(0)
+  const [pendingCancelCartUntil, setPendingCancelCartUntil] = useState(0)
+  const [pendingCashDrawerBypassUntil, setPendingCashDrawerBypassUntil] = useState(0)
+  const [pendingCheckoutUntil, setPendingCheckoutUntil] = useState(0)
   const [deviceConnectivity, setDeviceConnectivity] = useState(() =>
     getDeviceConnectivityDemo(),
   )
@@ -273,6 +313,11 @@ export function Shell({ staff, online, onLogout }: Props) {
       [],
     ) ?? []
   const promotions = useLiveQuery(() => db.promotions.toArray(), [], []) ?? []
+  const dayClosureToday = useLiveQuery(
+    () => db.dayClosures.get(saleLocalYmd(Date.now())),
+    [],
+    undefined,
+  )
   const loyaltyCustomers =
     useLiveQuery(() => db.loyaltyCustomers.toArray(), [], []) ?? []
 
@@ -401,11 +446,18 @@ export function Shell({ staff, online, onLogout }: Props) {
       if (activeView !== 'caisse') return true
       if (targetView === 'caisse') return true
       if (cartItemCount === 0) return true
-      return window.confirm(
-        'Un panier est en cours. Quitter la caisse sans encaisser ?',
-      )
+      const now = new Date().getTime()
+      if (now > pendingLeaveCartUntil) {
+        setPendingLeaveCartUntil(now + 7000)
+        toast.warning(
+          'Panier en cours',
+          'Cliquez encore pour quitter la caisse sans encaisser (7s).',
+        )
+        return false
+      }
+      return true
     },
-    [activeView, cartItemCount],
+    [activeView, cartItemCount, pendingLeaveCartUntil, toast],
   )
 
   const handleSelectView = useCallback(
@@ -645,17 +697,16 @@ export function Shell({ staff, online, onLogout }: Props) {
 
   const handleCancelCartTransaction = useCallback(async () => {
     if (cart.length === 0) return
-    if (
-      !window.confirm(
-        'Annuler la transaction en cours ? Le panier sera vidé et l’opération sera consignée dans le journal d’audit.',
+    const now = new Date().getTime()
+    if (now > pendingCancelCartUntil) {
+      setPendingCancelCartUntil(now + 7000)
+      toast.warning(
+        'Confirmer annulation',
+        'Cliquez encore sur annuler transaction dans les 7 secondes.',
       )
-    ) {
       return
     }
-    const reason =
-      window.prompt(
-        'Motif (recommandé pour l’audit) — Entrée pour valider, Annuler pour laisser vide :',
-      ) ?? ''
+    const reason = ''
     try {
       await logCartCancellation({
         actor: {
@@ -674,6 +725,7 @@ export function Shell({ staff, online, onLogout }: Props) {
         },
       })
       toast.info('Transaction annulée', 'Consignée dans le journal d’audit')
+      setPendingCancelCartUntil(0)
     } catch (e) {
       toast.error(
         'Échec de l’annulation',
@@ -682,7 +734,7 @@ export function Shell({ staff, online, onLogout }: Props) {
       return
     }
     handleClear()
-  }, [cart, discountPct, staff.displayName, staff.id, handleClear, toast])
+  }, [cart, discountPct, staff.displayName, staff.id, handleClear, pendingCancelCartUntil, toast])
 
   const handleApplyPromo = useCallback(() => {
     const c = promoInput.trim().toUpperCase()
@@ -844,6 +896,30 @@ export function Shell({ staff, online, onLogout }: Props) {
 
   const handleCheckout = useCallback(async () => {
     if (cart.length === 0) return
+    const now = new Date()
+    const todayYmd = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
+    const dayClosure = await db.dayClosures.get(todayYmd)
+    debugLog(
+      'src/Shell.tsx:handleCheckout:entry',
+      'Checkout attempt while day closure state is evaluated',
+      'H3',
+      {
+        todayYmd,
+        hasDayClosureRow: !!dayClosure,
+        isClosed: !!dayClosure?.closedAt,
+        activeStoreId,
+        staffRole: staff.role,
+        cartLines: cart.length,
+        payableTotalTTC,
+      },
+    )
+    if (dayClosure?.closedAt) {
+      toast.error(
+        'Journée clôturée',
+        'Réouvrez la journée dans le journal de caisse pour encaisser à nouveau.',
+      )
+      return
+    }
     if (discountPct > perms.maxDiscountPct) {
       toast.error(
         'Remise non autorisée',
@@ -865,22 +941,26 @@ export function Shell({ staff, online, onLogout }: Props) {
       return
     }
     if (payCheck.split.cash > 0 && !deviceConnectivity.cashDrawer) {
-      const proceed = window.confirm(
-        'Tiroir-caisse désactivé. Continuer l’encaissement en espèces malgré tout ?',
+      toast.warning(
+        'Tiroir-caisse désactivé',
+        'Encaissement poursuivi en un clic.',
       )
-      if (!proceed) return
     }
-    if (
-      !window.confirm(
-        confirmCheckoutSummary(checkoutPayment, payCheck, totalR),
-      )
-    ) {
+    toast.info(
+      'Encaissement en cours',
+      confirmCheckoutSummary(checkoutPayment, payCheck, totalR),
+    )
+    if (checkoutBusy) {
       return
     }
 
     const saleId = crypto.randomUUID()
     const createdAt = Date.now()
     const storeName = activeStore?.name
+    const selectedTable = selectedTableId
+      ? diningTables.find((t) => t.id === selectedTableId)
+      : null
+    const kitchenEnabled = isKitchenModuleDemoOn()
 
     setCheckoutBusy(true)
     try {
@@ -907,6 +987,8 @@ export function Shell({ staff, online, onLogout }: Props) {
         synced: false,
         storeId: activeStoreId,
         storeName,
+        tableId: selectedTable?.id,
+        tableName: selectedTable?.name,
         cashierProfileId: staff.id,
         cashierDisplayName: staff.displayName,
         promoCode:
@@ -929,6 +1011,10 @@ export function Shell({ staff, online, onLogout }: Props) {
           db.storeStocks,
           db.promotions,
           db.diningTables,
+          db.onlineOrders,
+          db.kitchenIngredients,
+          db.kitchenIngredientStocks,
+          db.productRecipeIngredients,
           db.loyaltyCustomers,
           db.loyaltyTransactions,
         ],
@@ -956,7 +1042,84 @@ export function Shell({ staff, online, onLogout }: Props) {
             })
           }
 
+          // Déduction stock ingrédients cuisine (recettes par produit).
+          const recipeRows = await db.productRecipeIngredients.toArray()
+          const ingredientUsage = new Map<string, number>()
+          for (const line of cart) {
+            const rows = recipeRows.filter((r) => r.productId === line.productId)
+            for (const row of rows) {
+              const used = row.qtyPerUnit * line.qty
+              ingredientUsage.set(
+                row.ingredientId,
+                (ingredientUsage.get(row.ingredientId) ?? 0) + used,
+              )
+            }
+          }
+          for (const [ingredientId, usedQty] of ingredientUsage.entries()) {
+            const ingredient = await db.kitchenIngredients.get(ingredientId)
+            if (!ingredient || ingredient.archived) continue
+            const stockId = `${activeStoreId}:${ingredientId}`
+            const stockRow = await db.kitchenIngredientStocks.get(stockId)
+            const currentStock = stockRow?.stock ?? 0
+            if (currentStock < usedQty) {
+              throw new Error(
+                `Stock cuisine insuffisant pour « ${ingredient.name} » (disponible: ${currentStock}${ingredient.unit}).`,
+              )
+            }
+          }
+          for (const [ingredientId, usedQty] of ingredientUsage.entries()) {
+            const ingredient = await db.kitchenIngredients.get(ingredientId)
+            if (!ingredient || ingredient.archived) continue
+            const stockId = `${activeStoreId}:${ingredientId}`
+            const stockRow = await db.kitchenIngredientStocks.get(stockId)
+            const currentStock = stockRow?.stock ?? 0
+            await db.kitchenIngredientStocks.put({
+              id: stockId,
+              storeId: activeStoreId,
+              ingredientId,
+              stock: currentStock - usedQty,
+            })
+          }
+
           await db.sales.add(saleRecord)
+
+          if (kitchenEnabled) {
+            const table = selectedTableId
+              ? await db.diningTables.get(selectedTableId)
+              : null
+            const tableLabel = table?.name
+              ? `Table ${table.name}`
+              : 'Vente caisse'
+            const kitchenOrderId = crypto.randomUUID()
+            await db.onlineOrders.put({
+              id: kitchenOrderId,
+              createdAt,
+              storeId: activeStoreId,
+              storeName,
+              customerName: tableLabel,
+              customerNote: `Commande sur place · Encaissement ${saleId.slice(0, 8).toUpperCase()}`,
+              paymentMethod: saleRecord.paymentMethod,
+              lines: saleRecord.lines,
+              subtotalHT: saleRecord.subtotalHT,
+              tva: saleRecord.tva,
+              totalTTC: saleRecord.totalTTC,
+              discountPct: saleRecord.discountPct || undefined,
+              promoCode: saleRecord.promoCode,
+              fulfillmentMode: 'pickup',
+              status: 'approved',
+              sourcePlatform: 'native',
+              externalOrderRef: `onsite-${saleId.slice(0, 8).toUpperCase()}`,
+              reviewedAt: createdAt,
+              reviewedByProfileId: staff.id,
+              reviewedByDisplayName: staff.displayName,
+              kitchenStatus: 'queued',
+              kitchenPriority: 'normal',
+              kitchenStation: getKitchenStationDemo(),
+              kitchenTicketCode: `K-${kitchenOrderId.slice(0, 6).toUpperCase()}`,
+              kitchenUpdatedAt: createdAt,
+              stockDeductedAt: createdAt,
+            })
+          }
 
           if (appliedPromotionId) {
             const promo = await db.promotions.get(appliedPromotionId)
@@ -1055,6 +1218,8 @@ export function Shell({ staff, online, onLogout }: Props) {
         'Vente enregistrée',
         `${formatFCFA(totals.totalTTC)} encaissés`,
       )
+      setPendingCashDrawerBypassUntil(0)
+      setPendingCheckoutUntil(0)
 
       if (online) {
         const r = await flushSyncQueue()
@@ -1074,6 +1239,7 @@ export function Shell({ staff, online, onLogout }: Props) {
     discountPct,
     perms.maxDiscountPct,
     checkoutPayment,
+    checkoutBusy,
     online,
     staff,
     refreshSyncMeta,
@@ -1082,9 +1248,12 @@ export function Shell({ staff, online, onLogout }: Props) {
     deviceConnectivity.cashDrawer,
     deviceConnectivity.receiptPrinters,
     deviceConnectivity.paymentTerminals,
+    pendingCashDrawerBypassUntil,
+    pendingCheckoutUntil,
     toast,
     appliedPromotionId,
     selectedTableId,
+    diningTables,
     payableTotalTTC,
     promotions,
     activeLoyaltyCustomer,
@@ -1099,6 +1268,8 @@ export function Shell({ staff, online, onLogout }: Props) {
   }, [onLogout])
 
   const isCaisse = activeView === 'caisse'
+  const canAddProductFromCaisse =
+    staff.role !== 'caissier' && perms.canManageCatalogFull
   const cartHideClass = 'lg:hidden'
   const cartDesktopClass = 'hidden lg:flex'
   const densityTabs = useMemo(
@@ -1116,7 +1287,9 @@ export function Shell({ staff, online, onLogout }: Props) {
           source={
             receiptOpen.type === 'sale'
               ? { kind: 'sale', sale: receiptOpen.sale }
-              : { kind: 'onlineOrder', order: receiptOpen.order }
+              : receiptOpen.type === 'onlineOrder'
+                ? { kind: 'onlineOrder', order: receiptOpen.order }
+                : { kind: 'ticketInvoice', ticketInvoice: receiptOpen.ticketInvoice }
           }
           autoPrint={receiptOpen.autoPrint}
           onClose={() => setReceiptOpen(null)}
@@ -1204,7 +1377,7 @@ export function Shell({ staff, online, onLogout }: Props) {
                 search={search}
                 onSearchChange={setSearch}
                 onAddProduct={
-                  perms.canManageCatalogFull
+                  canAddProductFromCaisse
                     ? () => setAddProductOpen(true)
                     : undefined
                 }
@@ -1264,6 +1437,7 @@ export function Shell({ staff, online, onLogout }: Props) {
                   id: t.id,
                   name: t.name,
                   status: tableStatusLabel(t.status),
+                  statusCode: t.status,
                 }))}
                 selectedTableId={selectedTableId}
                 onSelectedTableIdChange={setSelectedTableId}
@@ -1286,6 +1460,7 @@ export function Shell({ staff, online, onLogout }: Props) {
                 onCancelTransaction={handleCancelCartTransaction}
                 onCheckout={handleCheckout}
                 checkoutBusy={checkoutBusy}
+                dayClosed={!!dayClosureToday?.closedAt}
               />
             </div>
           </div>
@@ -1301,6 +1476,11 @@ export function Shell({ staff, online, onLogout }: Props) {
               {activeView === 'dash' ? (
                 <DashboardView
                   onOpenOnlineOrders={() => handleSelectView('onlineOrders')}
+                  onOpenTicketsFactures={
+                    staff.role === 'admin'
+                      ? () => handleSelectView('ticketsFactures')
+                      : undefined
+                  }
                 />
               ) : null}
               {activeView === 'catalogue' ? (
@@ -1340,7 +1520,7 @@ export function Shell({ staff, online, onLogout }: Props) {
                 <TablesManagementView
                   activeStoreId={activeStoreId}
                   activeStoreLabel={activeStore?.name ?? 'Magasin'}
-                  canManageTables={perms.canManageStocks}
+                  canManageTables={perms.canManageStocks || staff.role === 'caissier'}
                 />
               ) : null}
               {activeView === 'promotions' ? (
@@ -1353,13 +1533,33 @@ export function Shell({ staff, online, onLogout }: Props) {
                 <LoyaltyProgramView canManageLoyalty={perms.canEditPrices} />
               ) : null}
               {activeView === 'kitchen' ? (
-                <KitchenView activeStoreId={activeStoreId} />
+                <KitchenView
+                  activeStoreId={activeStoreId}
+                  canManageKitchenActions={staff.role !== 'caissier'}
+                />
               ) : null}
               {activeView === 'ticketsFactures' ? (
                 <TicketsFacturesView
                   activeStoreId={activeStoreId}
                   activeStoreLabel={activeStore?.name ?? 'Magasin'}
                   actor={{ id: staff.id, displayName: staff.displayName }}
+                  canViewAllDocuments={staff.role === 'admin' || staff.role === 'gerant'}
+                  onViewReceipt={(ticketInvoice) =>
+                    setReceiptOpen({
+                      type: 'ticketInvoice',
+                      ticketInvoice,
+                      autoPrint: false,
+                    })
+                  }
+                  onPrintReceipt={(ticketInvoice) =>
+                    {
+                      setReceiptOpen({
+                        type: 'ticketInvoice',
+                        ticketInvoice,
+                        autoPrint: true,
+                      })
+                    }
+                  }
                 />
               ) : null}
               {activeView === 'onlineOrders' ? (
@@ -1369,7 +1569,9 @@ export function Shell({ staff, online, onLogout }: Props) {
                   activeStoreLabel={activeStore?.name ?? 'Magasin'}
                   canSwitchStore={canSwitchStore}
                   canValidateOnlineOrders={
-                    staff.role === 'gerant' || staff.role === 'admin'
+                    staff.role === 'gerant' ||
+                    staff.role === 'admin' ||
+                    staff.role === 'caissier'
                   }
                   reviewer={{
                     id: staff.id,
@@ -1383,11 +1585,13 @@ export function Shell({ staff, online, onLogout }: Props) {
               {activeView === 'journal' ? (
                 <JournalReportView
                   canDailyClosure={perms.canDailyClosure}
+                  canReopenDay={staff.role === 'admin'}
                   canProcessRefunds={perms.canProcessRefunds}
                   currentProfile={{
                     id: staff.id,
                     displayName: staff.displayName,
                   }}
+                  currentRole={staff.role}
                   onViewReceipt={(sale) =>
                     setReceiptOpen({ type: 'sale', sale, autoPrint: false })
                   }
@@ -1494,6 +1698,7 @@ export function Shell({ staff, online, onLogout }: Props) {
                         id: t.id,
                         name: t.name,
                         status: tableStatusLabel(t.status),
+                        statusCode: t.status,
                       }))}
                       selectedTableId={selectedTableId}
                       onSelectedTableIdChange={setSelectedTableId}
@@ -1517,6 +1722,7 @@ export function Shell({ staff, online, onLogout }: Props) {
                       onCheckout={handleCheckout}
                       checkoutBusy={checkoutBusy}
                       onClose={() => setIsFloatingCartOpen(false)}
+                      dayClosed={!!dayClosureToday?.closedAt}
                     />
                   </div>
                 </div>

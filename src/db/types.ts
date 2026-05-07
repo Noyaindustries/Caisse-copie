@@ -37,6 +37,31 @@ export interface StoreStock {
   stock: number
 }
 
+export type KitchenStockUnit = 'kg' | 'g' | 'l' | 'ml' | 'piece'
+
+export interface KitchenIngredient {
+  id: string
+  name: string
+  unit: KitchenStockUnit
+  lowStockThreshold: number
+  archived?: boolean
+}
+
+export interface KitchenIngredientStock {
+  id: string
+  storeId: string
+  ingredientId: string
+  stock: number
+}
+
+/** Quantité d'ingrédient consommée par 1 unité de produit vendu. */
+export interface ProductRecipeIngredient {
+  id: string
+  productId: string
+  ingredientId: string
+  qtyPerUnit: number
+}
+
 export interface StockLocation {
   id: string
   storeId: string
@@ -212,6 +237,8 @@ export interface TicketInvoice {
   linkedSaleId?: string
   createdByProfileId?: string
   createdByDisplayName?: string
+  updatedByProfileId?: string
+  updatedByDisplayName?: string
 }
 
 export interface TerminalNode {
@@ -357,6 +384,16 @@ export interface OnlineOrder {
   reviewedByProfileId?: string
   reviewedByDisplayName?: string
   reviewNote?: string
+  /** Message destiné au client (SMS/WhatsApp/canal externe). */
+  customerMessage?: string
+  /** Note interne visible uniquement par l’équipe. */
+  internalMessage?: string
+  messageUpdatedAt?: number
+  messageUpdatedByProfileId?: string
+  messageUpdatedByDisplayName?: string
+  customerNotifiedAt?: number
+  customerNotificationStatus?: 'sent' | 'failed'
+  customerNotificationError?: string
   deliveryStatus?: DeliveryStatus
   deliveryProvider?: string
   deliveryTrackingCode?: string
@@ -369,6 +406,18 @@ export interface OnlineOrder {
   kitchenStation?: string
   kitchenTicketCode?: string
   kitchenUpdatedAt?: number
+  /** Horodatage de la déduction de stock liée à la préparation cuisine. */
+  stockDeductedAt?: number
+}
+
+export interface OnlineOrderMessage {
+  id: string
+  orderId: string
+  createdAt: number
+  authorProfileId: string
+  authorDisplayName: string
+  customerMessage?: string
+  internalMessage?: string
 }
 
 export interface Sale {
@@ -394,6 +443,9 @@ export interface Sale {
   /** Magasin où la vente a été enregistrée. */
   storeId?: string
   storeName?: string
+  /** Table associée à la vente (service sur place). */
+  tableId?: string
+  tableName?: string
   /** Utilisateur connecté au moment de la vente (reçu / rapport). */
   cashierProfileId?: string
   cashierDisplayName?: string
@@ -429,6 +481,9 @@ export type AuditEventKind =
   | 'stock_adjusted'
   | 'stock_transfer'
   | 'time_punch'
+  | 'ticket_invoice_updated'
+  | 'day_closure'
+  | 'day_reopen'
 
 export interface AuditEvent {
   id: string

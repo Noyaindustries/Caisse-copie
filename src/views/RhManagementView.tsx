@@ -26,6 +26,7 @@ function statusLabel(s: HrRequestStatus): string {
 }
 
 export function RhManagementView({ actor, canReview }: Props) {
+  const nowTs = new Date().getTime()
   const { activeStoreId } = useActiveStore()
   const toast = useToast()
   const [staffProfileId, setStaffProfileId] = useState(actor.id)
@@ -34,6 +35,8 @@ export function RhManagementView({ actor, canReview }: Props) {
   const [endDate, setEndDate] = useState('')
   const [amountFCFA, setAmountFCFA] = useState('')
   const [reason, setReason] = useState('')
+  const [pendingRejectId, setPendingRejectId] = useState<string | null>(null)
+  const [pendingRejectUntil, setPendingRejectUntil] = useState(0)
 
   const profiles = useMemo(() => listStaffProfiles(), [])
   const punches = useLiveQuery(() => db.timePunches.orderBy('createdAt').reverse().limit(2000).toArray(), [], []) ?? []
@@ -43,7 +46,7 @@ export function RhManagementView({ actor, canReview }: Props) {
     const pending = requests.filter((r) => r.status === 'pending').length
     const approved = requests.filter((r) => r.status === 'approved').length
     const absentToday = new Set<string>()
-    const today = saleLocalYmd(Date.now())
+    const today = saleLocalYmd(nowTs)
     const byProfile = new Map<string, TimePunch[]>()
     for (const p of punches) {
       const arr = byProfile.get(p.profileId) ?? []
@@ -55,7 +58,7 @@ export function RhManagementView({ actor, canReview }: Props) {
       if (rows.length === 0) absentToday.add(profile.id)
     }
     return { pending, approved, absentToday: absentToday.size }
-  }, [requests, punches, profiles])
+  }, [requests, punches, profiles, nowTs])
 
   const createRequest = async (): Promise<void> => {
     if (!reason.trim()) {
@@ -91,26 +94,28 @@ export function RhManagementView({ actor, canReview }: Props) {
     id: string,
     status: Exclude<HrRequestStatus, 'pending'>,
   ): Promise<void> => {
-    const promptText =
-      status === 'approved'
-        ? 'Commentaire de validation (optionnel) :'
-        : 'Motif du refus (recommandé) :'
-    const raw = window.prompt(promptText)
-    if (raw === null) return
-    const reviewNote = raw.trim() || undefined
-    if (status === 'rejected' && !reviewNote) {
-      const ok = window.confirm(
-        'Aucun motif saisi. Enregistrer le rejet sans commentaire ?',
+    const now = new Date().getTime()
+    if (status === 'rejected' && (pendingRejectId !== id || now > pendingRejectUntil)) {
+      setPendingRejectId(id)
+      setPendingRejectUntil(now + 7000)
+      toast.warning(
+        'Confirmer le rejet',
+        'Cliquez encore sur "Rejeter" dans les 7 secondes.',
       )
-      if (!ok) return
+      return
     }
+    const reviewNote = undefined
     await db.hrRequests.update(id, {
       status,
-      reviewedAt: Date.now(),
+      reviewedAt: new Date().getTime(),
       reviewedByProfileId: actor.id,
       reviewedByDisplayName: actor.displayName,
       reviewNote,
     })
+    if (status === 'rejected') {
+      setPendingRejectId(null)
+      setPendingRejectUntil(0)
+    }
     toast.success(status === 'approved' ? 'Demande approuvée' : 'Demande rejetée')
   }
 

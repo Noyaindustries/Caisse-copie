@@ -3,7 +3,9 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { RefundSaleModal } from '../components/RefundSaleModal'
 import { db } from '../db/db'
 import type { AuditEvent, AuditEventKind, Sale } from '../db/types'
+import type { UserRole } from '../auth/types'
 import { downloadTextFile, toCsvSemicolon } from '../lib/analyticsExport'
+import { appendAuditEvent } from '../lib/auditLog'
 import { formatFCFA } from '../lib/money'
 import { paymentMethodShortLabel } from '../lib/paymentDisplay'
 import { saleFullyRefunded, saleNetTTC } from '../lib/refundMath'
@@ -32,6 +34,35 @@ import {
   IconRefund,
 } from '../ui/icons'
 
+const DEBUG_LOG_ENDPOINT =
+  'http://127.0.0.1:27772/ingest/cd30ae75-d94c-4f4b-a62c-8232a969c0d0'
+
+function debugLog(
+  location: string,
+  message: string,
+  hypothesisId: string,
+  data: Record<string, unknown>,
+): void {
+  // #region agent log
+  fetch(DEBUG_LOG_ENDPOINT, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'X-Debug-Session-Id': '5007b8',
+    },
+    body: JSON.stringify({
+      sessionId: '5007b8',
+      runId: 'run1',
+      hypothesisId,
+      location,
+      message,
+      data,
+      timestamp: Date.now(),
+    }),
+  }).catch(() => {})
+  // #endregion
+}
+
 function auditKindLabel(k: AuditEventKind): string {
   switch (k) {
     case 'cart_cancelled':
@@ -46,6 +77,12 @@ function auditKindLabel(k: AuditEventKind): string {
       return 'Transfert'
     case 'time_punch':
       return 'Pointage'
+    case 'ticket_invoice_updated':
+      return 'Ticket/Facture modifié'
+    case 'day_closure':
+      return 'Clôture journalière'
+    case 'day_reopen':
+      return 'Réouverture journalière'
     default:
       return k
   }
@@ -94,6 +131,18 @@ function auditPayloadSummary(ev: AuditEvent): string | null {
       }
       return bits || null
     }
+    if (ev.kind === 'ticket_invoice_updated') {
+      const ref = o.reference
+      const statusBefore = o.statusBefore
+      const statusAfter = o.statusAfter
+      const totalBefore = o.totalBefore
+      const totalAfter = o.totalAfter
+      const refPart = typeof ref === 'string' ? ref : 'Document'
+      if (typeof totalBefore === 'number' && typeof totalAfter === 'number') {
+        return `${refPart} · ${formatFCFA(totalBefore)} -> ${formatFCFA(totalAfter)} · ${String(statusBefore ?? '?')} -> ${String(statusAfter ?? '?')}`
+      }
+      return refPart
+    }
     return null
   } catch {
     return null
@@ -102,20 +151,24 @@ function auditPayloadSummary(ev: AuditEvent): string | null {
 
 type Props = {
   canDailyClosure: boolean
+  canReopenDay: boolean
   canProcessRefunds: boolean
   currentProfile: { id: string; displayName: string }
+  currentRole: UserRole
   onViewReceipt: (sale: Sale) => void
 }
 
 export function JournalReportView({
   canDailyClosure,
+  canReopenDay,
   canProcessRefunds,
   currentProfile,
+  currentRole,
   onViewReceipt,
 }: Props) {
   const toast = useToast()
   const sales = useLiveQuery(() => db.sales.toArray(), [], []) ?? []
-  const auditEvents =
+  const allAuditEvents =
     useLiveQuery(
       () => db.auditEvents.orderBy('createdAt').reverse().limit(120).toArray(),
       [],
@@ -124,7 +177,28 @@ export function JournalReportView({
   const todayYmd = saleLocalYmd(Date.now())
   const dayRow = useLiveQuery(() => db.dayClosures.get(todayYmd), [todayYmd])
 
-  const today = useMemo(() => filterSalesToday(sales), [sales])
+  const today = useMemo(
+    () =>
+      filterSalesToday(sales).filter(
+        (sale) =>
+          sale.cashierProfileId === currentProfile.id ||
+          (!sale.cashierProfileId &&
+            sale.cashierDisplayName === currentProfile.displayName),
+      ),
+    [sales, currentProfile.id, currentProfile.displayName],
+  )
+  const auditEvents = useMemo(
+    () =>
+      allAuditEvents.filter((ev) => ev.actorProfileId === currentProfile.id),
+    [allAuditEvents, currentProfile.id],
+  )
+  const closureHistory = useMemo(
+    () =>
+      allAuditEvents
+        .filter((ev) => ev.kind === 'day_closure' || ev.kind === 'day_reopen')
+        .slice(0, 40),
+    [allAuditEvents],
+  )
   const total = useMemo(() => sumTotalTTC(today), [today])
   const breakdown = useMemo(() => paymentBreakdown(today), [today])
   const payStats = useMemo(() => paymentStatsByMethod(today), [today])
@@ -161,6 +235,8 @@ export function JournalReportView({
   const [closureNote, setClosureNote] = useState('')
   const [busy, setBusy] = useState(false)
   const [refundSale, setRefundSale] = useState<Sale | null>(null)
+  const [pendingClosureUntil, setPendingClosureUntil] = useState(0)
+  const [pendingReopenUntil, setPendingReopenUntil] = useState(0)
 
   useEffect(() => {
     if (dayRow) setOpeningEdit(String(dayRow.openingFloat))
@@ -204,11 +280,26 @@ export function JournalReportView({
 
   const performClosure = useCallback(async () => {
     if (!canDailyClosure || isClosed) return
-    if (
-      !window.confirm(
-        'Clôturer la journée ? Les totaux affichés seront figés pour cette date.',
+    debugLog(
+      'src/views/JournalReportView.tsx:performClosure:entry',
+      'Closure attempt started',
+      'H1',
+      {
+        canDailyClosure,
+        isClosed,
+        pendingClosureUntil,
+        salesCount: today.length,
+        openingFloat: dayRow?.openingFloat ?? 0,
+        countedEdit,
+      },
+    )
+    const now = new Date().getTime()
+    if (now > pendingClosureUntil) {
+      setPendingClosureUntil(now + 7000)
+      toast.warning(
+        'Confirmer la clôture',
+        'Cliquez encore sur "Clôturer la journée" dans les 7 secondes.',
       )
-    ) {
       return
     }
     const stats = paymentStatsByMethod(today)
@@ -220,8 +311,32 @@ export function JournalReportView({
       countedRaw === ''
         ? undefined
         : Number.parseInt(countedRaw.replace(/\s/g, ''), 10)
+    debugLog(
+      'src/views/JournalReportView.tsx:performClosure:computed',
+      'Computed closure financials',
+      'H2',
+      {
+        opening,
+        cashTot,
+        expected,
+        countedRaw,
+        counted: counted ?? null,
+        statsCashCount: stats.cash.count,
+        statsCardCount: stats.card.count,
+        statsMobileCount: stats.mobile.count,
+      },
+    )
     if (countedRaw !== '' && (!Number.isFinite(counted) || counted! < 0)) {
       toast.error('Montant compté invalide')
+      return
+    }
+    const cashDifference = counted !== undefined ? counted - expected : undefined
+    const noteTrim = closureNote.trim()
+    if (cashDifference !== undefined && cashDifference !== 0 && noteTrim.length < 4) {
+      toast.error(
+        'Justificatif requis',
+        'Ajoutez un commentaire (min. 4 caractères) quand il y a un écart de caisse.',
+      )
       return
     }
     setBusy(true)
@@ -245,14 +360,46 @@ export function JournalReportView({
         snapshotMobileCount: stats.mobile.count,
         expectedCashAtClose: expected,
         countedCash: counted,
-        cashDifference:
-          counted !== undefined ? counted - expected : undefined,
-        note: closureNote.trim() || undefined,
+        cashDifference,
+        note: noteTrim || undefined,
         closedByProfileId: currentProfile.id,
         closedByDisplayName: currentProfile.displayName,
       })
+      await appendAuditEvent({
+        kind: 'day_closure',
+        actor: {
+          profileId: currentProfile.id,
+          displayName: currentProfile.displayName,
+        },
+        reason:
+          noteTrim ||
+          (cashDifference === undefined || cashDifference === 0
+            ? 'Clôture quotidienne'
+            : 'Clôture avec écart justifié'),
+        payload: {
+          dateYmd: todayYmd,
+          expectedCashAtClose: expected,
+          countedCash: counted ?? null,
+          cashDifference: cashDifference ?? null,
+          ticketCount: today.length,
+          totalTTC: sumTotalTTC(today),
+        },
+      })
+      debugLog(
+        'src/views/JournalReportView.tsx:performClosure:saved',
+        'Day closure persisted',
+        'H1',
+        {
+          dateYmd: todayYmd,
+          closedByProfileId: currentProfile.id,
+          expectedCashAtClose: expected,
+          countedCash: counted ?? null,
+          snapshotTransactionCount: today.length,
+        },
+      )
       setCountedEdit('')
       setClosureNote('')
+      setPendingClosureUntil(0)
       toast.success('Journée clôturée')
     } finally {
       setBusy(false)
@@ -268,6 +415,56 @@ export function JournalReportView({
     currentProfile.id,
     currentProfile.displayName,
     toast,
+    pendingClosureUntil,
+  ])
+
+  const reopenDay = useCallback(async () => {
+    if (!canReopenDay || !isClosed) return
+    const now = Date.now()
+    if (now > pendingReopenUntil) {
+      setPendingReopenUntil(now + 7000)
+      toast.warning(
+        'Confirmer la réouverture',
+        'Cliquez encore sur "Réouvrir la journée" dans les 7 secondes.',
+      )
+      return
+    }
+    setBusy(true)
+    try {
+      const prev = await db.dayClosures.get(todayYmd)
+      if (!prev) return
+      await db.dayClosures.put({
+        dateYmd: prev.dateYmd,
+        openingFloat: prev.openingFloat,
+      })
+      await appendAuditEvent({
+        kind: 'day_reopen',
+        actor: {
+          profileId: currentProfile.id,
+          displayName: currentProfile.displayName,
+        },
+        reason: 'Réouverture de la journée',
+        payload: {
+          dateYmd: prev.dateYmd,
+          previousClosedAt: prev.closedAt ?? null,
+          previousExpectedCashAtClose: prev.expectedCashAtClose ?? null,
+          previousCountedCash: prev.countedCash ?? null,
+          previousCashDifference: prev.cashDifference ?? null,
+        },
+      })
+      setPendingReopenUntil(0)
+      toast.success('Journée réouverte')
+    } finally {
+      setBusy(false)
+    }
+  }, [
+    canReopenDay,
+    isClosed,
+    pendingReopenUntil,
+    toast,
+    todayYmd,
+    currentProfile.id,
+    currentProfile.displayName,
   ])
 
   const exportDayCsv = useCallback(() => {
@@ -297,12 +494,42 @@ export function JournalReportView({
     toast.success('Export journal prêt')
   }, [todayYmd, totalNet, ticketCount, avgTicket, today, toast])
 
+  const exportClosureHistoryCsv = useCallback(() => {
+    const rows: string[][] = [
+      ['Historique clôtures / réouvertures'],
+      ['Date export', new Date().toISOString()],
+      [],
+      ['Horodatage', 'Action', 'Acteur', 'Motif', 'Date caisse'],
+      ...closureHistory.map((ev) => {
+        let dateYmd = ''
+        try {
+          const p = JSON.parse(ev.payloadJson) as { dateYmd?: string }
+          dateYmd = p.dateYmd ?? ''
+        } catch {
+          dateYmd = ''
+        }
+        return [
+          new Date(ev.createdAt).toLocaleString('fr-FR'),
+          auditKindLabel(ev.kind),
+          ev.actorDisplayName,
+          ev.reason,
+          dateYmd,
+        ]
+      }),
+    ]
+    downloadTextFile(
+      `historique-clotures-${todayYmd}.csv`,
+      toCsvSemicolon(rows),
+    )
+    toast.success('Export historique prêt')
+  }, [closureHistory, todayYmd, toast])
+
   return (
     <div className="space-y-4 pb-6 sm:space-y-5">
       <PageHeader
         eyebrow="Rapport quotidien"
         title="Journal de caisse"
-        subtitle={`${dateStr.charAt(0).toUpperCase()}${dateStr.slice(1)} · Session #${SESSION_ID}`}
+        subtitle={`${dateStr.charAt(0).toUpperCase()}${dateStr.slice(1)} · ${currentProfile.displayName} · Session #${SESSION_ID}`}
         actions={
           <div className="flex flex-wrap gap-2">
             <Button
@@ -320,6 +547,14 @@ export function JournalReportView({
               className="w-full sm:w-auto"
             >
               Imprimer
+            </Button>
+            <Button
+              variant="secondary"
+              iconLeft={<IconDownload />}
+              onClick={exportClosureHistoryCsv}
+              className="w-full sm:w-auto"
+            >
+              Export historique
             </Button>
           </div>
         }
@@ -343,8 +578,21 @@ export function JournalReportView({
                 {dayRow.closedByDisplayName
                   ? ` · ${dayRow.closedByDisplayName}`
                   : ''}
+                {dayRow.closedByDisplayName
+                  ? ` (${currentRole === 'admin' ? 'admin' : currentRole})`
+                  : ''}
               </p>
             </div>
+            {canReopenDay ? (
+              <Button
+                size="sm"
+                variant="secondary"
+                loading={busy}
+                onClick={() => void reopenDay()}
+              >
+                Réouvrir la journée
+              </Button>
+            ) : null}
           </CardContent>
         </Card>
       ) : null}
@@ -527,10 +775,14 @@ export function JournalReportView({
 
         <SectionHeader
           title="Ventes du jour"
-          subtitle="Montants nets après remboursements"
+          subtitle="Montants nets après remboursements · profil connecté"
         />
         {today.length === 0 ? (
-          <EmptyState title="Aucune vente aujourd’hui" variant="flat" />
+          <EmptyState
+            title="Aucune vente aujourd’hui"
+            description="Aucune vente enregistrée pour ce profil."
+            variant="flat"
+          />
         ) : (
           <Table minWidth={700}>
             <THead>
@@ -655,6 +907,45 @@ export function JournalReportView({
                     </li>
                   )
                 })}
+              </ul>
+            </CardContent>
+          </Card>
+        )}
+
+        <SectionHeader
+          title="Historique clôtures / réouvertures"
+          subtitle="Traçabilité opérationnelle exportable"
+        />
+        {closureHistory.length === 0 ? (
+          <EmptyState title="Aucun historique" variant="flat" />
+        ) : (
+          <Card className="rounded-2xl">
+            <CardContent className="p-0!">
+              <ul className="divide-y divide-zinc-100">
+                {closureHistory.map((ev) => (
+                  <li key={ev.id} className="px-4 py-2.5 text-[12px]">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <span className="font-semibold text-zinc-800">
+                        {auditKindLabel(ev.kind)}
+                      </span>
+                      <time
+                        className="font-mono-nums text-[11px] text-zinc-500"
+                        dateTime={new Date(ev.createdAt).toISOString()}
+                      >
+                        {new Date(ev.createdAt).toLocaleString('fr-FR', {
+                          dateStyle: 'short',
+                          timeStyle: 'medium',
+                        })}
+                      </time>
+                    </div>
+                    <p className="mt-0.5 text-zinc-600">
+                      <span className="font-medium text-zinc-700">
+                        {ev.actorDisplayName}
+                      </span>{' '}
+                      — <span className="italic">« {ev.reason} »</span>
+                    </p>
+                  </li>
+                ))}
               </ul>
             </CardContent>
           </Card>

@@ -1,5 +1,5 @@
-import { useEffect, useMemo } from 'react'
-import type { OnlineOrder, Sale } from '../db/types'
+import { useCallback, useEffect, useMemo, useRef } from 'react'
+import type { OnlineOrder, Sale, TicketInvoice } from '../db/types'
 import { formatFCFA, vatSlicesFromLinesTTC } from '../lib/money'
 import {
   paymentMethodShortLabel,
@@ -14,6 +14,7 @@ import { IconPrinter } from '../ui/icons'
 export type ReceiptModalSource =
   | { kind: 'sale'; sale: Sale }
   | { kind: 'onlineOrder'; order: OnlineOrder }
+  | { kind: 'ticketInvoice'; ticketInvoice: TicketInvoice }
 
 type Props = {
   source: ReceiptModalSource
@@ -34,6 +35,24 @@ function syntheticSaleFromOnlineOrder(order: OnlineOrder): Sale {
     synced: false,
     storeId: order.storeId,
     storeName: order.storeName,
+  }
+}
+
+function syntheticSaleFromTicketInvoice(doc: TicketInvoice): Sale {
+  return {
+    id: doc.id,
+    createdAt: doc.createdAt,
+    lines: doc.lines,
+    subtotalHT: doc.subtotalHT,
+    tva: doc.tva,
+    totalTTC: doc.totalTTC,
+    discountPct: 0,
+    paymentMethod: 'cash',
+    synced: false,
+    storeId: doc.storeId,
+    storeName: doc.storeName,
+    cashierProfileId: doc.createdByProfileId,
+    cashierDisplayName: doc.createdByDisplayName,
   }
 }
 
@@ -62,34 +81,147 @@ function onlineOrderStatusLabel(status: OnlineOrder['status']): string {
 }
 
 export function ReceiptModal({ source, autoPrint = false, onClose }: Props) {
+  const autoPrintedReceiptRef = useRef<string | null>(null)
   const isOnline = source.kind === 'onlineOrder'
+  const isTicketInvoice = source.kind === 'ticketInvoice'
   const order = isOnline ? source.order : null
+  const ticketInvoice = isTicketInvoice ? source.ticketInvoice : null
   const sale = useMemo(
-    () =>
-      source.kind === 'sale' ? source.sale : syntheticSaleFromOnlineOrder(source.order),
+    () => {
+      if (source.kind === 'sale') return source.sale
+      if (source.kind === 'onlineOrder') return syntheticSaleFromOnlineOrder(source.order)
+      return syntheticSaleFromTicketInvoice(source.ticketInvoice)
+    },
     [source],
   )
 
-  const receiptKey = source.kind === 'sale' ? source.sale.id : source.order.id
+  const receiptKey =
+    source.kind === 'sale'
+      ? source.sale.id
+      : source.kind === 'onlineOrder'
+        ? source.order.id
+        : source.ticketInvoice.id
+  const dtLabel = useMemo(
+    () =>
+      new Date(sale.createdAt).toLocaleString('fr-FR', {
+        dateStyle: 'medium',
+        timeStyle: 'short',
+      }),
+    [sale.createdAt],
+  )
+  const amt = salePaymentAmounts(sale)
+  const vatSlices = vatSlicesFromLinesTTC(sale.lines, sale.discountPct)
+  const modalTitle = isOnline
+    ? 'Reçu commande en ligne'
+    : isTicketInvoice
+      ? ticketInvoice?.kind === 'facture'
+        ? 'Facture'
+        : 'Reçu'
+      : 'Reçu de vente'
+  const tagline = isOnline
+    ? 'Infinitecore Système · Commande web'
+    : isTicketInvoice
+      ? `Infinitecore Système · ${ticketInvoice?.kind === 'facture' ? 'Facture' : 'Ticket'}`
+      : 'Infinitecore Système · Ticket de caisse'
+
+  const printReceipt = useCallback(() => {
+    const printFrame = document.createElement('iframe')
+    printFrame.style.position = 'fixed'
+    printFrame.style.right = '0'
+    printFrame.style.bottom = '0'
+    printFrame.style.width = '0'
+    printFrame.style.height = '0'
+    printFrame.style.border = '0'
+    printFrame.setAttribute('aria-hidden', 'true')
+    document.body.appendChild(printFrame)
+    const frameWindow = printFrame.contentWindow
+    if (!frameWindow) {
+      printFrame.remove()
+      return
+    }
+    const linesHtml = sale.lines
+      .map(
+        (line) => `<tr>
+  <td style="padding:4px 0;">${line.name}<br/><span style="font-size:11px;color:#666;">${formatFCFA(line.unitPriceTTC)} × ${line.qty}</span></td>
+  <td style="padding:4px 0;text-align:right;white-space:nowrap;">${formatFCFA(line.unitPriceTTC * line.qty)}</td>
+</tr>`,
+      )
+      .join('')
+    const vatHtml = vatSlices
+      .map(
+        (s) => `<div style="display:flex;justify-content:space-between;font-size:12px;color:#555;">
+  <span>TVA ${s.ratePct} %</span><span>${formatFCFA(s.tva)}</span>
+</div>`,
+      )
+      .join('')
+    const receiptRef = (ticketInvoice?.reference ?? sale.id.slice(0, 8)).toUpperCase()
+    const clientBlock = ticketInvoice
+      ? `<div style="margin-top:8px;font-size:12px;">
+<div><strong>Référence :</strong> ${ticketInvoice.reference}</div>
+<div><strong>Client :</strong> ${ticketInvoice.customerName ?? 'Client comptoir'}</div>
+${ticketInvoice.customerPhone ? `<div><strong>Tél. :</strong> ${ticketInvoice.customerPhone}</div>` : ''}
+${ticketInvoice.notes ? `<div><strong>Note :</strong> ${ticketInvoice.notes}</div>` : ''}
+</div>`
+      : ''
+    frameWindow.document.open()
+    frameWindow.document.write(`<!doctype html>
+<html lang="fr">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Impression reçu</title>
+    <style>
+      html, body { background: #fff; color: #111; font-family: Arial, sans-serif; }
+      body { margin: 0; padding: 8mm; }
+      .row { display:flex; justify-content:space-between; font-size:12px; }
+    </style>
+  </head>
+  <body>
+    <section id="print-receipt">
+      <div style="text-align:center;border-bottom:1px dashed #999;padding-bottom:8px;">
+        <div style="font-size:11px;font-weight:700;letter-spacing:.08em;">${tagline}</div>
+        <div style="font-size:12px;color:#555;margin-top:4px;">${dtLabel}</div>
+        <div style="font-size:11px;color:#555;margin-top:2px;">Session #${SESSION_ID}</div>
+        <div style="font-size:12px;margin-top:4px;"><strong>Réf.</strong> ${receiptRef}</div>
+        ${sale.cashierDisplayName ? `<div style="font-size:12px;">Caissier : ${sale.cashierDisplayName}</div>` : ''}
+        ${sale.storeName ? `<div style="font-size:12px;">Point de vente : ${sale.storeName}</div>` : ''}
+        ${sale.tableName ? `<div style="font-size:12px;">Table : ${sale.tableName}</div>` : ''}
+        ${clientBlock}
+      </div>
+      <table style="width:100%;border-collapse:collapse;margin-top:8px;font-size:13px;">
+        <tbody>${linesHtml}</tbody>
+      </table>
+      <div style="margin-top:8px;border-top:1px dashed #999;padding-top:6px;">
+        <div class="row"><span>Sous-total HT</span><span>${formatFCFA(sale.subtotalHT)}</span></div>
+        ${vatHtml}
+        <div class="row" style="font-weight:700;font-size:14px;border-top:1px solid #ddd;padding-top:6px;margin-top:4px;">
+          <span>Total TTC</span><span>${formatFCFA(sale.totalTTC)}</span>
+        </div>
+      </div>
+    </section>
+  </body>
+</html>`)
+    frameWindow.document.close()
+    frameWindow.focus()
+    window.setTimeout(() => {
+      frameWindow.print()
+      window.setTimeout(() => {
+        printFrame.remove()
+      }, 300)
+    }, 300)
+  }, [dtLabel, sale, source.kind, tagline, ticketInvoice, vatSlices])
 
   useEffect(() => {
     if (!autoPrint) return
+    if (autoPrintedReceiptRef.current === receiptKey) {
+      return
+    }
+    autoPrintedReceiptRef.current = receiptKey
     const id = window.setTimeout(() => {
-      // L’impression automatique peut démarrer avant que le DOM soit totalement
-      // stabilisé (surtout la liste des lignes). On laisse un léger délai.
-      requestAnimationFrame(() => requestAnimationFrame(() => window.print()))
-    }, 450)
+      requestAnimationFrame(() => requestAnimationFrame(() => printReceipt()))
+    }, 900)
     return () => clearTimeout(id)
-  }, [autoPrint, receiptKey])
-
-  const dt = new Date(sale.createdAt)
-  const amt = salePaymentAmounts(sale)
-  const vatSlices = vatSlicesFromLinesTTC(sale.lines, sale.discountPct)
-
-  const modalTitle = isOnline ? 'Reçu commande en ligne' : 'Reçu de vente'
-  const tagline = isOnline
-    ? 'Infinitecore Système · Commande web'
-    : 'Infinitecore Système · Ticket de caisse'
+  }, [autoPrint, printReceipt, receiptKey])
 
   return (
     <Modal
@@ -97,7 +229,7 @@ export function ReceiptModal({ source, autoPrint = false, onClose }: Props) {
       onClose={onClose}
       size="md"
       title={modalTitle}
-      subtitle={`Réf. ${sale.id.slice(0, 8).toUpperCase()}`}
+      subtitle={`Réf. ${(ticketInvoice?.reference ?? sale.id.slice(0, 8)).toUpperCase()}`}
       footer={
         <>
           <Button variant="ghost" onClick={onClose}>
@@ -106,7 +238,7 @@ export function ReceiptModal({ source, autoPrint = false, onClose }: Props) {
           <Button
             variant="primary"
             iconLeft={<IconPrinter />}
-            onClick={() => window.print()}
+            onClick={printReceipt}
           >
             Imprimer
           </Button>
@@ -118,12 +250,7 @@ export function ReceiptModal({ source, autoPrint = false, onClose }: Props) {
           <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-zinc-700">
             {tagline}
           </p>
-          <p className="mt-1.5 font-mono-nums text-[12px] text-zinc-500">
-            {dt.toLocaleString('fr-FR', {
-              dateStyle: 'medium',
-              timeStyle: 'short',
-            })}
-          </p>
+          <p className="mt-1.5 font-mono-nums text-[12px] text-zinc-500">{dtLabel}</p>
           <p className="mt-1 font-mono-nums text-[10px] text-zinc-500">
             Session #{SESSION_ID}
           </p>
@@ -150,6 +277,44 @@ export function ReceiptModal({ source, autoPrint = false, onClose }: Props) {
               </p>
             </div>
           ) : null}
+          {ticketInvoice ? (
+            <div className="mt-2 space-y-1 rounded-lg bg-zinc-50 px-2 py-2 text-[11px] text-zinc-700">
+              <p>
+                <span className="text-zinc-500">Référence :</span>{' '}
+                <span className="font-semibold text-zinc-900">{ticketInvoice.reference}</span>
+              </p>
+              <p>
+                <span className="text-zinc-500">Client :</span>{' '}
+                <span className="font-semibold text-zinc-900">
+                  {ticketInvoice.customerName ?? 'Client comptoir'}
+                </span>
+              </p>
+              {ticketInvoice.customerPhone ? (
+                <p>
+                  <span className="text-zinc-500">Tél. :</span> {ticketInvoice.customerPhone}
+                </p>
+              ) : null}
+              {ticketInvoice.dueAt ? (
+                <p>
+                  <span className="text-zinc-500">Échéance :</span>{' '}
+                  {new Date(ticketInvoice.dueAt).toLocaleDateString('fr-FR')}
+                </p>
+              ) : null}
+              {ticketInvoice.notes ? (
+                <p>
+                  <span className="text-zinc-500">Note :</span> {ticketInvoice.notes}
+                </p>
+              ) : null}
+              {ticketInvoice.updatedByDisplayName ? (
+                <p>
+                  <span className="text-zinc-500">Modifié par :</span>{' '}
+                  <span className="font-semibold text-zinc-900">
+                    {ticketInvoice.updatedByDisplayName}
+                  </span>
+                </p>
+              ) : null}
+            </div>
+          ) : null}
           {sale.cashierDisplayName ? (
             <p className="mt-1 text-[11px] text-zinc-600">
               Caissier :{' '}
@@ -164,6 +329,12 @@ export function ReceiptModal({ source, autoPrint = false, onClose }: Props) {
               <span className="font-semibold text-zinc-800">
                 {sale.storeName}
               </span>
+            </p>
+          ) : null}
+          {sale.tableName ? (
+            <p className="text-[11px] text-zinc-600">
+              Table :{' '}
+              <span className="font-semibold text-zinc-800">{sale.tableName}</span>
             </p>
           ) : null}
         </header>
@@ -232,7 +403,8 @@ export function ReceiptModal({ source, autoPrint = false, onClose }: Props) {
           </div>
         </div>
 
-        <div className="rounded-lg border border-zinc-200 bg-zinc-50 p-3 text-[13px]">
+        {!isTicketInvoice ? (
+          <div className="rounded-lg border border-zinc-200 bg-zinc-50 p-3 text-[13px]">
           <p className="text-center text-[10px] font-semibold uppercase tracking-wide text-zinc-500">
             Paiement
           </p>
@@ -281,7 +453,8 @@ export function ReceiptModal({ source, autoPrint = false, onClose }: Props) {
               Réf. mobile : {sale.mobileMoneyReference}
             </p>
           ) : null}
-        </div>
+          </div>
+        ) : null}
 
         {order?.reviewedByDisplayName && order.status !== 'pending' ? (
           <p className="text-center text-[10px] text-zinc-500">
