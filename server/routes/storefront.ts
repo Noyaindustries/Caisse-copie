@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto'
-import { Router } from 'express'
+import { Router, type Request } from 'express'
 import { z } from 'zod'
 import { prisma } from '../lib/prisma.js'
 import { publicAppUrl } from '../lib/stripe.js'

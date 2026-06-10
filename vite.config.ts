@@ -56,9 +56,22 @@ export default defineConfig({
         globPatterns: [
           '**/*.{js,css,html,ico,svg,png,webp,woff2,woff,json,webmanifest}',
         ],
+        /* Images marketing lourdes (~2,3 Mo) : hors précache, cache à la visite */
+        globIgnores: ['**/marketing/**'],
         navigateFallback: 'index.html',
         navigateFallbackDenylist: [/^\/__/, /\.(?:png|jpg|jpeg|svg|gif|webp|ico)$/i],
         runtimeCaching: [
+          {
+            urlPattern: /\/marketing\/.+\.(?:png|jpg|jpeg|webp)$/i,
+            handler: 'CacheFirst',
+            options: {
+              cacheName: 'marketing-images',
+              expiration: {
+                maxEntries: 12,
+                maxAgeSeconds: 60 * 60 * 24 * 30,
+              },
+            },
+          },
           {
             urlPattern: /^https:\/\/fonts\.(googleapis|gstatic)\.com\/.*/i,
             handler: 'CacheFirst',
