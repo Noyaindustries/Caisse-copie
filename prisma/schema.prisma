@@ -36,3 +36,77 @@ model WebhookEvent {
   receivedAt DateTime @default(now())
   payload    Json
 }
+
+model Organization {
+  id                  String    @id @default(auto()) @map("_id") @db.ObjectId
+  name                String
+  email               String
+  passwordHash        String?
+  licenseKey          String    @unique
+  storeCode           String?   @unique
+  planId              String    @default("starter")
+  status              String    @default("trialing")
+  stripeCustomerId    String?
+  stripeSubId         String?
+  trialEndsAt         DateTime?
+  currentPeriodEnd    DateTime?
+  billingProvider     String?
+  billingPhone        String?
+  smsRemindersEnabled Boolean   @default(true)
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+  storefrontMenu        Json?
+  storefrontPublishedAt DateTime?
+  mobilePayments      MobileMoneyPayment[]
+  reminderLogs        SubscriptionReminderLog[]
+  storefrontOrders    StorefrontOrder[]
+}
+
+model StorefrontOrder {
+  id             String       @id @default(auto()) @map("_id") @db.ObjectId
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  organizationId String       @db.ObjectId
+  storeCode      String
+  externalId     String       @unique
+  status         String       @default("pending")
+  payload        Json
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  @@index([organizationId, status, createdAt])
+  @@index([storeCode, createdAt])
+}
+
+model SubscriptionReminderLog {
+  id             String       @id @default(auto()) @map("_id") @db.ObjectId
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  organizationId String       @db.ObjectId
+  kind           String
+  periodEnd      DateTime
+  phone          String
+  message        String?
+  status         String       @default("sent")
+  error          String?
+  sentAt         DateTime     @default(now())
+
+  @@unique([organizationId, kind, periodEnd])
+}
+
+model MobileMoneyPayment {
+  id             String       @id @default(auto()) @map("_id") @db.ObjectId
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  organizationId String       @db.ObjectId
+  planId         String
+  transactionId  String       @unique
+  channel        String
+  amountFcfa     Int
+  customerPhone  String
+  status         String       @default("pending")
+  paymentToken   String?
+  operatorId     String?
+  paymentMethod  String?
+  notifyPayload  Json?
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+  paidAt         DateTime?
+}

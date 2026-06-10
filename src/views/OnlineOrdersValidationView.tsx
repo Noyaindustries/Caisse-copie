@@ -1,6 +1,7 @@
-import { useLiveQuery } from 'dexie-react-hooks'
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useLiveQuery } from 'dexie-react-hooks'
 import { OnlineOrderMessageModal } from '../components/OnlineOrderMessageModal'
+import { useSubscription } from '../context/SubscriptionContext'
 import { db } from '../db/db'
 import type {
   OnlineOrder,
@@ -13,6 +14,7 @@ import { formatFCFA } from '../lib/money'
 import { sendOrderApprovedSms } from '../lib/onlineOrderSms'
 import { storeStockRowId } from '../lib/storeStockId'
 import { flushSyncQueue } from '../lib/sync'
+import { importStorefrontInbox } from '../lib/storefront/syncInbox'
 import {
   getDeliveryProviderDemo,
   getKitchenStationDemo,
@@ -136,6 +138,7 @@ export function OnlineOrdersValidationView({
   onPrintOrder,
 }: Props) {
   const toast = useToast()
+  const { subscription } = useSubscription()
   const orders = useLiveQuery(
     () => db.onlineOrders.orderBy('createdAt').reverse().toArray(),
     [],
@@ -155,6 +158,23 @@ export function OnlineOrdersValidationView({
     'delivery',
   )
   const [messageOrderId, setMessageOrderId] = useState<string | null>(null)
+
+  useEffect(() => {
+    if (!online || !subscription?.licenseKey) return
+    void importStorefrontInbox(subscription.licenseKey)
+      .then((count) => {
+        if (count > 0) {
+          toast.success(
+            count === 1
+              ? '1 commande web reçue via votre lien boutique'
+              : `${count} commandes web reçues via votre lien boutique`,
+          )
+        }
+      })
+      .catch(() => {
+        /* inbox optionnel si API indisponible */
+      })
+  }, [online, subscription?.licenseKey, toast])
 
   const scopedOrders = useMemo(() => {
     const list = orders ?? []

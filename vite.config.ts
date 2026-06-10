@@ -18,7 +18,11 @@ export default defineConfig({
     tailwindcss(),
     VitePWA({
       registerType: 'autoUpdate',
-      includeAssets: ['favicon.svg', 'branding/digitalpro-solutions-logo.png'],
+      includeAssets: [
+        'favicon.svg',
+        'branding/digitalpro-solutions-logo.png',
+        'branding/logo-circle.svg',
+      ],
       manifest: {
         name: 'Digitalpro Solutions — Point de vente',
         short_name: 'Digitalpro Solutions',
@@ -34,10 +38,16 @@ export default defineConfig({
         categories: ['business', 'finance', 'productivity'],
         icons: [
           {
-            src: '/favicon.svg',
+            src: '/branding/logo-circle.svg',
             sizes: 'any',
             type: 'image/svg+xml',
             purpose: 'any',
+          },
+          {
+            src: '/branding/digitalpro-solutions-logo.png',
+            sizes: '512x512',
+            type: 'image/png',
+            purpose: 'maskable',
           },
         ],
       },

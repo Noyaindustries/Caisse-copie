@@ -137,48 +137,26 @@ webhookRouter.post('/webhooks/sms', async (req, res) => {
       })
     }
 
-    const providerUrl = process.env.SMS_PROVIDER_URL?.trim()
-    const providerToken = process.env.SMS_PROVIDER_TOKEN?.trim()
-    if (!providerUrl) {
-      console.info('[sms:webhook:demo]', {
-        to: normalizedTo,
-        message,
+    const { sendSms } = await import('../lib/sms.js')
+    const result = await sendSms({
+      to: normalizedTo,
+      message,
+      meta: {
         orderId: asString(payload.orderId),
         storeId: asString(payload.storeId),
         customerName: asString(payload.customerName),
-      })
-      return res.status(202).json({
-        ok: true,
-        mode: 'demo',
-        message: 'SMS journalise en mode demo (provider non configure).',
-      })
-    }
-
-    const providerRes = await fetch(providerUrl, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        ...(providerToken ? { Authorization: `Bearer ${providerToken}` } : {}),
       },
-      body: JSON.stringify({
-        to: normalizedTo,
-        message,
-        orderId: asString(payload.orderId),
-        storeId: asString(payload.storeId),
-        customerName: asString(payload.customerName),
-      }),
     })
-    if (!providerRes.ok) {
-      return res.status(502).json({
-        ok: false,
-        message: `Provider SMS en erreur (${providerRes.status}).`,
-      })
+    if (!result.ok) {
+      return res.status(502).json({ ok: false, message: result.error })
     }
-
     return res.status(202).json({
       ok: true,
-      mode: 'provider',
-      message: 'SMS transmis au provider.',
+      mode: result.mode,
+      message:
+        result.mode === 'demo'
+          ? 'SMS journalise en mode demo (provider non configure).'
+          : 'SMS transmis au provider.',
     })
   } catch (error) {
     console.error('[webhook:sms] erreur', error)

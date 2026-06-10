@@ -8,7 +8,8 @@ import {
 import type { StaffAuthMethod, StaffProfile } from '../auth/types'
 import { db } from '../db/db'
 import { useLiveQuery } from 'dexie-react-hooks'
-import { BRAND_LOGO_SRC, BRAND_NAME } from '../brand'
+import { BRAND_NAME } from '../brand'
+import { BrandLogo } from './BrandLogo'
 import { Button } from '../ui/Button'
 import { Field, Input } from '../ui/Input'
 import { IconArrowLeft, IconArrowRight, IconShield } from '../ui/icons'
@@ -74,11 +75,7 @@ export function LoginScreen({ onSuccess }: Props) {
         </div>
         <div className="relative flex h-full flex-col justify-between p-12 text-zinc-100">
           <div className="flex items-center gap-3">
-            <img
-              src={BRAND_LOGO_SRC}
-              alt={BRAND_NAME}
-              className="h-10 max-h-11 w-auto max-w-[min(85vw,260px)] rounded-lg border border-white/15 bg-white/95 object-contain object-left p-1"
-            />
+            <BrandLogo size="lg" alt={BRAND_NAME} ring="dark" />
           </div>
           <div>
             <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-emerald-400/90">

@@ -2,11 +2,17 @@ import { useEffect, useState, type ReactNode } from 'react'
 import type { UserRole } from '../auth/types'
 import { roleLabel } from '../auth/profiles'
 import type { Store } from '../db/types'
-import { navSectionsForRole, VIEW_ACCENTS, type NavViewId } from '../navigation'
+import {
+  navSectionsForRole,
+  VIEW_ACCENTS,
+  type NavSection,
+  type NavViewId,
+} from '../navigation'
 import { Badge } from '../ui/Badge'
 import { cn } from '../ui/cn'
 import { Tooltip } from '../ui/Tooltip'
-import { BRAND_LOGO_SRC, BRAND_NAME } from '../brand'
+import { BRAND_NAME } from '../brand'
+import { BrandLogo } from './BrandLogo'
 import {
   IconAnalytique,
   IconCaisse,
@@ -32,6 +38,7 @@ import {
   IconMail,
   IconFile,
   IconReceipt,
+  IconCard,
 } from '../ui/icons'
 
 /** Onglet filtre caisse : « Tous » ou libellé de catégorie (voir `productCategories` en base). */
@@ -57,6 +64,7 @@ const ICON_BY_VIEW: Record<NavViewId, ReactNode> = {
   analytique: <IconAnalytique />,
   integrations: <IconIntegrations />,
   network: <IconNetwork />,
+  subscription: <IconCard />,
 }
 
 
@@ -76,6 +84,7 @@ type CommonProps = {
     role: UserRole
   }
   onLogout: () => void
+  navSections?: readonly NavSection[]
 }
 
 type DesktopProps = CommonProps & {
@@ -100,6 +109,7 @@ function SidebarBody({
   canSwitchStore,
   user,
   onLogout,
+  navSections,
   collapsed,
   onToggleCollapsed,
   variant,
@@ -108,7 +118,7 @@ function SidebarBody({
   onToggleCollapsed?: () => void
   variant: 'desktop' | 'mobile'
 }) {
-  const sections = navSectionsForRole(user.role)
+  const sections = navSections ?? navSectionsForRole(user.role)
   const activeStore = stores.find((s) => s.id === activeStoreId)
   const [storeMenuOpen, setStoreMenuOpen] = useState(false)
   const isMobile = variant === 'mobile'
@@ -118,18 +128,11 @@ function SidebarBody({
       {/* Brand */}
       <div
         className={cn(
-          'flex h-14 items-center gap-2.5 border-b border-zinc-100 px-3',
+          'flex h-16 items-center gap-2.5 border-b border-zinc-100 px-3',
           collapsed ? 'justify-center' : 'px-4',
         )}
       >
-        <img
-          src={BRAND_LOGO_SRC}
-          alt=""
-          className={cn(
-            'shrink-0 rounded-lg border border-zinc-200 bg-white object-contain object-left',
-            collapsed ? 'h-8 w-8 p-0.5' : 'h-8 max-h-9 w-auto max-w-[140px]',
-          )}
-        />
+        <BrandLogo size="md" alt="" ring="subtle" />
         {!collapsed ? (
           <div className="min-w-0">
             <p className="truncate text-[13px] font-semibold tracking-tight text-zinc-900">

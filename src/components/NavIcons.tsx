@@ -309,6 +309,7 @@ const MAP: Record<NavViewId, ReactNode> = {
   analytique: <IconTrending />,
   integrations: <IconPuzzle />,
   network: <IconBuilding />,
+  subscription: <IconLedger />,
 }
 
 export function NavIcon({ id }: { id: NavViewId }) {

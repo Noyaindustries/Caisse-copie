@@ -337,6 +337,7 @@ export type OnlineOrderPlatform =
   | 'jumia'
   | 'shopify'
   | 'whatsapp'
+  | 'web_storefront'
 
 export type DeliveryStatus =
   | 'queued'

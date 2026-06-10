@@ -20,6 +20,7 @@ export type NavViewId =
   | 'analytique'
   | 'integrations'
   | 'network'
+  | 'subscription'
 
 export const VIEW_LABELS: Record<NavViewId, string> = {
   caisse: 'Caisse',
@@ -41,6 +42,7 @@ export const VIEW_LABELS: Record<NavViewId, string> = {
   analytique: 'Analytique',
   integrations: 'Intégrations',
   network: 'Multi-magasins',
+  subscription: 'Abonnement',
 }
 
 export const VIEW_SUBTITLES: Record<NavViewId, string> = {
@@ -67,6 +69,7 @@ export const VIEW_SUBTITLES: Record<NavViewId, string> = {
     'Périodes, top produits, heures de pointe, marges, exports CSV / Excel / PDF',
   integrations: 'Marketplace, API partenaires, app mobile gérant',
   network: 'Stocks par site, transferts, vue consolidée gérant',
+  subscription: 'Plan, essai gratuit, facturation et paiements récurrents',
 }
 
 export type ViewAccent = {
@@ -191,6 +194,12 @@ export const VIEW_ACCENTS: Record<NavViewId, ViewAccent> = {
     labelActive: 'text-green-900',
     chip: 'bg-green-100 text-green-800',
   },
+  subscription: {
+    icon: 'text-blue-600 bg-blue-50',
+    iconActive: 'text-blue-700 bg-blue-100',
+    labelActive: 'text-blue-900',
+    chip: 'bg-blue-100 text-blue-800',
+  },
 }
 
 export type NavSection = {
@@ -240,7 +249,10 @@ export const NAV_SECTIONS: readonly NavSection[] = [
   },
   {
     title: 'Écosystème',
-    items: [{ id: 'integrations', label: 'Intégrations' }],
+    items: [
+      { id: 'integrations', label: 'Intégrations' },
+      { id: 'subscription', label: 'Abonnement' },
+    ],
   },
 ] as const
 
@@ -285,4 +297,16 @@ export function flattenedNavViewIds(
   sections: readonly NavSection[],
 ): Set<NavViewId> {
   return new Set(sections.flatMap((s) => s.items.map((i) => i.id)))
+}
+
+export function filterNavSections(
+  sections: readonly NavSection[],
+  canAccess: (view: NavViewId) => boolean,
+): NavSection[] {
+  return sections
+    .map((section) => ({
+      ...section,
+      items: section.items.filter((item) => canAccess(item.id)),
+    }))
+    .filter((section) => section.items.length > 0)
 }

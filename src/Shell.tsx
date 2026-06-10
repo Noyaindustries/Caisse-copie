@@ -20,7 +20,10 @@ import { ProductGrid, type ProductGridDensity } from './components/ProductGrid'
 import { MobileNavDrawer, Sidebar, type CategoryTab } from './components/Sidebar'
 import { Topbar } from './components/Topbar'
 import { useActiveStore } from './context/ActiveStoreContext'
+import { SubscriptionBanner } from './components/SubscriptionBanner'
+import { useSubscription } from './context/SubscriptionContext'
 import {
+  filterNavSections,
   flattenedNavViewIds,
   navSectionsForRole,
   type NavViewId,
@@ -201,6 +204,11 @@ const IntegrationsView = lazy(() =>
 const MultiStoreView = lazy(() =>
   import('./views/MultiStoreView').then((m) => ({ default: m.MultiStoreView })),
 )
+const SubscriptionView = lazy(() =>
+  import('./views/SubscriptionView').then((m) => ({
+    default: m.SubscriptionView,
+  })),
+)
 
 export function Shell({ staff, online, onLogout }: Props) {
   const {
@@ -213,9 +221,19 @@ export function Shell({ staff, online, onLogout }: Props) {
   } = useActiveStore()
 
   const toast = useToast()
+  const { canAccessView } = useSubscription()
 
   const perms = useMemo(() => effectivePermissions(staff), [staff])
-  const navSections = useMemo(() => navSectionsForRole(staff.role), [staff.role])
+  const navSections = useMemo(() => {
+    const roleSections =
+      staff.role === 'admin'
+        ? navSectionsForRole(staff.role)
+        : navSectionsForRole(staff.role).map((section) => ({
+            ...section,
+            items: section.items.filter((item) => item.id !== 'subscription'),
+          }))
+    return filterNavSections(roleSections, canAccessView)
+  }, [staff.role, canAccessView])
   const allowedViews = useMemo(() => {
     return flattenedNavViewIds(navSections)
   }, [navSections])
@@ -1281,7 +1299,9 @@ export function Shell({ staff, online, onLogout }: Props) {
   )
 
   return (
-    <div className="flex min-h-svh w-full max-w-full overflow-x-clip bg-zinc-50">
+    <div className="flex min-h-svh w-full max-w-full flex-col overflow-x-clip bg-zinc-50">
+      <SubscriptionBanner onOpenSubscription={() => setActiveView('subscription')} />
+      <div className="flex min-h-0 flex-1">
       {receiptOpen ? (
         <ReceiptModal
           source={
@@ -1306,6 +1326,7 @@ export function Shell({ staff, online, onLogout }: Props) {
       <Sidebar
         activeView={activeView}
         onSelectView={handleSelectView}
+        navSections={navSections}
         ruptureCount={ruptureCount}
         lowStockCount={lowStockCount}
         onlineOrdersPending={onlineOrdersPending}
@@ -1328,6 +1349,7 @@ export function Shell({ staff, online, onLogout }: Props) {
         onClose={() => setMobileNavOpen(false)}
         activeView={activeView}
         onSelectView={handleSelectView}
+        navSections={navSections}
         ruptureCount={ruptureCount}
         lowStockCount={lowStockCount}
         onlineOrdersPending={onlineOrdersPending}
@@ -1610,6 +1632,7 @@ export function Shell({ staff, online, onLogout }: Props) {
               ) : null}
               {activeView === 'analytique' ? <AnalytiqueView /> : null}
               {activeView === 'integrations' ? <IntegrationsView /> : null}
+              {activeView === 'subscription' ? <SubscriptionView /> : null}
               {activeView === 'network' ? (
                 <MultiStoreView
                   canConfigureStores={perms.canConfigureStoresAdmin}
@@ -1730,6 +1753,7 @@ export function Shell({ staff, online, onLogout }: Props) {
             ) : null}
           </>
         ) : null}
+      </div>
       </div>
     </div>
   )

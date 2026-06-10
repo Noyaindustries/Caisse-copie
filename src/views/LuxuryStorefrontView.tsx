@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { OfflineBanner } from '../components/OfflineBanner'
-import { useActiveStore } from '../context/ActiveStoreContext'
+import { useActiveStoreOptional } from '../context/ActiveStoreContext'
 import { db } from '../db/db'
 import type {
   CartLine,
@@ -18,7 +18,8 @@ import { productImageSrc } from '../lib/productImage'
 import { ProductImage } from '../components/ProductImage'
 import { ProductDetailModal } from '../components/ProductDetailModal'
 import { storeStockRowId } from '../lib/storeStockId'
-import { BRAND_LOGO_SRC, BRAND_NAME } from '../brand'
+import { BRAND_NAME } from '../brand'
+import { BrandLogo } from '../components/BrandLogo'
 import {
   getDeliveryProviderDemo,
   getKitchenStationDemo,
@@ -26,10 +27,22 @@ import {
   isKitchenModuleDemoOn,
 } from '../lib/integrationsConfig'
 
+import type { PublicStorefrontOrderInput } from '../lib/storefront/types'
+
+type PublicStorefrontConfig = {
+  storeName: string
+  storeId: string
+  products: ProductWithStock[]
+  submitOrder: (
+    order: PublicStorefrontOrderInput,
+  ) => Promise<{ orderId: string; reference: string }>
+}
+
 type Props = {
   online: boolean
   seedReady: boolean
   onOpenStaffLogin: () => void
+  publicStorefront?: PublicStorefrontConfig
 }
 
 type FlyToCartAnim = {
@@ -128,8 +141,20 @@ export function LuxuryStorefrontView({
   online,
   seedReady,
   onOpenStaffLogin,
+  publicStorefront,
 }: Props) {
-  const { displayProducts, activeStoreId, activeStore } = useActiveStore()
+  const storeCtx = useActiveStoreOptional()
+  const displayProducts = publicStorefront?.products ?? storeCtx?.displayProducts ?? []
+  const activeStoreId = publicStorefront?.storeId ?? storeCtx?.activeStoreId ?? 'store-main'
+  const activeStore = publicStorefront
+    ? {
+        id: publicStorefront.storeId,
+        name: publicStorefront.storeName,
+        shortCode: '',
+        sortOrder: 0,
+      }
+    : storeCtx?.activeStore
+  const isPublicStorefront = Boolean(publicStorefront)
   const cardDensity: 'compact' | 'confort' = 'compact'
   const [cart, setCart] = useState<CartLine[]>([])
   const [customerName, setCustomerName] = useState('')
@@ -174,6 +199,7 @@ export function LuxuryStorefrontView({
     [displayProducts],
   )
   const topOrderedProducts = useLiveQuery(async () => {
+    if (isPublicStorefront) return []
     const [sales, onlineOrders] = await Promise.all([
       db.sales.toArray(),
       db.onlineOrders.toArray(),
@@ -615,6 +641,18 @@ export function LuxuryStorefrontView({
       }
 
       for (const line of cart) {
+        if (isPublicStorefront) {
+          const product = displayProducts.find((p) => p.id === line.productId)
+          if (!product) {
+            throw new Error(`Le produit « ${line.name} » n'est plus disponible.`)
+          }
+          if (product.stock < line.qty) {
+            throw new Error(
+              `Stock insuffisant pour « ${line.name} » (reste ${product.stock}).`,
+            )
+          }
+          continue
+        }
         const product = await db.products.get(line.productId)
         if (!product || product.archived) {
           throw new Error(`Le produit « ${line.name} » n'est plus disponible.`)
@@ -629,6 +667,47 @@ export function LuxuryStorefrontView({
           )
         }
       }
+
+      if (isPublicStorefront && publicStorefront) {
+        const result = await publicStorefront.submitOrder({
+          customerName: customerLabel,
+          customerPhone: customerPhone.trim() || undefined,
+          customerAddress: customerAddress.trim() || undefined,
+          customerNote: customerNote.trim() || undefined,
+          desiredTimeSlot: desiredTimeSlot.trim() || undefined,
+          paymentMethod,
+          fulfillmentMode,
+          lines: cart.map((line) => ({
+            productId: line.productId,
+            name: line.name,
+            unitPriceTTC: line.unitPriceTTC,
+            qty: line.qty,
+            vatRatePct: line.vatRatePct,
+          })),
+          subtotalHT: total.subtotalHT,
+          tva: total.tva,
+          totalTTC: grandTotalTTC,
+          netProductsTTC: total.totalTTC,
+          discountPct: discountPct || undefined,
+          promoCode: promoCode.trim().toUpperCase() || undefined,
+          deliveryFeeTTC: deliveryFeeTTC || undefined,
+        })
+        setCart([])
+        setCustomerName('')
+        setCustomerPhone('')
+        setCustomerAddress('')
+        setCustomerNote('')
+        setDesiredTimeSlot('')
+        setPromoCode('')
+        setPromoFeedback(null)
+        setDiscountPct(0)
+        setConfirmationTone('success')
+        setConfirmation(
+          `Commande envoyée pour validation. Référence: ${result.reference}.`,
+        )
+        return
+      }
+
       await db.onlineOrders.put(orderRecord)
 
       setCart([])
@@ -672,6 +751,9 @@ export function LuxuryStorefrontView({
     online,
     paymentMethod,
     promoCode,
+    isPublicStorefront,
+    publicStorefront,
+    displayProducts,
   ])
 
   return (
@@ -681,7 +763,8 @@ export function LuxuryStorefrontView({
         <header className="premium-dark-card sticky top-3 z-20 rounded-3xl bg-linear-to-r from-slate-900 via-slate-900 to-amber-950/70 p-3 shadow-2xl shadow-amber-900/20 sm:p-4">
           <div className="mb-3 flex flex-wrap items-center gap-2 rounded-2xl border border-white/10 bg-black/20 px-3 py-2 text-[11px] text-slate-300">
             <p className="truncate">
-              Boutique officielle {BRAND_NAME} · Commande rapide et livraison locale
+              Boutique {publicStorefront?.storeName ?? BRAND_NAME} · Commande rapide et
+              livraison locale
             </p>
           </div>
 
@@ -693,13 +776,9 @@ export function LuxuryStorefrontView({
                 window.scrollTo({ top: 0, behavior: 'smooth' })
               }}
               title="Retour à l'accueil"
-              className="shrink-0 rounded-xl border border-amber-200/35 bg-white/5 p-1 ring-1 ring-emerald-200/25"
+              className="shrink-0 rounded-full border border-amber-200/35 bg-white/5 p-0.5 ring-1 ring-emerald-200/25"
             >
-              <img
-                src={BRAND_LOGO_SRC}
-                alt={BRAND_NAME}
-                className="h-8 max-h-9 w-auto max-w-[min(50vw,190px)] object-contain object-left sm:h-9 sm:max-h-10 lg:max-w-[240px]"
-              />
+              <BrandLogo size="md" alt={BRAND_NAME} ring="gold" />
             </button>
             <nav className="ui-scroll flex min-w-0 flex-1 items-center gap-1.5 overflow-x-auto whitespace-nowrap lg:justify-center">
               <button
@@ -1182,12 +1261,13 @@ export function LuxuryStorefrontView({
           >
             {!seedReady ? (
               <div className="mt-6 flex flex-col items-center gap-3 py-4">
-                <div className="relative">
+                <div className="relative flex h-20 w-20 items-center justify-center">
                   <span className="absolute inset-0 rounded-full border-2 border-emerald-300/55" />
-                  <img
-                    src={BRAND_LOGO_SRC}
+                  <BrandLogo
+                    size="xl"
                     alt="Chargement catalogue"
-                    className="h-14 w-auto max-w-[200px] rounded-xl border border-amber-200/45 object-contain object-center ring-1 ring-emerald-200/30 animate-pulse"
+                    ring="gold"
+                    className="animate-pulse"
                   />
                 </div>
                 <p className="text-sm text-slate-400">
@@ -1610,11 +1690,7 @@ export function LuxuryStorefrontView({
         <footer className="premium-dark-card premium-ring mt-6 rounded-3xl border border-white/10 bg-slate-950/75 p-5">
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
             <div>
-              <img
-                src={BRAND_LOGO_SRC}
-                alt={BRAND_NAME}
-                className="h-12 w-auto max-w-[220px] rounded-xl border border-amber-200/35 object-contain object-left"
-              />
+              <BrandLogo size="xl" alt={BRAND_NAME} ring="gold" />
               <p className="mt-2 text-sm text-slate-300">
                 Commande premium avec validation en magasin, livraison locale et
                 retrait rapide.
