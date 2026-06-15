@@ -37,7 +37,7 @@ export function Topbar({
 }: Props) {
   const accent = VIEW_ACCENTS[view]
   return (
-    <header className="sticky top-0 z-20 flex min-h-14 flex-wrap items-center gap-2 border-b border-border bg-white/88 px-3 py-2 backdrop-blur-xl sm:gap-3 sm:px-4 lg:px-6">
+    <header className="sticky top-0 z-20 flex min-h-12 flex-wrap items-center gap-2 border-b border-border bg-white/88 px-3 py-2 backdrop-blur-xl sm:min-h-14 sm:gap-3 sm:px-4 lg:px-6 pt-[max(0.5rem,env(safe-area-inset-top,0px))]">
       {onOpenMobileMenu ? (
         <button
           type="button"
@@ -63,7 +63,7 @@ export function Topbar({
             {VIEW_LABELS[view]}
           </h1>
         </div>
-        <p className="hidden truncate text-[11px] text-ink-subtle md:block">
+        <p className="hidden truncate text-[11px] text-ink-subtle sm:block md:max-w-md">
           {VIEW_SUBTITLES[view]}
         </p>
       </div>

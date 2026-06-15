@@ -17,13 +17,13 @@ export function PageHeader({
   return (
     <div
       className={cn(
-        'flex flex-col gap-3 pb-6 pt-1 sm:gap-4 sm:pb-7 lg:flex-row lg:items-end lg:justify-between',
+        'flex flex-col gap-3 pb-5 pt-1 sm:gap-4 sm:pb-7 lg:flex-row lg:items-end lg:justify-between',
         className,
       )}
     >
       <div className="min-w-0">
         {eyebrow ? <p className="ui-eyebrow mb-1.5">{eyebrow}</p> : null}
-        <h1 className="ui-h1 text-2xl leading-tight sm:text-3xl">{title}</h1>
+        <h1 className="ui-h1 text-xl leading-tight sm:text-2xl lg:text-3xl">{title}</h1>
         {subtitle ? (
           <p className="ui-muted mt-2 max-w-2xl text-[13px] leading-[1.55] sm:text-sm">
             {subtitle}
@@ -31,7 +31,7 @@ export function PageHeader({
         ) : null}
       </div>
       {actions ? (
-        <div className="ui-scroll -mx-1 flex flex-nowrap items-center gap-2.5 overflow-x-auto px-1 pb-1 lg:flex-wrap lg:justify-end lg:overflow-visible lg:pb-0">
+        <div className="flex max-w-full flex-wrap items-center gap-2 sm:gap-2.5 lg:justify-end">
           {actions}
         </div>
       ) : null}

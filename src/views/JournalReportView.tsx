@@ -559,7 +559,7 @@ export function JournalReportView({
 
       <div id="print-journal" className="space-y-5">
         {(reportTab === 'overview' || reportTab === 'sales') ? (
-        <div className="catalogue-hero p-4 sm:p-5">
+        <div className="catalogue-hero p-3 sm:p-4 md:p-5">
         <div className="grid gap-2.5 sm:grid-cols-2 xl:grid-cols-4">
           <Kpi label="Total ventes (TTC)" value={formatFCFA(totalNet)} tone="accent" />
           <Kpi label="Tickets" value={String(ticketCount)} tone="neutral" />
@@ -806,6 +806,8 @@ export function JournalReportView({
             variant="flat"
           />
         ) : (
+          <>
+          <div className="hidden md:block">
           <Table minWidth={700}>
             <THead>
               <Tr hover={false}>
@@ -883,6 +885,57 @@ export function JournalReportView({
                 ))}
             </TBody>
           </Table>
+          </div>
+
+          <ul className="grid gap-2 md:hidden">
+            {filteredToday.map((s) => (
+              <li key={s.id} className="catalogue-cat-row p-3">
+                <div className="flex items-start justify-between gap-2">
+                  <div className="min-w-0">
+                    <p className="font-mono-nums text-[13px] font-semibold text-zinc-900">
+                      {new Date(s.createdAt).toLocaleTimeString('fr-FR', {
+                        hour: '2-digit',
+                        minute: '2-digit',
+                      })}
+                      {' · '}
+                      {paymentMethodShortLabel(s.paymentMethod)}
+                    </p>
+                    <p className="truncate text-[11px] text-zinc-500">
+                      {s.cashierDisplayName ?? '—'}
+                      {s.storeName ? ` · ${s.storeName}` : ''}
+                    </p>
+                  </div>
+                  <span className="shrink-0 font-mono-nums text-[14px] font-bold text-[var(--color-caisse-gold)]">
+                    {formatFCFA(saleNetTTC(s))}
+                  </span>
+                </div>
+                <div className="mt-2 flex flex-wrap items-center gap-1.5">
+                  {saleFullyRefunded(s) ? (
+                    <Badge tone="warning">Remboursé</Badge>
+                  ) : null}
+                  <div className="ml-auto flex gap-1">
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      iconLeft={<IconEye />}
+                      onClick={() => onViewReceipt(s)}
+                      aria-label="Voir reçu"
+                    />
+                    {canProcessRefunds && !saleFullyRefunded(s) ? (
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        iconLeft={<IconRefund />}
+                        onClick={() => setRefundSale(s)}
+                        aria-label="Rembourser"
+                      />
+                    ) : null}
+                  </div>
+                </div>
+              </li>
+            ))}
+          </ul>
+          </>
         )}
         </>
         ) : null}

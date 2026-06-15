@@ -79,37 +79,9 @@ import {
 } from './lib/integrationsConfig'
 import { Tabs } from './ui/Tabs'
 import { Button } from './ui/Button'
+import { Select } from './ui/Input'
 import { useToast } from './ui/Toast'
 import { IconArrowRight, IconReceipt, IconShield } from './ui/icons'
-
-const DEBUG_LOG_ENDPOINT =
-  'http://127.0.0.1:27772/ingest/cd30ae75-d94c-4f4b-a62c-8232a969c0d0'
-
-function debugLog(
-  location: string,
-  message: string,
-  hypothesisId: string,
-  data: Record<string, unknown>,
-): void {
-  // #region agent log
-  fetch(DEBUG_LOG_ENDPOINT, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'X-Debug-Session-Id': '5007b8',
-    },
-    body: JSON.stringify({
-      sessionId: '5007b8',
-      runId: 'run1',
-      hypothesisId,
-      location,
-      message,
-      data,
-      timestamp: Date.now(),
-    }),
-  }).catch(() => {})
-  // #endregion
-}
 
 type Props = {
   staff: StaffProfile
@@ -952,20 +924,6 @@ export function Shell({ staff, online, onLogout }: Props) {
     const now = new Date()
     const todayYmd = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
     const dayClosure = await db.dayClosures.get(todayYmd)
-    debugLog(
-      'src/Shell.tsx:handleCheckout:entry',
-      'Checkout attempt while day closure state is evaluated',
-      'H3',
-      {
-        todayYmd,
-        hasDayClosureRow: !!dayClosure,
-        isClosed: !!dayClosure?.closedAt,
-        activeStoreId,
-        staffRole: staff.role,
-        cartLines: cart.length,
-        payableTotalTTC,
-      },
-    )
     if (dayClosure?.closedAt) {
       toast.error(
         'Journée clôturée',
@@ -1377,13 +1335,26 @@ export function Shell({ staff, online, onLogout }: Props) {
           onOpenMobileMenu={() => setMobileNavOpen(true)}
           rightSlot={
             isCaisse ? (
-              <Tabs
-                variant="segmented"
-                items={densityTabs}
-                active={productGridDensity}
-                onChange={setProductGridDensity}
-                className="hidden sm:inline-flex"
-              />
+              <>
+                <Tabs
+                  variant="segmented"
+                  items={densityTabs}
+                  active={productGridDensity}
+                  onChange={setProductGridDensity}
+                  className="hidden sm:inline-flex"
+                />
+                <Select
+                  value={productGridDensity}
+                  onChange={(e) =>
+                    setProductGridDensity(e.target.value as ProductGridDensity)
+                  }
+                  className="h-9 w-[7.5rem] shrink-0 text-[12px] sm:hidden"
+                  aria-label="Densité grille produits"
+                >
+                  <option value="compact">Compact</option>
+                  <option value="confort">Confort</option>
+                </Select>
+              </>
             ) : null
           }
         />
@@ -1391,7 +1362,7 @@ export function Shell({ staff, online, onLogout }: Props) {
 
         {isCaisse ? (
           <div className="flex min-w-0 flex-1 flex-col lg:flex-row">
-            <main className="caisse-main ui-scroll min-w-0 flex-1 overflow-y-auto px-2 pb-24 pt-3 sm:px-4 sm:pt-4 xl:px-6 xl:pt-5 xl:pb-6">
+            <main className="caisse-main ui-scroll min-w-0 flex-1 overflow-y-auto app-main-pad pb-safe-caisse pt-3 sm:px-4 sm:pt-4 lg:pb-6 xl:px-6 xl:pt-5">
               <CaisseHeader
                 ref={barcodeFieldRef}
                 sessionId={SESSION_ID}
@@ -1490,7 +1461,8 @@ export function Shell({ staff, online, onLogout }: Props) {
             </div>
           </div>
         ) : (
-          <div className="ui-scroll flex-1 overflow-y-auto px-3 pb-10 pt-3 sm:px-4 sm:pt-4 lg:px-8">
+          <div className="ui-scroll app-main-pad flex-1 overflow-y-auto pb-safe pt-3 sm:pt-4">
+            <div className="mx-auto w-full max-w-[1680px] px-1 sm:px-2 lg:px-4">
             <Suspense
               fallback={
                 <div className="flex min-h-[40vh] items-center justify-center text-sm text-zinc-500">
@@ -1652,6 +1624,7 @@ export function Shell({ staff, online, onLogout }: Props) {
                 />
               ) : null}
             </Suspense>
+            </div>
           </div>
         )}
 
@@ -1662,7 +1635,7 @@ export function Shell({ staff, online, onLogout }: Props) {
               <button
                 type="button"
                 onClick={() => setIsFloatingCartOpen(true)}
-                className={`fixed inset-x-3 bottom-3 z-30 flex items-center justify-between gap-3 rounded-2xl px-4 py-3.5 text-left text-ink backdrop-blur-md transition hover:brightness-[1.02] caisse-mobile-cart ${cartHideClass}`}
+                className={`fixed z-30 flex items-center justify-between gap-3 rounded-2xl px-4 py-3.5 text-left text-ink backdrop-blur-md transition hover:brightness-[1.02] caisse-mobile-cart ${cartHideClass}`}
               >
                 <span className="flex items-center gap-3">
                   <span className="relative flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl border border-[rgba(184,146,46,0.22)] bg-[#f7f0e3] text-[#b8922e]">
@@ -1692,7 +1665,7 @@ export function Shell({ staff, online, onLogout }: Props) {
               <button
                 type="button"
                 onClick={() => setIsFloatingCartOpen(true)}
-                className={`fixed bottom-3 right-3 z-30 flex h-12 w-12 items-center justify-center rounded-2xl border border-[rgba(184,146,46,0.28)] bg-[linear-gradient(145deg,#fffefb,#f7f0e3)] text-[#b8922e] shadow-(--shadow-caisse-pop) transition hover:brightness-[1.03] ${cartHideClass}`}
+                className={`fixed-safe-bottom fixed right-3 z-30 flex h-12 w-12 items-center justify-center rounded-2xl border border-[rgba(184,146,46,0.28)] bg-[linear-gradient(145deg,#fffefb,#f7f0e3)] text-[#b8922e] shadow-(--shadow-caisse-pop) transition hover:brightness-[1.03] ${cartHideClass}`}
                 aria-label="Ouvrir le panier"
               >
                 <IconReceipt className="h-5 w-5" />

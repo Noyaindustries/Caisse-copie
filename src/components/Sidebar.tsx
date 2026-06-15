@@ -407,7 +407,7 @@ export function MobileNavDrawer({
         onClick={onClose}
         className="absolute inset-0 animate-ui-fade-in bg-zinc-950/40 backdrop-blur-[2px]"
       />
-      <aside className="relative z-10 flex h-svh w-[280px] max-w-[85vw] animate-ui-slide-up flex-col border-r border-border bg-white/95 backdrop-blur-md shadow-(--shadow-overlay)">
+      <aside className="relative z-10 flex h-svh w-[min(280px,85vw)] max-w-[85vw] animate-ui-slide-up flex-col border-r border-border bg-white/95 pt-[env(safe-area-inset-top,0px)] pb-[env(safe-area-inset-bottom,0px)] shadow-(--shadow-overlay) backdrop-blur-md">
         <button
           type="button"
           onClick={onClose}

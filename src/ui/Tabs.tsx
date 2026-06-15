@@ -25,12 +25,12 @@ export function Tabs<T extends string>({
 }: Props<T>) {
   if (variant === 'segmented') {
     return (
-      <div
-        className={cn(
-          'inline-flex items-center gap-0.5 rounded-lg border border-border bg-surface-sunken/70 p-0.5',
-          className,
-        )}
-      >
+      <div className={cn('tabs-scroll-x', className)}>
+        <div
+          className={cn(
+            'inline-flex min-w-max items-center gap-0.5 rounded-lg border border-border bg-surface-sunken/70 p-0.5',
+          )}
+        >
         {items.map((it) => {
           const on = it.id === active
           return (
@@ -63,17 +63,14 @@ export function Tabs<T extends string>({
             </button>
           )
         })}
+        </div>
       </div>
     )
   }
 
   return (
-    <div
-      className={cn(
-        'flex items-center gap-0.5 border-b border-border',
-        className,
-      )}
-    >
+    <div className={cn('tabs-scroll-x', className)}>
+      <div className="flex min-w-max items-center gap-0.5 border-b border-border">
       {items.map((it) => {
         const on = it.id === active
         return (
@@ -105,6 +102,7 @@ export function Tabs<T extends string>({
           </button>
         )
       })}
+      </div>
     </div>
   )
 }
