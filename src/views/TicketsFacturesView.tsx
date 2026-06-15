@@ -19,8 +19,9 @@ import { Field, Input, Select } from '../ui/Input'
 import { Kpi } from '../ui/Kpi'
 import { PageHeader } from '../ui/PageHeader'
 import { Table, TBody, Td, Th, THead, Tr } from '../ui/Table'
+import { Tabs } from '../ui/Tabs'
 import { useToast } from '../ui/Toast'
-import { IconDownload, IconPrinter } from '../ui/icons'
+import { IconDownload, IconPrinter, IconReceipt, IconSearch } from '../ui/icons'
 
 type Props = {
   activeStoreId: string
@@ -38,6 +39,9 @@ type DraftLine = {
   vatRatePct: string
 }
 
+type ViewTab = 'create' | 'history' | 'ventes'
+type KindFilter = 'all' | TicketInvoiceKind
+
 function statusTone(
   s: TicketInvoiceStatus,
 ): 'neutral' | 'warning' | 'success' | 'danger' {
@@ -49,9 +53,9 @@ function statusTone(
 
 function statusLabel(s: TicketInvoiceStatus): string {
   if (s === 'draft') return 'Brouillon'
-  if (s === 'issued') return 'Emise'
-  if (s === 'paid') return 'Reglee'
-  return 'Annulee'
+  if (s === 'issued') return 'Émise'
+  if (s === 'paid') return 'Réglée'
+  return 'Annulée'
 }
 
 function kindLabel(k: TicketInvoiceKind): string {
@@ -96,6 +100,8 @@ export function TicketsFacturesView({
     ) ?? []
 
   const [kind, setKind] = useState<TicketInvoiceKind>('ticket')
+  const [viewTab, setViewTab] = useState<ViewTab>('history')
+  const [filterKind, setFilterKind] = useState<KindFilter>('all')
   const [customerName, setCustomerName] = useState('')
   const [customerPhone, setCustomerPhone] = useState('')
   const [dueAt, setDueAt] = useState('')
@@ -171,10 +177,13 @@ export function TicketsFacturesView({
 
   const visibleRows = useMemo(() => {
     const q = search.trim().toLowerCase()
-    const base =
+    let base =
       filterStatus === 'all'
         ? scopedRows
         : scopedRows.filter((r) => r.status === filterStatus)
+    if (filterKind !== 'all') {
+      base = base.filter((r) => r.kind === filterKind)
+    }
     if (!q) return base
     return base.filter((r) => {
       if (r.reference.toLowerCase().includes(q)) return true
@@ -182,15 +191,37 @@ export function TicketsFacturesView({
       if ((r.customerPhone ?? '').toLowerCase().includes(q)) return true
       return false
     })
-  }, [scopedRows, filterStatus, search])
+  }, [scopedRows, filterStatus, filterKind, search])
+
+  const linkedSaleIds = useMemo(
+    () =>
+      new Set(
+        scopedRows
+          .map((r) => r.linkedSaleId)
+          .filter((id): id is string => Boolean(id)),
+      ),
+    [scopedRows],
+  )
+
+  const recentSales = useMemo(() => {
+    return sales
+      .filter((s) => !linkedSaleIds.has(s.id))
+      .slice(0, 40)
+  }, [sales, linkedSaleIds])
 
   const kpis = useMemo(() => {
     const issued = scopedRows.filter((r) => r.status === 'issued')
     const paid = scopedRows.filter((r) => r.status === 'paid')
+    const drafts = scopedRows.filter((r) => r.status === 'draft')
+    const now = Date.now()
+    const overdue = issued.filter((r) => r.dueAt != null && r.dueAt < now)
     return {
       issuedCount: issued.length,
       unpaidAmount: issued.reduce((s, r) => s + r.totalTTC, 0),
       paidAmount: paid.reduce((s, r) => s + r.totalTTC, 0),
+      draftCount: drafts.length,
+      overdueCount: overdue.length,
+      totalDocs: scopedRows.length,
     }
   }, [scopedRows])
 
@@ -358,6 +389,7 @@ export function TicketsFacturesView({
     const isOwn = row.createdByProfileId === actor.id
     if (!canViewAllDocuments && !isOwn) return
     if (row.status === 'cancelled') return
+    setViewTab('create')
     setEditingId(row.id)
     setEditingStatus(row.status)
     setKind(row.kind)
@@ -400,11 +432,11 @@ export function TicketsFacturesView({
     <div className="space-y-4 pb-6 sm:space-y-5">
       <PageHeader
         eyebrow="Facturation"
-        title="Gestion des tickets et factures"
+        title="Tickets & factures"
         subtitle={
           canViewAllDocuments
-            ? 'Creation, emission, suivi des paiements et historique.'
-            : 'Vos tickets/factures: creation, modification et suivi.'
+            ? `Création, émission, suivi des paiements — ${activeStoreLabel}`
+            : `Vos documents — ${activeStoreLabel}`
         }
         actions={
           <Button
@@ -418,12 +450,50 @@ export function TicketsFacturesView({
         }
       />
 
-      <div className="grid gap-2.5 sm:grid-cols-3">
-        <Kpi label="Documents emis" value={String(kpis.issuedCount)} tone="amber" />
-        <Kpi label="Montant a encaisser" value={formatFCFA(kpis.unpaidAmount)} tone="rose" />
-        <Kpi label="Montant regle" value={formatFCFA(kpis.paidAmount)} tone="accent" />
+      <div className="catalogue-hero p-4 sm:p-5">
+        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+          <Kpi
+            label="Documents"
+            value={String(kpis.totalDocs)}
+            hint={`${kpis.draftCount} brouillon(s)`}
+            tone="neutral"
+            icon={<IconReceipt />}
+          />
+          <Kpi
+            label="À encaisser"
+            value={formatFCFA(kpis.unpaidAmount)}
+            hint={`${kpis.issuedCount} émis · ${kpis.overdueCount} en retard`}
+            tone="amber"
+          />
+          <Kpi
+            label="Réglé"
+            value={formatFCFA(kpis.paidAmount)}
+            tone="accent"
+          />
+          <Kpi
+            label="Brouillons"
+            value={String(kpis.draftCount)}
+            tone="violet"
+          />
+        </div>
       </div>
 
+      <Tabs
+        variant="segmented"
+        active={viewTab}
+        onChange={setViewTab}
+        items={[
+          { id: 'history', label: 'Historique', count: visibleRows.length },
+          { id: 'create', label: 'Nouveau document' },
+          {
+            id: 'ventes',
+            label: 'Ventes caisse',
+            count: recentSales.length > 0 ? recentSales.length : undefined,
+          },
+        ]}
+      />
+
+      {viewTab === 'create' ? (
       <Card>
         <CardContent className="grid gap-2.5 md:grid-cols-3">
           <Field label="Type">
@@ -442,11 +512,11 @@ export function TicketsFacturesView({
           <Field label="Telephone">
             <Input value={customerPhone} onChange={(e) => setCustomerPhone(e.target.value)} placeholder="07..." />
           </Field>
-          <Field label="Echeance (optionnel)">
+          <Field label="Échéance (optionnel)">
             <Input type="date" value={dueAt} onChange={(e) => setDueAt(e.target.value)} />
           </Field>
           <Field label="Note" className="md:col-span-2">
-            <Input value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Conditions, details..." />
+            <Input value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Conditions, détails…" />
           </Field>
           {lines.map((line, idx) => (
             <div key={idx} className="grid gap-2 md:col-span-3 md:grid-cols-12">
@@ -469,7 +539,7 @@ export function TicketsFacturesView({
               Total: <strong className="font-mono-nums text-zinc-900">{formatFCFA(totals.totalTTC)}</strong>
             </span>
             <Button variant="accent" className="w-full sm:w-auto" onClick={() => void saveDraft()}>
-              {editingId ? 'Mettre a jour' : 'Enregistrer brouillon'}
+              {editingId ? 'Mettre à jour' : 'Enregistrer brouillon'}
             </Button>
             {editingId ? (
               <Button
@@ -492,44 +562,96 @@ export function TicketsFacturesView({
                   ])
                 }}
               >
-                Annuler edition
+                Annuler édition
               </Button>
             ) : null}
           </div>
         </CardContent>
       </Card>
+      ) : null}
 
+      {viewTab === 'ventes' ? (
+        <Card>
+          <CardContent className="space-y-3">
+            <p className="text-[12px] text-zinc-600">
+              Ventes caisse récentes sans document lié (synchronisation automatique en arrière-plan).
+            </p>
+            {recentSales.length === 0 ? (
+              <EmptyState
+                title="Aucune vente en attente"
+                description="Toutes les ventes sont déjà associées à un ticket."
+                variant="flat"
+              />
+            ) : (
+              <ul className="divide-y divide-zinc-100">
+                {recentSales.map((sale) => (
+                  <li
+                    key={sale.id}
+                    className="flex flex-wrap items-center justify-between gap-2 py-2.5 text-[12px]"
+                  >
+                    <div>
+                      <p className="font-semibold text-zinc-900">
+                        {sale.tableName ? `Table ${sale.tableName}` : 'Client comptoir'}
+                      </p>
+                      <p className="text-zinc-500">
+                        {new Date(sale.createdAt).toLocaleString('fr-FR')} ·{' '}
+                        {sale.cashierDisplayName ?? '—'}
+                      </p>
+                    </div>
+                    <span className="font-mono-nums font-bold text-[var(--color-caisse-gold)]">
+                      {formatFCFA(sale.totalTTC)}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </CardContent>
+        </Card>
+      ) : null}
+
+      {viewTab === 'history' ? (
       <Card>
         <CardContent className="space-y-3">
-          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-            <h3 className="text-sm font-semibold text-zinc-900">Historique</h3>
-            <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row">
+          <div className="catalogue-filter-bar space-y-3 p-4">
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
               <Input
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                placeholder="Recherche reference/client/tel"
-                className="w-full sm:w-[240px]"
+                placeholder="Référence, client, téléphone…"
+                iconLeft={<IconSearch />}
+                className="flex-1"
               />
+              <Select
+                value={filterKind}
+                onChange={(e) => setFilterKind(e.target.value as KindFilter)}
+                className="w-full sm:w-[160px]"
+              >
+                <option value="all">Tous types</option>
+                <option value="ticket">Tickets</option>
+                <option value="facture">Factures</option>
+              </Select>
               <Select
                 value={filterStatus}
                 onChange={(e) => setFilterStatus(e.target.value as 'all' | TicketInvoiceStatus)}
-                className="w-full sm:w-[200px]"
+                className="w-full sm:w-[180px]"
               >
-                <option value="all">Tous les statuts</option>
+                <option value="all">Tous statuts</option>
                 <option value="draft">Brouillon</option>
-                <option value="issued">Emise</option>
-                <option value="paid">Reglee</option>
-                <option value="cancelled">Annulee</option>
+                <option value="issued">Émise</option>
+                <option value="paid">Réglée</option>
+                <option value="cancelled">Annulée</option>
               </Select>
             </div>
           </div>
           {visibleRows.length === 0 ? (
-            <EmptyState title="Aucun document" description="Creez votre premier ticket ou facture." variant="flat" />
+            <EmptyState title="Aucun document" description="Créez votre premier ticket ou facture." variant="flat" />
           ) : (
+            <>
+            <div className="hidden md:block">
             <Table minWidth={980}>
               <THead>
                 <Tr hover={false}>
-                  <Th>Reference</Th>
+                  <Th>Référence</Th>
                   <Th>Type</Th>
                   <Th>Client</Th>
                   <Th align="right">Montant TTC</Th>
@@ -557,7 +679,7 @@ export function TicketsFacturesView({
                     <Td align="right">
                       <div className="grid grid-cols-1 gap-1.5 sm:flex sm:flex-wrap sm:justify-end">
                         {row.status === 'draft' ? (
-                          <Button size="sm" className="w-full sm:w-auto" variant="secondary" onClick={() => void updateStatus(row, 'issued')}>Emettre</Button>
+                          <Button size="sm" className="w-full sm:w-auto" variant="secondary" onClick={() => void updateStatus(row, 'issued')}>Émettre</Button>
                         ) : null}
                         {row.status === 'draft' ? (
                           <Button
@@ -580,7 +702,7 @@ export function TicketsFacturesView({
                           </Button>
                         ) : null}
                         {row.status !== 'paid' && row.status !== 'cancelled' ? (
-                          <Button size="sm" className="w-full sm:w-auto" variant="accent" onClick={() => void updateStatus(row, 'paid')}>Reglee</Button>
+                          <Button size="sm" className="w-full sm:w-auto" variant="accent" onClick={() => void updateStatus(row, 'paid')}>Réglée</Button>
                         ) : null}
                         {row.status !== 'cancelled' ? (
                           <Button size="sm" className="w-full sm:w-auto" variant="ghost" onClick={() => void updateStatus(row, 'cancelled')}>Annuler</Button>
@@ -636,6 +758,34 @@ export function TicketsFacturesView({
                 ))}
               </TBody>
             </Table>
+            </div>
+
+            <ul className="grid gap-2 md:hidden">
+              {visibleRows.map((row) => (
+                <li key={row.id} className="catalogue-cat-row p-3">
+                  <div className="flex items-start justify-between gap-2">
+                    <div>
+                      <p className="font-mono-nums text-[12px] font-semibold text-zinc-900">{row.reference}</p>
+                      <p className="text-[11px] text-zinc-600">{row.customerName ?? 'Client comptoir'}</p>
+                    </div>
+                    <Badge tone={statusTone(row.status)}>{statusLabel(row.status)}</Badge>
+                  </div>
+                  <div className="mt-2 flex items-center justify-between">
+                    <span className="text-[11px] text-zinc-500">{kindLabel(row.kind)}</span>
+                    <span className="font-mono-nums font-bold text-[var(--color-caisse-gold)]">
+                      {formatFCFA(row.totalTTC)}
+                    </span>
+                  </div>
+                  <div className="mt-2 flex flex-wrap gap-1">
+                    <Button size="sm" variant="ghost" onClick={() => onViewReceipt(row)}>Reçu</Button>
+                    <Button size="sm" variant="ghost" onClick={() => onPrintReceipt(row)} iconLeft={<IconPrinter />}>
+                      Impr.
+                    </Button>
+                  </div>
+                </li>
+              ))}
+            </ul>
+            </>
           )}
           {selectedDetailId ? (
             <div className="rounded-xl border border-zinc-200 bg-zinc-50 p-3 text-[12px]">
@@ -658,6 +808,7 @@ export function TicketsFacturesView({
           ) : null}
         </CardContent>
       </Card>
+      ) : null}
     </div>
   )
 }

@@ -1,8 +1,15 @@
 import { useLiveQuery } from 'dexie-react-hooks'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { db } from '../db/db'
+import { getAppSettings } from '../lib/appSettings'
+import { db, loadKitchenStockDemo } from '../db/db'
 import type { KitchenPriority, KitchenStatus, OnlineOrder } from '../db/types'
 import { formatFCFA } from '../lib/money'
+import {
+  computeIngredientUsageFromLines,
+  deductKitchenIngredientStockForLines,
+  mergeIngredientUsage,
+  mergeKitchenIngredientRows,
+} from '../lib/kitchenStock'
 import { storeStockRowId } from '../lib/storeStockId'
 import {
   getDeviceConnectivityDemo,
@@ -17,6 +24,7 @@ import { Kpi } from '../ui/Kpi'
 import { PageHeader } from '../ui/PageHeader'
 import { useToast } from '../ui/Toast'
 import { IconBell, IconCheck, IconClose, IconCollapse, IconExpand, IconFile } from '../ui/icons'
+import { KitchenIngredientStockPanel } from '../components/KitchenIngredientStockPanel'
 
 type Props = {
   activeStoreId: string
@@ -92,13 +100,16 @@ export function KitchenView({ activeStoreId, canManageKitchenActions = true }: P
   const [kdsMode, setKdsMode] = useState(false)
   const [soundOn, setSoundOn] = useState(true)
   const [slaAutoOn, setSlaAutoOn] = useState(true)
-  const [slaThresholdMin, setSlaThresholdMin] = useState(15)
+  const [slaThresholdMin, setSlaThresholdMin] = useState(
+    () => getAppSettings().kitchenSlaThresholdMin,
+  )
   const [nowTick, setNowTick] = useState(() => Date.now())
   const knownQueuedRef = useRef<Set<string>>(new Set())
   const knownEscalatedRef = useRef<Set<string>>(new Set())
   const [kdsHardwareOn, setKdsHardwareOn] = useState(
     () => getDeviceConnectivityDemo().kitchenScreens,
   )
+  const [kitchenDemoBusy, setKitchenDemoBusy] = useState(false)
   const kitchenOn = isKitchenModuleDemoOn()
   const stationDefault = getKitchenStationDemo()
   const orders =
@@ -120,6 +131,12 @@ export function KitchenView({ activeStoreId, canManageKitchenActions = true }: P
       [],
     ) ?? []
   const recipeRows = useLiveQuery(() => db.productRecipeIngredients.toArray(), [], []) ?? []
+
+  useEffect(() => {
+    const sync = () => setSlaThresholdMin(getAppSettings().kitchenSlaThresholdMin)
+    window.addEventListener('caisseci-app-settings-changed', sync)
+    return () => window.removeEventListener('caisseci-app-settings-changed', sync)
+  }, [])
 
   const activeKitchenOrders = useMemo(() => {
     return orders
@@ -291,22 +308,48 @@ export function KitchenView({ activeStoreId, canManageKitchenActions = true }: P
     }
   }, [byStatus])
   const lowKitchenIngredients = useMemo(() => {
-    const stockByIngredient = new Map(
-      kitchenIngredientStocks.map((row) => [row.ingredientId, row.stock]),
-    )
-    return kitchenIngredients
-      .filter((ing) => !ing.archived)
-      .filter((ing) => (stockByIngredient.get(ing.id) ?? 0) <= ing.lowStockThreshold)
-      .map((ing) => ({
-        ...ing,
-        stock: stockByIngredient.get(ing.id) ?? 0,
-      }))
+    return mergeKitchenIngredientRows(kitchenIngredients, kitchenIngredientStocks, activeStoreId)
+      .filter((ing) => ing.stock <= ing.lowStockThreshold)
       .sort((a, b) => a.stock - b.stock)
-  }, [kitchenIngredientStocks, kitchenIngredients])
+  }, [kitchenIngredientStocks, kitchenIngredients, activeStoreId])
+  const kitchenIngredientRows = useMemo(
+    () => mergeKitchenIngredientRows(kitchenIngredients, kitchenIngredientStocks, activeStoreId),
+    [kitchenIngredients, kitchenIngredientStocks, activeStoreId],
+  )
+  const projectedIngredientUsage = useMemo(() => {
+    let usage = new Map<string, number>()
+    for (const order of activeKitchenOrders) {
+      const status = order.kitchenStatus ?? 'queued'
+      if (status === 'served' || status === 'cancelled') continue
+      if (order.kitchenIngredientDeductedAt) continue
+      usage = mergeIngredientUsage(
+        usage,
+        computeIngredientUsageFromLines(order.lines, recipeRows),
+      )
+    }
+    return usage
+  }, [activeKitchenOrders, recipeRows])
   const lowKitchenIngredientIdSet = useMemo(
     () => new Set(lowKitchenIngredients.map((ing) => ing.id)),
     [lowKitchenIngredients],
   )
+
+  const loadKitchenDemo = useCallback(async () => {
+    if (!canManageKitchenActions) return
+    setKitchenDemoBusy(true)
+    try {
+      const changed = await loadKitchenStockDemo()
+      if (changed) {
+        toast.success('Stock cuisine chargé', 'Ingrédients et recettes de démo prêts.')
+      } else {
+        toast.info('Stock cuisine', 'Les données existent déjà.')
+      }
+    } catch {
+      toast.error('Échec', 'Impossible de charger les exemples cuisine.')
+    } finally {
+      setKitchenDemoBusy(false)
+    }
+  }, [canManageKitchenActions, toast])
 
   const patchKitchen = useCallback(
     async (order: OnlineOrder, status: KitchenStatus) => {
@@ -323,41 +366,87 @@ export function KitchenView({ activeStoreId, canManageKitchenActions = true }: P
 
   const ensureKitchenStockDeducted = useCallback(
     async (order: OnlineOrder) => {
-      if (order.stockDeductedAt) return
-      await db.transaction('rw', [db.onlineOrders, db.products, db.storeStocks], async () => {
-        const fresh = await db.onlineOrders.get(order.id)
-        if (!fresh || fresh.stockDeductedAt) return
-        if (fresh.status === 'approved' && fresh.reviewedAt) {
+      if (order.stockDeductedAt && order.kitchenIngredientDeductedAt) return
+      await db.transaction(
+        'rw',
+        [
+          db.onlineOrders,
+          db.products,
+          db.storeStocks,
+          db.kitchenIngredients,
+          db.kitchenIngredientStocks,
+          db.productRecipeIngredients,
+        ],
+        async () => {
+          const fresh = await db.onlineOrders.get(order.id)
+          if (!fresh) return
+          if (fresh.stockDeductedAt && fresh.kitchenIngredientDeductedAt) return
+
+          const recipeRowsLocal = await db.productRecipeIngredients.toArray()
+          const now = Date.now()
+
+          if (fresh.status === 'approved' && fresh.reviewedAt && !fresh.stockDeductedAt) {
+            await db.onlineOrders.update(fresh.id, {
+              stockDeductedAt: fresh.reviewedAt,
+              kitchenIngredientDeductedAt:
+                fresh.kitchenIngredientDeductedAt ?? fresh.reviewedAt,
+            })
+            return
+          }
+          if (
+            fresh.status === 'approved' &&
+            fresh.reviewedAt &&
+            fresh.stockDeductedAt &&
+            !fresh.kitchenIngredientDeductedAt
+          ) {
+            await db.onlineOrders.update(fresh.id, {
+              kitchenIngredientDeductedAt: fresh.reviewedAt,
+            })
+            return
+          }
+
+          if (!fresh.stockDeductedAt) {
+            for (const line of fresh.lines) {
+              const product = await db.products.get(line.productId)
+              if (!product || product.archived) {
+                throw new Error(`Produit indisponible: « ${line.name} ».`)
+              }
+              const stockId = storeStockRowId(fresh.storeId, line.productId)
+              const row = await db.storeStocks.get(stockId)
+              const currentStock = row?.stock ?? 0
+              if (currentStock < line.qty) {
+                throw new Error(
+                  `Stock insuffisant pour « ${line.name} » (disponible: ${currentStock}).`,
+                )
+              }
+            }
+            for (const line of fresh.lines) {
+              const stockId = storeStockRowId(fresh.storeId, line.productId)
+              const row = await db.storeStocks.get(stockId)
+              const currentStock = row?.stock ?? 0
+              await db.storeStocks.put({
+                id: stockId,
+                storeId: fresh.storeId,
+                productId: line.productId,
+                stock: currentStock - line.qty,
+              })
+            }
+          }
+
+          if (!fresh.kitchenIngredientDeductedAt) {
+            await deductKitchenIngredientStockForLines(
+              fresh.storeId,
+              fresh.lines,
+              recipeRowsLocal,
+            )
+          }
+
           await db.onlineOrders.update(fresh.id, {
-            stockDeductedAt: fresh.reviewedAt,
+            stockDeductedAt: fresh.stockDeductedAt ?? now,
+            kitchenIngredientDeductedAt: fresh.kitchenIngredientDeductedAt ?? now,
           })
-          return
-        }
-        for (const line of fresh.lines) {
-          const product = await db.products.get(line.productId)
-          if (!product || product.archived) {
-            throw new Error(`Produit indisponible: « ${line.name} ».`)
-          }
-          const stockId = storeStockRowId(fresh.storeId, line.productId)
-          const row = await db.storeStocks.get(stockId)
-          const currentStock = row?.stock ?? 0
-          if (currentStock < line.qty) {
-            throw new Error(`Stock insuffisant pour « ${line.name} » (disponible: ${currentStock}).`)
-          }
-        }
-        for (const line of fresh.lines) {
-          const stockId = storeStockRowId(fresh.storeId, line.productId)
-          const row = await db.storeStocks.get(stockId)
-          const currentStock = row?.stock ?? 0
-          await db.storeStocks.put({
-            id: stockId,
-            storeId: fresh.storeId,
-            productId: line.productId,
-            stock: currentStock - line.qty,
-          })
-        }
-        await db.onlineOrders.update(fresh.id, { stockDeductedAt: Date.now() })
-      })
+        },
+      )
     },
     [],
   )
@@ -463,12 +552,21 @@ export function KitchenView({ activeStoreId, canManageKitchenActions = true }: P
               <IconFile className="h-4 w-4" />
             </span>
             <p className="text-[12px] text-zinc-700">
-              Le module cuisine est désactivé dans les intégrations. Active-le pour
-              alimenter automatiquement les tickets.
+              Le module cuisine est désactivé dans Paramètres → Modules. Active-le pour
+              alimenter automatiquement les tickets KDS.
             </p>
           </CardContent>
         </Card>
       ) : null}
+
+      <KitchenIngredientStockPanel
+        storeId={activeStoreId}
+        rows={kitchenIngredientRows}
+        projectedUsage={kitchenOn ? projectedIngredientUsage : undefined}
+        canAdjust={canManageKitchenActions}
+        onLoadDemo={canManageKitchenActions ? loadKitchenDemo : undefined}
+        loadDemoBusy={kitchenDemoBusy}
+      />
       {kitchenOn && !kdsHardwareOn ? (
         <Card>
           <CardContent className="flex items-start gap-3">

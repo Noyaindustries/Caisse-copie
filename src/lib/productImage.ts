@@ -4,6 +4,7 @@ type ProductImageLike = {
   name: string
   category?: string
   imageDataUrl?: string
+  imageUrl?: string
 }
 
 const svgCache = new Map<string, string>()
@@ -187,6 +188,7 @@ function canUseRemoteImages(): boolean {
  * automatiquement sur le SVG via `onError`.
  */
 export function productImageSrc(product: ProductImageLike): string {
+  if (product.imageUrl) return product.imageUrl
   if (product.imageDataUrl) return product.imageDataUrl
   if (canUseRemoteImages()) {
     const remote = productImageRemoteUrl(product)

@@ -17,6 +17,10 @@ export function getOrCreateTerminalId(): string {
 }
 
 export function getOrCreateTerminalLabel(): string {
+  return getTerminalLabel()
+}
+
+export function getTerminalLabel(): string {
   try {
     const existing = localStorage.getItem(KEY_TERMINAL_LABEL)
     if (existing) return existing
@@ -26,4 +30,16 @@ export function getOrCreateTerminalLabel(): string {
   } catch {
     return `Terminal ${SESSION_ID}`
   }
+}
+
+export function setTerminalLabel(label: string): void {
+  try {
+    localStorage.setItem(KEY_TERMINAL_LABEL, label.trim() || `Terminal ${SESSION_ID}`)
+  } catch {
+    /* ignore */
+  }
+}
+
+export function getTerminalId(): string {
+  return getOrCreateTerminalId()
 }

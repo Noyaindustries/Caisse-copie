@@ -1,7 +1,8 @@
 import { db, ensureAllStoreStockRows, syncProductCategoriesFromProducts } from '../db/db'
 import { DEFAULT_STORE_ID } from '../db/seedStores'
-import type { Product, ProductCategory } from '../db/types'
+import type { Product, ProductCategory, ProductWithStock } from '../db/types'
 import { PRODUCT_CATEGORY_LIST } from '../db/types'
+import { downloadTextFile, toCsvSemicolon } from './analyticsExport'
 import { storeStockRowId } from './storeStockId'
 
 export const CSV_TEMPLATE = `nom;prix_ttc;prix_revient_ttc;code_barres;categorie;stock;seuil;tva_pct;archive;image_url
@@ -221,10 +222,13 @@ function validateAndBuild(
   }
   const archived = parseBoolArchive(o.archived)
   let imageDataUrl: string | undefined
+  let imageUrl: string | undefined
   const img = o.imageUrl?.trim()
   if (img) {
-    if (img.startsWith('data:') || img.startsWith('http://') || img.startsWith('https://')) {
+    if (img.startsWith('data:')) {
       imageDataUrl = img
+    } else if (img.startsWith('http://') || img.startsWith('https://')) {
+      imageUrl = img
     } else {
       return {
         error: {
@@ -245,6 +249,7 @@ function validateAndBuild(
     archived,
     ...(purchasePriceTTC !== undefined ? { purchasePriceTTC } : {}),
     ...(imageDataUrl ? { imageDataUrl } : {}),
+    ...(imageUrl ? { imageUrl } : {}),
   }
   return { product, mainStoreStock: stock }
 }
@@ -309,9 +314,13 @@ export async function applyProductsCsvImport(
           lowStockThreshold: p.lowStockThreshold,
           vatRatePct: p.vatRatePct,
           archived: p.archived,
-          ...(p.imageDataUrl !== undefined
-            ? { imageDataUrl: p.imageDataUrl }
-            : {}),
+        }
+        if (p.imageUrl !== undefined) {
+          merged.imageUrl = p.imageUrl
+          delete merged.imageDataUrl
+        } else if (p.imageDataUrl !== undefined) {
+          merged.imageDataUrl = p.imageDataUrl
+          delete merged.imageUrl
         }
         if (p.purchasePriceTTC !== undefined) {
           merged.purchasePriceTTC = p.purchasePriceTTC
@@ -350,4 +359,36 @@ export function downloadCsvTemplate(): void {
   a.download = 'caisseci-import-produits-modele.csv'
   a.click()
   URL.revokeObjectURL(url)
+}
+
+/** Exporte les produits visibles (stock magasin actif inclus). */
+export function exportProductsCsv(
+  products: ProductWithStock[],
+  filename: string,
+): void {
+  const header = [
+    'nom',
+    'prix_ttc',
+    'prix_revient_ttc',
+    'code_barres',
+    'categorie',
+    'stock',
+    'seuil',
+    'tva_pct',
+    'archive',
+    'image_url',
+  ]
+  const rows = products.map((p) => [
+    p.name,
+    String(p.priceTTC),
+    p.purchasePriceTTC != null ? String(p.purchasePriceTTC) : '',
+    p.barcode,
+    p.category,
+    String(p.stock),
+    String(p.lowStockThreshold),
+    String(p.vatRatePct ?? 18),
+    p.archived ? '1' : '',
+    p.imageUrl ?? '',
+  ])
+  downloadTextFile(filename, toCsvSemicolon([header, ...rows]))
 }

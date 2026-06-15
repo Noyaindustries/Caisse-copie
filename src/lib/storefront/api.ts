@@ -100,6 +100,7 @@ export async function publishStorefrontMenu(
         category: p.category,
         vatRatePct: p.vatRatePct,
         imageDataUrl: p.imageDataUrl,
+        imageUrl: p.imageUrl,
         stock: p.stock,
         barcode: p.barcode,
         lowStockThreshold: p.lowStockThreshold,

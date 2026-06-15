@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react'
 import { MARKETING_IMAGES } from '../lib/marketingImages'
 import { MarketingImage } from './marketing/MarketingImage'
+import { MarketingBlobs } from './marketing/MarketingBlobs'
 import { MarketingSectionHeader } from './marketing/MarketingSectionHeader'
 import { Reveal } from './marketing/Reveal'
 import { NavIcon } from './NavIcons'
@@ -233,6 +234,7 @@ export function MarketingModulesSection() {
 
   return (
     <section id="fonctionnalites" className="relative border-t border-border/50 bg-linear-to-b from-white via-[#f8f9fc] to-white py-24">
+      <MarketingBlobs preset="light" className="opacity-80" />
       <div className="marketing-grid-pattern pointer-events-none absolute inset-0 opacity-[0.35]" />
       <div className="relative mx-auto max-w-7xl px-4 sm:px-6">
         <div className="overflow-hidden rounded-3xl shadow-lg ring-1 ring-border/50">

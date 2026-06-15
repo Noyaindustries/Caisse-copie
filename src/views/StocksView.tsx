@@ -7,7 +7,7 @@ import {
   type CSSProperties,
 } from 'react'
 import { useActiveStore } from '../context/ActiveStoreContext'
-import { db } from '../db/db'
+import { db, loadKitchenStockDemo } from '../db/db'
 import type {
   KitchenStockUnit,
   ProductWithStock,
@@ -16,6 +16,14 @@ import { downloadTextFile, toCsvSemicolon } from '../lib/analyticsExport'
 import { formatFCFA } from '../lib/money'
 import { productIsActive } from '../lib/productFilters'
 import { storeStockRowId } from '../lib/storeStockId'
+import {
+  adjustKitchenIngredientStock,
+  createKitchenIngredientFromProduct,
+  ingredientStatus,
+  kitchenIngredientStats,
+  kitchenIngredientStockRowId,
+  mergeKitchenIngredientRows,
+} from '../lib/kitchenStock'
 import { locationStockRowId } from '../lib/locationStockId'
 import type { AuditActor } from '../lib/auditLog'
 import { appendAuditEvent } from '../lib/auditLog'
@@ -43,6 +51,9 @@ import {
 type Props = { isAdmin: boolean; auditActor: AuditActor }
 
 type StockFilter = 'tous' | 'rupture' | 'alerte' | 'ok'
+type StockScope = 'catalogue' | 'cuisine'
+type CatalogueSubTab = 'articles' | 'mouvements'
+type StockSortKey = 'urgency' | 'name' | 'stock-asc' | 'stock-desc' | 'price-desc'
 
 function urgency(p: ProductWithStock): number {
   if (p.stock <= 0) return 0
@@ -87,6 +98,9 @@ export function StocksView({ isAdmin, auditActor }: Props) {
   }, [products, stockRows, locationStocks, selectedLocationId])
   const [showArchived, setShowArchived] = useState(false)
   const [filter, setFilter] = useState<StockFilter>('tous')
+  const [stockScope, setStockScope] = useState<StockScope>('catalogue')
+  const [catalogueSubTab, setCatalogueSubTab] = useState<CatalogueSubTab>('articles')
+  const [sortKey, setSortKey] = useState<StockSortKey>('urgency')
   const [q, setQ] = useState('')
   const [editingId, setEditingId] = useState<string | null>(null)
   const [stockInput, setStockInput] = useState('')
@@ -97,6 +111,7 @@ export function StocksView({ isAdmin, auditActor }: Props) {
   const [quickBusy, setQuickBusy] = useState(false)
   const [bulkQty, setBulkQty] = useState('10')
   const [bulkBusy, setBulkBusy] = useState(false)
+  const [kitchenDemoBusy, setKitchenDemoBusy] = useState(false)
   const kitchenIngredients = useLiveQuery(() => db.kitchenIngredients.toArray(), [], []) ?? []
   const kitchenIngredientStocks =
     useLiveQuery(
@@ -111,6 +126,7 @@ export function StocksView({ isAdmin, auditActor }: Props) {
   const [ingredientThreshold, setIngredientThreshold] = useState('0')
   const [recipeProductId, setRecipeProductId] = useState('')
   const [recipeIngredientId, setRecipeIngredientId] = useState('')
+  const [linkProductId, setLinkProductId] = useState('')
   const [recipeQtyPerUnit, setRecipeQtyPerUnit] = useState('')
   const auditRows = useLiveQuery(
     () => db.auditEvents.orderBy('createdAt').reverse().limit(200).toArray(),
@@ -166,12 +182,24 @@ export function StocksView({ isAdmin, auditActor }: Props) {
       )
     }
     return list.sort((a, b) => {
-      const ua = urgency(a)
-      const ub = urgency(b)
-      if (ua !== ub) return ua - ub
-      return a.stock - b.stock
+      switch (sortKey) {
+        case 'name':
+          return a.name.localeCompare(b.name, 'fr')
+        case 'stock-asc':
+          return a.stock - b.stock
+        case 'stock-desc':
+          return b.stock - a.stock
+        case 'price-desc':
+          return b.priceTTC - a.priceTTC
+        default: {
+          const ua = urgency(a)
+          const ub = urgency(b)
+          if (ua !== ub) return ua - ub
+          return a.stock - b.stock
+        }
+      }
     })
-  }, [visibleProducts, filter, q])
+  }, [visibleProducts, filter, q, sortKey])
 
   const stockMovements = useMemo(() => {
     const rows = auditRows ?? []
@@ -206,18 +234,15 @@ export function StocksView({ isAdmin, auditActor }: Props) {
       .slice(0, 20)
   }, [auditRows, activeStoreId])
 
-  const kitchenRows = useMemo(() => {
-    const stockByIngredient = new Map(
-      kitchenIngredientStocks.map((row) => [row.ingredientId, row.stock]),
-    )
-    return kitchenIngredients
-      .filter((x) => !x.archived)
-      .map((ing) => ({
-        ...ing,
-        stock: stockByIngredient.get(ing.id) ?? 0,
-      }))
-      .sort((a, b) => a.name.localeCompare(b.name, 'fr'))
-  }, [kitchenIngredients, kitchenIngredientStocks])
+  const kitchenRows = useMemo(
+    () => mergeKitchenIngredientRows(kitchenIngredients, kitchenIngredientStocks, activeStoreId),
+    [kitchenIngredients, kitchenIngredientStocks, activeStoreId],
+  )
+  const kitchenStats = useMemo(() => kitchenIngredientStats(kitchenRows), [kitchenRows])
+  const linkedProductIds = useMemo(
+    () => new Set(kitchenRows.map((row) => row.productId).filter(Boolean)),
+    [kitchenRows],
+  )
   const productNameById = useMemo(
     () => new Map(products.map((p) => [p.id, p.name])),
     [products],
@@ -541,7 +566,7 @@ export function StocksView({ isAdmin, auditActor }: Props) {
       archived: false,
     })
     await db.kitchenIngredientStocks.put({
-      id: `${activeStoreId}:${id}`,
+      id: kitchenIngredientStockRowId(activeStoreId, id),
       storeId: activeStoreId,
       ingredientId: id,
       stock,
@@ -557,15 +582,55 @@ export function StocksView({ isAdmin, auditActor }: Props) {
       const row = kitchenRows.find((x) => x.id === ingredientId)
       if (!row) return
       const next = Math.max(0, Math.round((row.stock + delta) * 1000) / 1000)
-      await db.kitchenIngredientStocks.put({
-        id: `${activeStoreId}:${ingredientId}`,
-        storeId: activeStoreId,
-        ingredientId,
-        stock: next,
-      })
+      await adjustKitchenIngredientStock(activeStoreId, ingredientId, next)
     },
     [activeStoreId, kitchenRows],
   )
+
+  const addKitchenIngredientFromProduct = useCallback(async () => {
+    if (!linkProductId) {
+      toast.error('Choisissez un produit du catalogue')
+      return
+    }
+    const product = products.find((p) => p.id === linkProductId)
+    if (!product || product.archived) {
+      toast.error('Produit indisponible')
+      return
+    }
+    const stockRow = stockRows.find((r) => r.productId === linkProductId)
+    const stock = stockRow?.stock ?? 0
+    const threshold = Number.parseFloat(ingredientThreshold.replace(',', '.'))
+    if (!Number.isFinite(threshold) || threshold < 0) {
+      toast.error('Seuil ingrédient invalide')
+      return
+    }
+    try {
+      await createKitchenIngredientFromProduct({
+        storeId: activeStoreId,
+        productId: linkProductId,
+        productName: product.name,
+        unit: ingredientUnit,
+        stock,
+        lowStockThreshold: threshold,
+      })
+      setLinkProductId('')
+      setIngredientThreshold('0')
+      toast.success('Ingrédient lié au produit', product.name)
+    } catch (e) {
+      toast.error(
+        'Liaison impossible',
+        e instanceof Error ? e.message : String(e),
+      )
+    }
+  }, [
+    activeStoreId,
+    ingredientThreshold,
+    ingredientUnit,
+    linkProductId,
+    products,
+    stockRows,
+    toast,
+  ])
 
   const addRecipeRow = useCallback(async () => {
     const qty = Number.parseFloat(recipeQtyPerUnit.replace(',', '.'))
@@ -654,6 +719,39 @@ export function StocksView({ isAdmin, auditActor }: Props) {
     toast.success('Export mouvements prêt', `${stockMovements.length} ligne(s)`)
   }, [stockMovements, activeStore?.shortCode, activeStoreId, toast])
 
+  const loadKitchenDemo = useCallback(async () => {
+    setKitchenDemoBusy(true)
+    try {
+      const changed = await loadKitchenStockDemo()
+      if (changed) {
+        toast.success(
+          'Stock cuisine chargé',
+          'Ingrédients, quantités et recettes de démo sont prêts.',
+        )
+        setStockScope('cuisine')
+      } else {
+        toast.info('Stock cuisine', 'Les données cuisine existent déjà.')
+        setStockScope('cuisine')
+      }
+    } catch {
+      toast.error('Échec', 'Impossible de charger les exemples cuisine.')
+    } finally {
+      setKitchenDemoBusy(false)
+    }
+  }, [toast])
+
+  const scopeTabs = useMemo(
+    () => [
+      { id: 'catalogue' as const, label: 'Produits catalogue' },
+      {
+        id: 'cuisine' as const,
+        label: 'Ingrédients cuisine',
+        count: kitchenRows.length > 0 ? kitchenRows.length : undefined,
+      },
+    ],
+    [kitchenRows.length],
+  )
+
   const filterTabs = useMemo(
     () => [
       { id: 'tous' as const, label: 'Tous' },
@@ -669,9 +767,319 @@ export function StocksView({ isAdmin, auditActor }: Props) {
       <PageHeader
         eyebrow={`Magasin · ${activeStore?.name ?? '—'}`}
         title="Stocks"
-        subtitle="Niveaux par magasin et par emplacement, seuils d’alerte et inventaire rapide"
+        subtitle={
+          stockScope === 'cuisine'
+            ? 'Matières premières et ingrédients utilisés en cuisine (recettes)'
+            : 'Niveaux par magasin et par emplacement, seuils d’alerte et inventaire rapide'
+        }
+        actions={
+          stockScope === 'catalogue' ? (
+            <div className="flex flex-wrap gap-2">
+              <Button
+                variant="secondary"
+                size="sm"
+                iconLeft={<IconDownload />}
+                onClick={exportStockCsv}
+              >
+                Export stock
+              </Button>
+              <Button
+                variant="secondary"
+                size="sm"
+                iconLeft={<IconDownload />}
+                onClick={exportMovementsCsv}
+                disabled={stockMovements.length === 0}
+              >
+                Mouvements
+              </Button>
+            </div>
+          ) : null
+        }
       />
 
+      <Tabs
+        variant="segmented"
+        items={scopeTabs}
+        active={stockScope}
+        onChange={setStockScope}
+      />
+
+      {stockScope === 'catalogue' && isAdmin ? (
+        <Card>
+          <CardContent className="flex flex-wrap items-center justify-between gap-3">
+            <p className="text-[12px] text-ink-muted">
+              Le <strong className="text-ink">stock cuisine</strong> (matières premières,
+              recettes) ne figure pas dans le catalogue : utilisez l’onglet{' '}
+              <strong className="text-ink">Ingrédients cuisine</strong>.
+            </p>
+            <Button size="sm" variant="secondary" onClick={() => setStockScope('cuisine')}>
+              Voir ingrédients cuisine
+            </Button>
+          </CardContent>
+        </Card>
+      ) : null}
+
+      {stockScope === 'cuisine' ? (
+        isAdmin ? (
+          <>
+            <div className="catalogue-hero p-4 sm:p-5">
+              <div className="grid gap-3 sm:grid-cols-3">
+              <Kpi
+                label="Rupture cuisine"
+                value={String(kitchenStats.rupture)}
+                tone="rose"
+                icon={<IconAlert />}
+              />
+              <Kpi
+                label="Sous le seuil"
+                value={String(kitchenStats.low)}
+                hint={`${kitchenStats.total} références`}
+                tone="amber"
+                icon={<IconStocks />}
+              />
+              <Kpi
+                label="Stock confortable"
+                value={String(kitchenStats.ok)}
+                tone="accent"
+                icon={<IconCheckCircle />}
+              />
+              </div>
+            </div>
+            <Card>
+              <CardContent className="space-y-3">
+                <h2 className="text-[14px] font-semibold text-ink">
+                  Stock cuisine (ingrédients)
+                </h2>
+                <div className="grid gap-2 md:grid-cols-5">
+                  <Input
+                    value={ingredientName}
+                    onChange={(e) => setIngredientName(e.target.value)}
+                    placeholder="Nom ingrédient"
+                  />
+                  <Select
+                    value={ingredientUnit}
+                    onChange={(e) => setIngredientUnit(e.target.value as KitchenStockUnit)}
+                  >
+                    <option value="kg">kg</option>
+                    <option value="g">g</option>
+                    <option value="l">L</option>
+                    <option value="ml">ml</option>
+                    <option value="piece">pièce</option>
+                  </Select>
+                  <Input
+                    inputMode="decimal"
+                    value={ingredientStock}
+                    onChange={(e) => setIngredientStock(e.target.value)}
+                    placeholder="Stock initial"
+                  />
+                  <Input
+                    inputMode="decimal"
+                    value={ingredientThreshold}
+                    onChange={(e) => setIngredientThreshold(e.target.value)}
+                    placeholder="Seuil alerte"
+                  />
+                  <Button variant="accent" onClick={() => void addKitchenIngredient()}>
+                    Ajouter
+                  </Button>
+                </div>
+                <div className="grid gap-2 md:grid-cols-[2fr_1fr_1fr_auto]">
+                  <Select
+                    value={linkProductId}
+                    onChange={(e) => setLinkProductId(e.target.value)}
+                  >
+                    <option value="">Créer depuis un produit catalogue…</option>
+                    {products
+                      .filter((p) => !p.archived && !linkedProductIds.has(p.id))
+                      .map((p) => (
+                        <option key={p.id} value={p.id}>
+                          {p.name}
+                        </option>
+                      ))}
+                  </Select>
+                  <Select
+                    value={ingredientUnit}
+                    onChange={(e) => setIngredientUnit(e.target.value as KitchenStockUnit)}
+                  >
+                    <option value="kg">kg</option>
+                    <option value="g">g</option>
+                    <option value="l">L</option>
+                    <option value="ml">ml</option>
+                    <option value="piece">pièce</option>
+                  </Select>
+                  <Input
+                    inputMode="decimal"
+                    value={ingredientThreshold}
+                    onChange={(e) => setIngredientThreshold(e.target.value)}
+                    placeholder="Seuil alerte"
+                  />
+                  <Button variant="secondary" onClick={() => void addKitchenIngredientFromProduct()}>
+                    Lier produit
+                  </Button>
+                </div>
+                {kitchenRows.length === 0 ? (
+                  <EmptyState
+                    title="Aucun ingrédient cuisine"
+                    description="Ajoutez des matières premières, liez un produit du catalogue, ou chargez les exemples (poulet, poisson, attiéké, recettes des plats p1–p3)."
+                    variant="flat"
+                    action={
+                      <Button
+                        variant="accent"
+                        disabled={kitchenDemoBusy}
+                        onClick={() => void loadKitchenDemo()}
+                      >
+                        {kitchenDemoBusy ? 'Chargement…' : 'Charger les exemples cuisine'}
+                      </Button>
+                    }
+                  />
+                ) : (
+                  <div className="space-y-2">
+                    {kitchenRows.map((row) => {
+                      const status = ingredientStatus(row)
+                      const statusTone =
+                        status === 'rupture'
+                          ? 'danger'
+                          : status === 'alerte'
+                            ? 'warning'
+                            : 'success'
+                      const statusLabel =
+                        status === 'rupture'
+                          ? 'Rupture'
+                          : status === 'alerte'
+                            ? 'Alerte'
+                            : 'OK'
+                      return (
+                        <div
+                          key={row.id}
+                          className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-zinc-200 px-3 py-2 text-[12px]"
+                        >
+                          <span className="font-medium text-zinc-800">
+                            {row.name} · {row.stock} {row.unit}
+                            {row.productId ? (
+                              <span className="text-ink-subtle">
+                                {' '}
+                                · catalogue: {productNameById.get(row.productId) ?? 'produit'}
+                              </span>
+                            ) : null}
+                          </span>
+                          <div className="flex flex-wrap items-center gap-1">
+                            <Badge tone={statusTone}>{statusLabel}</Badge>
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              onClick={() => void adjustKitchenIngredient(row.id, -0.1)}
+                            >
+                              -0.1
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              onClick={() => void adjustKitchenIngredient(row.id, 0.1)}
+                            >
+                              +0.1
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              onClick={() => void adjustKitchenIngredient(row.id, -1)}
+                            >
+                              -1
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              onClick={() => void adjustKitchenIngredient(row.id, 1)}
+                            >
+                              +1
+                            </Button>
+                          </div>
+                        </div>
+                      )
+                    })}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+            <Card>
+              <CardContent className="space-y-3">
+                <h2 className="text-[14px] font-semibold text-ink">
+                  Recettes (plat {'->'} ingrédients)
+                </h2>
+                <div className="grid gap-2 md:grid-cols-[1.5fr_1.5fr_1fr_auto]">
+                  <Select
+                    value={recipeProductId}
+                    onChange={(e) => setRecipeProductId(e.target.value)}
+                  >
+                    <option value="">Choisir un produit</option>
+                    {products
+                      .filter((p) => !p.archived)
+                      .map((p) => (
+                        <option key={p.id} value={p.id}>
+                          {p.name}
+                        </option>
+                      ))}
+                  </Select>
+                  <Select
+                    value={recipeIngredientId}
+                    onChange={(e) => setRecipeIngredientId(e.target.value)}
+                  >
+                    <option value="">Choisir un ingrédient</option>
+                    {kitchenRows.map((row) => (
+                      <option key={row.id} value={row.id}>
+                        {row.name}
+                      </option>
+                    ))}
+                  </Select>
+                  <Input
+                    inputMode="decimal"
+                    value={recipeQtyPerUnit}
+                    onChange={(e) => setRecipeQtyPerUnit(e.target.value)}
+                    placeholder="Qté / plat"
+                  />
+                  <Button variant="accent" onClick={() => void addRecipeRow()}>
+                    Enregistrer
+                  </Button>
+                </div>
+                {recipeRows.length === 0 ? (
+                  <p className="text-[12px] text-ink-subtle">Aucune recette enregistrée.</p>
+                ) : (
+                  <div className="space-y-1">
+                    {recipeRows.map((row) => (
+                      <div
+                        key={row.id}
+                        className="flex flex-wrap items-center justify-between gap-2 text-[12px] text-zinc-700"
+                      >
+                        <p>
+                          {(productNameById.get(row.productId) ?? 'Produit')} {'->'}{' '}
+                          {(ingredientNameById.get(row.ingredientId) ?? 'Ingrédient')} :{' '}
+                          {row.qtyPerUnit}
+                        </p>
+                        <div className="flex gap-1">
+                          <Button size="sm" variant="ghost" onClick={() => startEditRecipeRow(row.id)}>
+                            Modifier
+                          </Button>
+                          <Button size="sm" variant="ghost" onClick={() => void removeRecipeRow(row.id)}>
+                            Supprimer
+                          </Button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </>
+        ) : (
+          <Card>
+            <CardContent>
+              <p className="text-[12px] text-ink-subtle">
+                Vous n’avez pas les droits pour gérer le stock cuisine. Contactez un gérant ou
+                administrateur.
+              </p>
+            </CardContent>
+          </Card>
+        )
+      ) : (
+        <>
       <Card>
         <CardContent className="grid gap-2 sm:grid-cols-2">
           <Field label="Emplacement de stock actif">
@@ -694,7 +1102,8 @@ export function StocksView({ isAdmin, auditActor }: Props) {
         </CardContent>
       </Card>
 
-      <div className="grid gap-3 sm:grid-cols-3">
+      <div className="catalogue-hero p-4 sm:p-5">
+        <div className="grid gap-3 sm:grid-cols-3 xl:grid-cols-5">
         <Kpi
           label="Rupture"
           value={String(stats.rupture)}
@@ -716,24 +1125,39 @@ export function StocksView({ isAdmin, auditActor }: Props) {
           tone="accent"
           icon={<IconCheckCircle />}
         />
-      </div>
-      <div className="grid gap-3 sm:grid-cols-2">
         <Kpi
           label="Valeur du stock"
           value={formatFCFA(stockValuation)}
-          hint="Stock courant du magasin actif"
-          tone="accent"
+          hint="Magasin actif"
+          tone="violet"
           icon={<IconStocks />}
         />
         <Kpi
-          label="Valeur exposée (rupture)"
+          label="Exposé rupture"
           value={formatFCFA(ruptureValuation)}
-          hint="Valeur des références en rupture"
+          hint="Références à zéro"
           tone="rose"
           icon={<IconAlert />}
         />
+        </div>
       </div>
 
+      <Tabs
+        variant="segmented"
+        active={catalogueSubTab}
+        onChange={setCatalogueSubTab}
+        items={[
+          { id: 'articles', label: 'Articles', count: filtered.length },
+          {
+            id: 'mouvements',
+            label: 'Mouvements',
+            count: stockMovements.length > 0 ? stockMovements.length : undefined,
+          },
+        ]}
+      />
+
+      {catalogueSubTab === 'articles' ? (
+        <>
       {isAdmin ? (
         <Card>
           <CardContent>
@@ -777,194 +1201,11 @@ export function StocksView({ isAdmin, auditActor }: Props) {
         </Card>
       ) : null}
 
-      {isAdmin ? (
-        <Card>
-          <CardContent className="space-y-3">
-            <h2 className="text-[14px] font-semibold text-ink">
-              Stock cuisine (ingrédients)
-            </h2>
-            <div className="grid gap-2 md:grid-cols-5">
-              <Input
-                value={ingredientName}
-                onChange={(e) => setIngredientName(e.target.value)}
-                placeholder="Nom ingrédient"
-              />
-              <Select
-                value={ingredientUnit}
-                onChange={(e) => setIngredientUnit(e.target.value as KitchenStockUnit)}
-              >
-                <option value="kg">kg</option>
-                <option value="g">g</option>
-                <option value="l">L</option>
-                <option value="ml">ml</option>
-                <option value="piece">pièce</option>
-              </Select>
-              <Input
-                inputMode="decimal"
-                value={ingredientStock}
-                onChange={(e) => setIngredientStock(e.target.value)}
-                placeholder="Stock initial"
-              />
-              <Input
-                inputMode="decimal"
-                value={ingredientThreshold}
-                onChange={(e) => setIngredientThreshold(e.target.value)}
-                placeholder="Seuil alerte"
-              />
-              <Button variant="accent" onClick={() => void addKitchenIngredient()}>
-                Ajouter
-              </Button>
-            </div>
-            {kitchenRows.length === 0 ? (
-              <p className="text-[12px] text-ink-subtle">
-                Aucun ingrédient cuisine configuré.
-              </p>
-            ) : (
-              <div className="space-y-2">
-                {kitchenRows.map((row) => (
-                  <div
-                    key={row.id}
-                    className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-zinc-200 px-3 py-2 text-[12px]"
-                  >
-                    <span className="font-medium text-zinc-800">
-                      {row.name} · {row.stock} {row.unit}
-                    </span>
-                    <div className="flex gap-1">
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        onClick={() => void adjustKitchenIngredient(row.id, -0.1)}
-                      >
-                        -0.1
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        onClick={() => void adjustKitchenIngredient(row.id, 0.1)}
-                      >
-                        +0.1
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        onClick={() => void adjustKitchenIngredient(row.id, -1)}
-                      >
-                        -1
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        onClick={() => void adjustKitchenIngredient(row.id, 1)}
-                      >
-                        +1
-                      </Button>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </CardContent>
-        </Card>
-      ) : null}
-
-      {isAdmin ? (
-        <Card>
-          <CardContent className="space-y-3">
-            <h2 className="text-[14px] font-semibold text-ink">
-              Recettes (plat {'->'} ingrédients)
-            </h2>
-            <div className="grid gap-2 md:grid-cols-[1.5fr_1.5fr_1fr_auto]">
-              <Select
-                value={recipeProductId}
-                onChange={(e) => setRecipeProductId(e.target.value)}
-              >
-                <option value="">Choisir un produit</option>
-                {products
-                  .filter((p) => !p.archived)
-                  .map((p) => (
-                    <option key={p.id} value={p.id}>
-                      {p.name}
-                    </option>
-                  ))}
-              </Select>
-              <Select
-                value={recipeIngredientId}
-                onChange={(e) => setRecipeIngredientId(e.target.value)}
-              >
-                <option value="">Choisir un ingrédient</option>
-                {kitchenRows.map((row) => (
-                  <option key={row.id} value={row.id}>
-                    {row.name}
-                  </option>
-                ))}
-              </Select>
-              <Input
-                inputMode="decimal"
-                value={recipeQtyPerUnit}
-                onChange={(e) => setRecipeQtyPerUnit(e.target.value)}
-                placeholder="Qté / plat"
-              />
-              <Button variant="accent" onClick={() => void addRecipeRow()}>
-                Enregistrer
-              </Button>
-            </div>
-            {recipeRows.length === 0 ? (
-              <p className="text-[12px] text-ink-subtle">
-                Aucune recette enregistrée.
-              </p>
-            ) : (
-              <div className="space-y-1">
-                {recipeRows.map((row) => (
-                  <div
-                    key={row.id}
-                    className="flex flex-wrap items-center justify-between gap-2 text-[12px] text-zinc-700"
-                  >
-                    <p>
-                      {(productNameById.get(row.productId) ?? 'Produit')} {'->'}{' '}
-                      {(ingredientNameById.get(row.ingredientId) ?? 'Ingrédient')} : {row.qtyPerUnit}
-                    </p>
-                    <div className="flex gap-1">
-                      <Button size="sm" variant="ghost" onClick={() => startEditRecipeRow(row.id)}>
-                        Modifier
-                      </Button>
-                      <Button size="sm" variant="ghost" onClick={() => void removeRecipeRow(row.id)}>
-                        Supprimer
-                      </Button>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </CardContent>
-        </Card>
-      ) : null}
-
       <Card>
         <CardContent className="space-y-3">
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <h2 className="text-[14px] font-semibold text-ink">
-              Actions stock
-            </h2>
-            <div className="flex flex-wrap gap-2">
-              <Button
-                variant="secondary"
-                size="sm"
-                iconLeft={<IconDownload />}
-                onClick={exportStockCsv}
-              >
-                Export stock
-              </Button>
-              <Button
-                variant="secondary"
-                size="sm"
-                iconLeft={<IconDownload />}
-                onClick={exportMovementsCsv}
-                disabled={stockMovements.length === 0}
-              >
-                Export mouvements
-              </Button>
-            </div>
-          </div>
+          <h2 className="text-[14px] font-semibold text-ink">
+            Réapprovisionnement
+          </h2>
           {isAdmin ? (
             <div className="flex flex-col gap-2 sm:flex-row sm:items-end">
               <Field label="Réappro bas stocks (+)">
@@ -991,30 +1232,44 @@ export function StocksView({ isAdmin, auditActor }: Props) {
         </CardContent>
       </Card>
 
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+      <div className="catalogue-filter-bar space-y-3 p-4">
         <Tabs
           variant="segmented"
           items={filterTabs}
           active={filter}
           onChange={setFilter}
         />
-        <div className="flex items-center gap-3">
-          {isAdmin ? (
-            <Switch
-              label="Archivés"
-              checked={showArchived}
-              onChange={(e) => setShowArchived(e.target.checked)}
-            />
-          ) : null}
-          <div className="w-full sm:w-64">
-            <Input
-              type="search"
-              value={q}
-              onChange={(e) => setQ(e.target.value)}
-              placeholder="Rechercher…"
-              iconLeft={<IconSearch />}
-            />
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex flex-1 flex-wrap items-center gap-3">
+            {isAdmin ? (
+              <Switch
+                label="Archivés"
+                checked={showArchived}
+                onChange={(e) => setShowArchived(e.target.checked)}
+              />
+            ) : null}
+            <div className="min-w-0 flex-1 sm:max-w-md">
+              <Input
+                type="search"
+                value={q}
+                onChange={(e) => setQ(e.target.value)}
+                placeholder="Rechercher article ou code-barres…"
+                iconLeft={<IconSearch />}
+              />
+            </div>
           </div>
+          <Select
+            value={sortKey}
+            onChange={(e) => setSortKey(e.target.value as StockSortKey)}
+            className="w-full sm:w-[180px]"
+            aria-label="Tri du stock"
+          >
+            <option value="urgency">Priorité alerte</option>
+            <option value="name">Nom A→Z</option>
+            <option value="stock-asc">Stock croissant</option>
+            <option value="stock-desc">Stock décroissant</option>
+            <option value="price-desc">Prix décroissant</option>
+          </Select>
         </div>
       </div>
 
@@ -1207,21 +1462,36 @@ export function StocksView({ isAdmin, auditActor }: Props) {
         </div>
       )}
 
+        </>
+      ) : (
       <Card>
         <CardContent>
-          <h2 className="mb-3 text-[14px] font-semibold text-ink">
-            Derniers mouvements de stock
-          </h2>
+          <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+            <h2 className="text-[14px] font-semibold text-ink">
+              Mouvements de stock récents
+            </h2>
+            <Button
+              variant="secondary"
+              size="sm"
+              iconLeft={<IconDownload />}
+              onClick={exportMovementsCsv}
+              disabled={stockMovements.length === 0}
+            >
+              Export CSV
+            </Button>
+          </div>
           {stockMovements.length === 0 ? (
-            <p className="text-[12px] text-ink-subtle">
-              Aucun mouvement récent pour ce magasin.
-            </p>
+            <EmptyState
+              title="Aucun mouvement"
+              description="Les ajustements apparaîtront ici."
+              variant="flat"
+            />
           ) : (
             <ul className="divide-y divide-border/50">
               {stockMovements.map((m) => (
-                <li key={m.id} className="py-2 text-[12px]">
+                <li key={m.id} className="py-3 text-[12px]">
                   <div className="flex flex-wrap items-center justify-between gap-2">
-                    <p className="font-medium text-ink-muted">
+                    <p className="font-medium text-ink">
                       {m.productName}{' '}
                       {m.previousQty != null && m.newQty != null ? (
                         <span className="font-mono-nums text-ink-subtle">
@@ -1229,19 +1499,22 @@ export function StocksView({ isAdmin, auditActor }: Props) {
                         </span>
                       ) : null}
                     </p>
-                    <span className="font-mono-nums text-[11px] text-ink-subtle">
-                      {new Date(m.createdAt).toLocaleString('fr-FR')}
-                    </span>
+                    <Badge tone="neutral">{m.source}</Badge>
                   </div>
-                  <p className="text-[11px] text-ink-subtle">
-                    {m.actorDisplayName} · {m.reason}
+                  <p className="mt-1 text-[11px] text-ink-subtle">
+                    {new Date(m.createdAt).toLocaleString('fr-FR')} ·{' '}
+                    {m.actorDisplayName}
                   </p>
+                  <p className="text-[11px] text-ink-muted">{m.reason}</p>
                 </li>
               ))}
             </ul>
           )}
         </CardContent>
       </Card>
+      )}
+        </>
+      )}
     </div>
   )
 }

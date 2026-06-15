@@ -7,6 +7,7 @@ import {
 } from '../lib/paymentDisplay'
 import { saleNetTTC } from '../lib/refundMath'
 import { SESSION_ID } from '../lib/session'
+import { getAppSettings } from '../lib/appSettings'
 import { Button } from '../ui/Button'
 import { Modal } from '../ui/Modal'
 import { IconPrinter } from '../ui/icons'
@@ -471,7 +472,7 @@ ${ticketInvoice.notes ? `<div><strong>Note :</strong> ${ticketInvoice.notes}</di
         <footer className="pt-2 text-center text-[10px] text-zinc-400">
           {isOnline
             ? 'Commande en ligne · Document non fiscal'
-            : 'Merci de votre achat · Document non fiscal'}
+            : getAppSettings().receiptFooterLine}
         </footer>
       </div>
     </Modal>

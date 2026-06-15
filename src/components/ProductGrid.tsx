@@ -4,7 +4,7 @@ import { Badge } from '../ui/Badge'
 import { ProductImage } from './ProductImage'
 import { cn } from '../ui/cn'
 import { EmptyState } from '../ui/EmptyState'
-import { IconSearch } from '../ui/icons'
+import { IconSearch, IconSparkles } from '../ui/icons'
 import type { CategoryTab } from './Sidebar'
 
 export type ProductGridDensity = 'compact' | 'confort'
@@ -45,7 +45,16 @@ export function ProductGrid({
 
   return (
     <>
-      <div className="mb-4 ui-scroll flex gap-1.5 overflow-x-auto pb-1">
+      <div className="mb-5 flex items-center justify-between gap-3">
+        <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[#b8922e]">
+          Catalogue
+        </p>
+        <p className="font-mono-nums text-[12px] text-[#5c6678]">
+          {filtered.length} article{filtered.length > 1 ? 's' : ''}
+        </p>
+      </div>
+
+      <div className="mb-5 ui-scroll flex gap-2 overflow-x-auto pb-1">
         {categoryTabs.map((tab) => {
           const on = tab === category
           return (
@@ -53,12 +62,7 @@ export function ProductGrid({
               key={tab}
               type="button"
               onClick={() => onCategoryChange(tab)}
-              className={cn(
-                'shrink-0 rounded-full border px-3 py-1.5 text-[12px] font-semibold transition',
-                on
-                  ? 'border-zinc-900 bg-zinc-900 text-white'
-                  : 'border-zinc-200 bg-white text-zinc-600 hover:border-zinc-300 hover:text-zinc-900',
-              )}
+              className={cn('caisse-cat-pill shrink-0', on && 'caisse-cat-pill-active')}
             >
               {tab}
             </button>
@@ -75,7 +79,7 @@ export function ProductGrid({
       ) : (
         <div
           className={cn(
-            'grid gap-2',
+            'grid gap-3',
             isCompact
               ? 'grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-5 2xl:grid-cols-7'
               : 'grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-4 2xl:grid-cols-5',
@@ -91,52 +95,56 @@ export function ProductGrid({
                 disabled={disabled}
                 onClick={(e) => onAdd(p, e.currentTarget)}
                 className={cn(
-                  'ui-card-hover group flex min-h-30 flex-col rounded-xl border border-zinc-200 bg-white text-left transition disabled:cursor-not-allowed disabled:opacity-50 sm:min-h-28',
-                  isCompact ? 'p-2.5' : 'p-3',
+                  'caisse-product-card group flex min-h-32 flex-col text-left disabled:cursor-not-allowed disabled:opacity-45 sm:min-h-30',
+                  isCompact ? 'p-3' : 'p-3.5',
                 )}
               >
-                <div className="relative mb-2 flex items-start justify-between gap-1.5">
+                <div className="relative z-[1] mb-2.5 flex items-start justify-between gap-2">
                   <ProductImage
                     product={p}
                     className={cn(
-                      'shrink-0 rounded-lg border border-zinc-200 object-cover',
-                      isCompact ? 'h-12 w-12' : 'h-14 w-14',
+                      'shrink-0 rounded-xl border border-[rgba(184,146,46,0.18)] object-cover shadow-sm',
+                      isCompact ? 'h-12 w-12' : 'h-16 w-16',
                     )}
                   />
                   {state === 'rupture' ? (
                     <Badge tone="neutral">Rupture</Badge>
                   ) : state === 'faible' ? (
                     <Badge tone="warning">Faible</Badge>
-                  ) : null}
+                  ) : (
+                    <span className="flex h-6 w-6 items-center justify-center rounded-full border border-[rgba(184,146,46,0.15)] bg-white/80 text-[#c9a962] opacity-0 transition group-hover:opacity-100">
+                      <IconSparkles className="h-3 w-3" />
+                    </span>
+                  )}
                 </div>
                 <p
                   className={cn(
-                    'line-clamp-2 font-medium leading-tight text-zinc-900',
+                    'relative z-[1] line-clamp-2 font-medium leading-snug text-[#1a2332]',
                     isCompact ? 'text-[12px]' : 'text-[13px]',
-                    disabled && 'text-zinc-400',
+                    disabled && 'text-[#8a919e]',
                   )}
                 >
                   {p.name}
                 </p>
                 <p
                   className={cn(
-                    'mt-1 font-mono-nums font-semibold text-emerald-600',
-                    isCompact ? 'text-[13px]' : 'text-[14px]',
+                    'caisse-price relative z-[1] mt-1.5 font-mono-nums',
+                    isCompact ? 'text-[14px]' : 'text-[15px]',
                   )}
                 >
                   {formatFCFA(p.priceTTC)}
                 </p>
                 <p
                   className={cn(
-                    'mt-0.5 font-mono-nums text-[11px]',
+                    'relative z-[1] mt-1 font-mono-nums text-[10px] uppercase tracking-wide',
                     state === 'rupture'
                       ? 'text-rose-600'
                       : state === 'faible'
                         ? 'text-amber-700'
-                        : 'text-zinc-500',
+                        : 'text-[#8a919e]',
                   )}
                 >
-                  Stock : {p.stock}
+                  Stock {p.stock}
                 </p>
               </button>
             )

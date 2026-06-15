@@ -16,15 +16,17 @@ import { Kpi } from '../ui/Kpi'
 import { PageHeader } from '../ui/PageHeader'
 import { useToast } from '../ui/Toast'
 import { IconClock, IconPlus, IconStore, IconUser } from '../ui/icons'
+import {
+  APP_SETTINGS_CHANGED_EVENT,
+  getAppSettings,
+  saveAppSettings,
+} from '../lib/appSettings'
 
 type Props = {
   activeStoreId: string
   activeStoreLabel: string
   canManageTables: boolean
 }
-
-const AUTO_RELEASE_ENABLED_KEY = 'caisseci-tables-auto-release-enabled'
-const AUTO_RELEASE_MINUTES_KEY = 'caisseci-tables-auto-release-minutes'
 
 const STATUS_LABELS: Record<DiningTableStatus, string> = {
   free: 'Libre',
@@ -169,8 +171,12 @@ export function TablesManagementView({
   const [resTime, setResTime] = useState(toLocalTimeInput(defaultStart.getTime()))
   const [resDurationMin, setResDurationMin] = useState('90')
   const [resNotes, setResNotes] = useState('')
-  const [autoReleaseEnabled, setAutoReleaseEnabled] = useState(true)
-  const [autoReleaseMinutes, setAutoReleaseMinutes] = useState('120')
+  const [autoReleaseEnabled, setAutoReleaseEnabled] = useState(
+    () => getAppSettings().tableAutoReleaseEnabled,
+  )
+  const [autoReleaseMinutes, setAutoReleaseMinutes] = useState(
+    () => getAppSettings().tableAutoReleaseMinutes,
+  )
 
   const summary = useMemo(() => {
     const out: Record<DiningTableStatus, number> = {
@@ -336,23 +342,20 @@ export function TablesManagementView({
   }, [tables, selectedTableId])
 
   useEffect(() => {
-    try {
-      const rawEnabled = localStorage.getItem(AUTO_RELEASE_ENABLED_KEY)
-      const rawMinutes = localStorage.getItem(AUTO_RELEASE_MINUTES_KEY)
-      if (rawEnabled != null) setAutoReleaseEnabled(rawEnabled === '1')
-      if (rawMinutes != null) setAutoReleaseMinutes(rawMinutes)
-    } catch {
-      // ignore
+    const sync = () => {
+      const settings = getAppSettings()
+      setAutoReleaseEnabled(settings.tableAutoReleaseEnabled)
+      setAutoReleaseMinutes(settings.tableAutoReleaseMinutes)
     }
+    window.addEventListener(APP_SETTINGS_CHANGED_EVENT, sync)
+    return () => window.removeEventListener(APP_SETTINGS_CHANGED_EVENT, sync)
   }, [])
 
   useEffect(() => {
-    try {
-      localStorage.setItem(AUTO_RELEASE_ENABLED_KEY, autoReleaseEnabled ? '1' : '0')
-      localStorage.setItem(AUTO_RELEASE_MINUTES_KEY, autoReleaseMinutes)
-    } catch {
-      // ignore
-    }
+    saveAppSettings({
+      tableAutoReleaseEnabled: autoReleaseEnabled,
+      tableAutoReleaseMinutes: autoReleaseMinutes,
+    })
   }, [autoReleaseEnabled, autoReleaseMinutes])
 
   useEffect(() => {

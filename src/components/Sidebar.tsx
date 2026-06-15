@@ -39,6 +39,7 @@ import {
   IconFile,
   IconReceipt,
   IconCard,
+  IconSettings,
 } from '../ui/icons'
 
 /** Onglet filtre caisse : « Tous » ou libellé de catégorie (voir `productCategories` en base). */
@@ -63,6 +64,7 @@ const ICON_BY_VIEW: Record<NavViewId, ReactNode> = {
   pointage: <IconPointage />,
   analytique: <IconAnalytique />,
   integrations: <IconIntegrations />,
+  parametres: <IconSettings />,
   network: <IconNetwork />,
   subscription: <IconCard />,
 }

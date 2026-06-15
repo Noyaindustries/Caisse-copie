@@ -1,5 +1,6 @@
 import { MARKETING_IMAGES } from '../../lib/marketingImages'
 import { MarketingSectionHeader } from './MarketingSectionHeader'
+import { MarketingBlobs } from './MarketingBlobs'
 import { Reveal } from './Reveal'
 import { MarketingImage } from './MarketingImage'
 import { cn } from '../../ui/cn'
@@ -56,6 +57,7 @@ const CASES: {
 export function MarketingUseCases() {
   return (
     <section className="relative overflow-hidden bg-[#f8f9fc] py-24">
+      <MarketingBlobs preset="light" />
       <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_50%_0%,rgba(20,99,255,0.06),transparent_50%)]" />
       <div className="relative mx-auto max-w-7xl px-4 sm:px-6">
         <Reveal>

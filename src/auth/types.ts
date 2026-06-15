@@ -21,6 +21,8 @@ export interface StaffPermissions {
   /** Onglet création magasins / admin réseau. */
   canConfigureStoresAdmin: boolean
   canManageIntegrations: boolean
+  /** Paramètres magasin, caisse et périphériques. */
+  canConfigureAppSettings: boolean
 }
 
 export interface StaffProfile {

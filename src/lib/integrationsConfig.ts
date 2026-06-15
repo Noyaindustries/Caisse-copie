@@ -110,9 +110,11 @@ export function setDeliveryWebhookDemo(url: string): void {
 
 export function isKitchenModuleDemoOn(): boolean {
   try {
-    return localStorage.getItem(KEY_KITCHEN) === '1'
+    const raw = localStorage.getItem(KEY_KITCHEN)
+    if (raw === null) return true
+    return raw === '1'
   } catch {
-    return false
+    return true
   }
 }
 

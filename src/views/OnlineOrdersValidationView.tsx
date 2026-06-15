@@ -13,6 +13,7 @@ import { downloadTextFile, toCsvSemicolon } from '../lib/analyticsExport'
 import { formatFCFA } from '../lib/money'
 import { sendOrderApprovedSms } from '../lib/onlineOrderSms'
 import { storeStockRowId } from '../lib/storeStockId'
+import { deductKitchenIngredientStockForLines } from '../lib/kitchenStock'
 import { flushSyncQueue } from '../lib/sync'
 import { importStorefrontInbox } from '../lib/storefront/syncInbox'
 import {
@@ -416,10 +417,16 @@ export function OnlineOrdersValidationView({
             db.sales,
             db.syncQueue,
             db.promotions,
+            db.kitchenIngredients,
+            db.kitchenIngredientStocks,
+            db.productRecipeIngredients,
           ],
           async () => {
             const fresh = await db.onlineOrders.get(order.id)
             if (!fresh || fresh.status !== 'pending') return
+
+            const recipeRows = await db.productRecipeIngredients.toArray()
+            const deductionAt = Date.now()
 
             if (!fresh.stockDeductedAt) {
               for (const line of fresh.lines) {
@@ -450,6 +457,14 @@ export function OnlineOrdersValidationView({
                   stock: currentStock - line.qty,
                 })
               }
+            }
+
+            if (!fresh.kitchenIngredientDeductedAt) {
+              await deductKitchenIngredientStockForLines(
+                fresh.storeId,
+                fresh.lines,
+                recipeRows,
+              )
             }
 
             const saleId = crypto.randomUUID()
@@ -532,7 +547,9 @@ export function OnlineOrdersValidationView({
                 ? `K-${fresh.id.slice(0, 6).toUpperCase()}`
                 : undefined,
               kitchenUpdatedAt: isKitchenModuleDemoOn() ? Date.now() : undefined,
-              stockDeductedAt: fresh.stockDeductedAt ?? Date.now(),
+              stockDeductedAt: fresh.stockDeductedAt ?? deductionAt,
+              kitchenIngredientDeductedAt:
+                fresh.kitchenIngredientDeductedAt ?? deductionAt,
             }
             approvedOrderId = approvedRecord.id
             await db.onlineOrders.put(approvedRecord)

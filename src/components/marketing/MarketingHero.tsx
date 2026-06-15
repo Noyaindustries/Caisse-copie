@@ -4,6 +4,7 @@ import { formatTrialPeriod } from '../../lib/subscription/plans'
 import { Badge } from '../../ui/Badge'
 import { Button } from '../../ui/Button'
 import { MarketingImage } from './MarketingImage'
+import { MarketingBlobs } from './MarketingBlobs'
 import { cn } from '../../ui/cn'
 import {
   IconArrowRight,
@@ -160,9 +161,7 @@ export function MarketingHero({
       <div className="marketing-hero-mesh pointer-events-none absolute inset-0 overflow-hidden opacity-50" />
       <div className="marketing-hero-noise pointer-events-none absolute inset-0 opacity-60 mix-blend-overlay" />
       <div className="marketing-grid-pattern pointer-events-none absolute inset-0 overflow-hidden opacity-[0.06]" />
-      <div className="pointer-events-none absolute -right-32 top-16 h-[28rem] w-[28rem] rounded-full bg-indigo-500/20 blur-3xl marketing-float-slow" />
-      <div className="pointer-events-none absolute -bottom-40 -left-20 h-80 w-80 rounded-full bg-violet-600/15 blur-3xl" />
-      <div className="pointer-events-none absolute left-1/2 top-1/3 h-64 w-64 -translate-x-1/2 rounded-full bg-sky-500/10 blur-3xl" />
+      <MarketingBlobs preset="hero" />
 
       <div className="relative mx-auto grid max-w-7xl min-w-0 items-center gap-14 px-4 py-20 pb-24 sm:px-6 sm:pb-28 lg:grid-cols-[5fr_6fr] lg:gap-10 xl:gap-12 lg:py-28 lg:pb-32">
         <div className="min-w-0">

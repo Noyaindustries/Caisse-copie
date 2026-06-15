@@ -9,6 +9,7 @@ type ProductImageLike = {
   name: string
   category?: string
   imageDataUrl?: string
+  imageUrl?: string
 }
 
 type Props = Omit<ImgHTMLAttributes<HTMLImageElement>, 'src' | 'alt'> & {
@@ -18,7 +19,7 @@ type Props = Omit<ImgHTMLAttributes<HTMLImageElement>, 'src' | 'alt'> & {
 
 /**
  * Rend une image produit avec **fallback automatique** :
- * 1. photo perso (`imageDataUrl`) si fournie
+ * 1. photo cloud (`imageUrl`) ou locale (`imageDataUrl`) si fournie
  * 2. photo distante (Unsplash)
  * 3. vignette SVG locale en cas d'erreur réseau / hors ligne
  */
@@ -34,6 +35,7 @@ export function ProductImage({ product, alt, ...rest }: Props) {
   )
 
   const initialSrc = useMemo((): string => {
+    if (product.imageUrl) return product.imageUrl
     if (product.imageDataUrl) return product.imageDataUrl
     if (typeof navigator !== 'undefined' && !navigator.onLine) return fallback
     const remote = productImageRemoteUrl(product)

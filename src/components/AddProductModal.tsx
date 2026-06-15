@@ -2,7 +2,8 @@ import { useEffect, useMemo, useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import type { Product, ProductCategory } from '../db/types'
 import { db } from '../db/db'
-import { DEFAULT_VAT_RATE_PCT } from '../lib/money'
+import { getAppSettings } from '../lib/appSettings'
+import { resolveProductImageFields } from '../lib/uploads/blob'
 import { Button } from '../ui/Button'
 import { cn } from '../ui/cn'
 import { Field, Input, Select } from '../ui/Input'
@@ -37,7 +38,9 @@ export function AddProductModal({ activeStoreLabel, onClose, onSave }: Props) {
   const [category, setCategory] = useState<ProductCategory>('Autre')
   const [stock, setStock] = useState('0')
   const [lowTh, setLowTh] = useState('5')
-  const [vatRatePct, setVatRatePct] = useState(String(DEFAULT_VAT_RATE_PCT))
+  const [vatRatePct, setVatRatePct] = useState(() =>
+    String(getAppSettings().defaultVatRatePct),
+  )
   const [imageDataUrl, setImageDataUrl] = useState<string | undefined>()
   const [busy, setBusy] = useState(false)
   const [err, setErr] = useState<string | null>(null)
@@ -76,20 +79,22 @@ export function AddProductModal({ activeStoreLabel, onClose, onSave }: Props) {
     const vat = Number.parseFloat(vatRatePct.replace(',', '.'))
     if (!Number.isFinite(vat) || vat < 0 || vat > 100)
       return setErr('TVA invalide (0–100).')
-    const product: Product = {
-      id: crypto.randomUUID(),
-      name: name.trim(),
-      priceTTC: price,
-      category,
-      barcode: barcode.trim(),
-      lowStockThreshold: th,
-      vatRatePct: Math.round(vat * 100) / 100,
-      archived: false,
-      ...(purchase !== undefined ? { purchasePriceTTC: purchase } : {}),
-      ...(imageDataUrl ? { imageDataUrl } : {}),
-    }
+    const productId = crypto.randomUUID()
     setBusy(true)
     try {
+      const imageFields = await resolveProductImageFields(productId, imageDataUrl)
+      const product: Product = {
+        id: productId,
+        name: name.trim(),
+        priceTTC: price,
+        category,
+        barcode: barcode.trim(),
+        lowStockThreshold: th,
+        vatRatePct: Math.round(vat * 100) / 100,
+        archived: false,
+        ...(purchase !== undefined ? { purchasePriceTTC: purchase } : {}),
+        ...imageFields,
+      }
       await onSave(product, st)
       toast.success('Article créé', product.name)
       onClose()
@@ -203,7 +208,7 @@ export function AddProductModal({ activeStoreLabel, onClose, onSave }: Props) {
             </div>
           </Field>
         </div>
-        <Field label="Photo" hint="Optionnel · max 500 Ko">
+        <Field label="Photo" hint="Optionnel · max 500 Ko · stockée sur Vercel Blob si configuré">
           <input
             type="file"
             accept="image/*"

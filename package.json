@@ -25,6 +25,7 @@
     "@fontsource/dm-sans": "^5.2.8",
     "@fontsource/jetbrains-mono": "^5.2.8",
     "@prisma/client": "^6.8.0",
+    "@vercel/blob": "^2.4.0",
     "cors": "^2.8.5",
     "dexie": "^4.4.1",
     "dexie-react-hooks": "^4.4.0",

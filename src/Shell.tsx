@@ -61,6 +61,11 @@ import {
 } from './lib/terminalSync'
 import { useBarcodeScannerWedge } from './hooks/useBarcodeScannerWedge'
 import { storeStockRowId } from './lib/storeStockId'
+import { deductKitchenIngredientStockForLines } from './lib/kitchenStock'
+import {
+  APP_SETTINGS_CHANGED_EVENT,
+  getAppSettings,
+} from './lib/appSettings'
 import {
   formatLastSyncRelative,
   getLastSyncTimestamp,
@@ -209,6 +214,11 @@ const SubscriptionView = lazy(() =>
     default: m.SubscriptionView,
   })),
 )
+const ParametresView = lazy(() =>
+  import('./views/ParametresView').then((m) => ({
+    default: m.ParametresView,
+  })),
+)
 
 export function Shell({ staff, online, onLogout }: Props) {
   const {
@@ -232,8 +242,15 @@ export function Shell({ staff, online, onLogout }: Props) {
             ...section,
             items: section.items.filter((item) => item.id !== 'subscription'),
           }))
-    return filterNavSections(roleSections, canAccessView)
-  }, [staff.role, canAccessView])
+    const planFiltered = filterNavSections(roleSections, canAccessView)
+    if (perms.canConfigureAppSettings) return planFiltered
+    return planFiltered
+      .map((section) => ({
+        ...section,
+        items: section.items.filter((item) => item.id !== 'parametres'),
+      }))
+      .filter((section) => section.items.length > 0)
+  }, [staff.role, canAccessView, perms.canConfigureAppSettings])
   const allowedViews = useMemo(() => {
     return flattenedNavViewIds(navSections)
   }, [navSections])
@@ -254,12 +271,30 @@ export function Shell({ staff, online, onLogout }: Props) {
     }
   }, [sidebarCollapsed])
 
+  useEffect(() => {
+    const syncAppSettings = () => {
+      const settings = getAppSettings()
+      setProductGridDensity(settings.productGridDensity)
+      setBlockSaleWhenOutOfStock(settings.blockSaleWhenOutOfStock)
+      setAutoPrintReceiptAfterSale(settings.autoPrintReceiptAfterSale)
+    }
+    window.addEventListener(APP_SETTINGS_CHANGED_EVENT, syncAppSettings)
+    return () => window.removeEventListener(APP_SETTINGS_CHANGED_EVENT, syncAppSettings)
+  }, [])
+
   const [addProductOpen, setAddProductOpen] = useState(false)
   const [search, setSearch] = useState('')
   const [barcodeInput, setBarcodeInput] = useState('')
   const [category, setCategory] = useState<CategoryTab>('Tous')
-  const [productGridDensity, setProductGridDensity] =
-    useState<ProductGridDensity>('compact')
+  const [productGridDensity, setProductGridDensity] = useState<ProductGridDensity>(
+    () => getAppSettings().productGridDensity,
+  )
+  const [blockSaleWhenOutOfStock, setBlockSaleWhenOutOfStock] = useState(
+    () => getAppSettings().blockSaleWhenOutOfStock,
+  )
+  const [autoPrintReceiptAfterSale, setAutoPrintReceiptAfterSale] = useState(
+    () => getAppSettings().autoPrintReceiptAfterSale,
+  )
   const [cart, setCart] = useState<CartLine[]>([])
   const [discountPct, setDiscountPct] = useState(0)
   const [promoInput, setPromoInput] = useState('')
@@ -625,7 +660,7 @@ export function Shell({ staff, online, onLogout }: Props) {
       setCart((prev) => {
         const line = prev.find((l) => l.productId === p.id)
         const currentQty = line?.qty ?? 0
-        if (currentQty >= p.stock) return prev
+        if (blockSaleWhenOutOfStock && currentQty >= p.stock) return prev
         if (!line) {
           didAdd = true
           return [
@@ -656,7 +691,7 @@ export function Shell({ staff, online, onLogout }: Props) {
         triggerFlyToCart(p, originEl)
       }
     },
-    [triggerFlyToCart],
+    [triggerFlyToCart, blockSaleWhenOutOfStock],
   )
 
   const handleAddFromGrid = useCallback(
@@ -674,7 +709,7 @@ export function Shell({ staff, online, onLogout }: Props) {
         if (!prod) return prev
         return prev.map((l) => {
           if (l.productId !== productId) return l
-          if (l.qty >= prod.stock) return l
+          if (blockSaleWhenOutOfStock && l.qty >= prod.stock) return l
           return {
             ...l,
             qty: l.qty + 1,
@@ -685,7 +720,7 @@ export function Shell({ staff, online, onLogout }: Props) {
         })
       })
     },
-    [displayProducts],
+    [displayProducts, blockSaleWhenOutOfStock],
   )
 
   const handleDec = useCallback((productId: string) => {
@@ -1062,42 +1097,7 @@ export function Shell({ staff, online, onLogout }: Props) {
 
           // Déduction stock ingrédients cuisine (recettes par produit).
           const recipeRows = await db.productRecipeIngredients.toArray()
-          const ingredientUsage = new Map<string, number>()
-          for (const line of cart) {
-            const rows = recipeRows.filter((r) => r.productId === line.productId)
-            for (const row of rows) {
-              const used = row.qtyPerUnit * line.qty
-              ingredientUsage.set(
-                row.ingredientId,
-                (ingredientUsage.get(row.ingredientId) ?? 0) + used,
-              )
-            }
-          }
-          for (const [ingredientId, usedQty] of ingredientUsage.entries()) {
-            const ingredient = await db.kitchenIngredients.get(ingredientId)
-            if (!ingredient || ingredient.archived) continue
-            const stockId = `${activeStoreId}:${ingredientId}`
-            const stockRow = await db.kitchenIngredientStocks.get(stockId)
-            const currentStock = stockRow?.stock ?? 0
-            if (currentStock < usedQty) {
-              throw new Error(
-                `Stock cuisine insuffisant pour « ${ingredient.name} » (disponible: ${currentStock}${ingredient.unit}).`,
-              )
-            }
-          }
-          for (const [ingredientId, usedQty] of ingredientUsage.entries()) {
-            const ingredient = await db.kitchenIngredients.get(ingredientId)
-            if (!ingredient || ingredient.archived) continue
-            const stockId = `${activeStoreId}:${ingredientId}`
-            const stockRow = await db.kitchenIngredientStocks.get(stockId)
-            const currentStock = stockRow?.stock ?? 0
-            await db.kitchenIngredientStocks.put({
-              id: stockId,
-              storeId: activeStoreId,
-              ingredientId,
-              stock: currentStock - usedQty,
-            })
-          }
+          await deductKitchenIngredientStockForLines(activeStoreId, cart, recipeRows)
 
           await db.sales.add(saleRecord)
 
@@ -1136,6 +1136,7 @@ export function Shell({ staff, online, onLogout }: Props) {
               kitchenTicketCode: `K-${kitchenOrderId.slice(0, 6).toUpperCase()}`,
               kitchenUpdatedAt: createdAt,
               stockDeductedAt: createdAt,
+              kitchenIngredientDeductedAt: createdAt,
             })
           }
 
@@ -1215,7 +1216,7 @@ export function Shell({ staff, online, onLogout }: Props) {
       setReceiptOpen({
         type: 'sale',
         sale: saleRecord,
-        autoPrint: deviceConnectivity.receiptPrinters,
+        autoPrint: deviceConnectivity.receiptPrinters && autoPrintReceiptAfterSale,
       })
       if (!deviceConnectivity.receiptPrinters) {
         toast.info(
@@ -1265,6 +1266,7 @@ export function Shell({ staff, online, onLogout }: Props) {
     activeStore?.name,
     deviceConnectivity.cashDrawer,
     deviceConnectivity.receiptPrinters,
+    autoPrintReceiptAfterSale,
     deviceConnectivity.paymentTerminals,
     pendingCashDrawerBypassUntil,
     pendingCheckoutUntil,
@@ -1389,10 +1391,11 @@ export function Shell({ staff, online, onLogout }: Props) {
 
         {isCaisse ? (
           <div className="flex min-w-0 flex-1 flex-col lg:flex-row">
-            <main className="ui-scroll min-w-0 flex-1 overflow-y-auto px-1 pb-24 pt-3 sm:px-3 sm:pt-4 xl:px-5 xl:pt-6 xl:pb-6">
+            <main className="caisse-main ui-scroll min-w-0 flex-1 overflow-y-auto px-2 pb-24 pt-3 sm:px-4 sm:pt-4 xl:px-6 xl:pt-5 xl:pb-6">
               <CaisseHeader
                 ref={barcodeFieldRef}
                 sessionId={SESSION_ID}
+                activeStoreLabel={activeStore?.name ?? 'Magasin'}
                 barcode={barcodeInput}
                 onBarcodeChange={setBarcodeInput}
                 onBarcodeSubmit={handleBarcodeSubmit}
@@ -1406,10 +1409,10 @@ export function Shell({ staff, online, onLogout }: Props) {
               />
               {ruptureCount > 0 ? (
                 <div
-                  className={`mb-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border px-4 py-3 text-sm ${
+                  className={`mb-4 flex flex-wrap items-center justify-between gap-3 rounded-2xl border px-4 py-3 text-sm ${
                     perms.canManageStocks
-                      ? 'border-rose-200 bg-rose-50 text-rose-900'
-                      : 'border-amber-200 bg-amber-50 text-amber-900'
+                      ? 'border-rose-200/80 bg-[linear-gradient(135deg,#fff5f5,#fffefb)] text-rose-900'
+                      : 'border-amber-200/80 bg-[linear-gradient(135deg,#fffbeb,#fffefb)] text-amber-900'
                   }`}
                   role="alert"
                 >
@@ -1627,6 +1630,15 @@ export function Shell({ staff, online, onLogout }: Props) {
               ) : null}
               {activeView === 'analytique' ? <AnalytiqueView /> : null}
               {activeView === 'integrations' ? <IntegrationsView /> : null}
+              {activeView === 'parametres' ? (
+                <ParametresView
+                  activeStoreId={activeStoreId}
+                  activeStoreName={activeStore?.name ?? 'Magasin'}
+                  canManageIntegrations={perms.canManageIntegrations}
+                  onOpenIntegrations={() => handleSelectView('integrations')}
+                  onOpenSubscription={() => handleSelectView('subscription')}
+                />
+              ) : null}
               {activeView === 'subscription' ? <SubscriptionView /> : null}
               {activeView === 'network' ? (
                 <MultiStoreView
@@ -1650,12 +1662,12 @@ export function Shell({ staff, online, onLogout }: Props) {
               <button
                 type="button"
                 onClick={() => setIsFloatingCartOpen(true)}
-                className={`fixed inset-x-3 bottom-3 z-30 flex items-center justify-between gap-3 rounded-2xl border border-border bg-white/95 px-4 py-3 text-left text-ink shadow-(--shadow-pop) backdrop-blur-sm transition hover:bg-white ${cartHideClass}`}
+                className={`fixed inset-x-3 bottom-3 z-30 flex items-center justify-between gap-3 rounded-2xl px-4 py-3.5 text-left text-ink backdrop-blur-md transition hover:brightness-[1.02] caisse-mobile-cart ${cartHideClass}`}
               >
                 <span className="flex items-center gap-3">
-                  <span className="relative flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-accent-soft text-accent">
+                  <span className="relative flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl border border-[rgba(184,146,46,0.22)] bg-[#f7f0e3] text-[#b8922e]">
                     <IconReceipt className="h-4 w-4" />
-                    <span className="absolute -right-1 -top-1 flex h-5 min-w-5 items-center justify-center rounded-full border-2 border-white bg-accent px-1 text-[10px] font-bold text-white">
+                    <span className="absolute -right-1 -top-1 flex h-5 min-w-5 items-center justify-center rounded-full border-2 border-[#fffefb] bg-[#b8922e] px-1 text-[10px] font-bold text-white">
                       {cartItemCount}
                     </span>
                   </span>
@@ -1668,7 +1680,7 @@ export function Shell({ staff, online, onLogout }: Props) {
                     </span>
                   </span>
                 </span>
-                <span className="inline-flex items-center gap-1.5 rounded-full bg-accent px-3 py-1.5 text-[12px] font-semibold text-white">
+                <span className="caisse-mobile-cart-cta inline-flex items-center gap-1.5 rounded-full px-3.5 py-2 text-[12px] font-semibold shadow-sm">
                   Encaisser
                   <IconArrowRight className="h-3.5 w-3.5" />
                 </span>
@@ -1680,7 +1692,7 @@ export function Shell({ staff, online, onLogout }: Props) {
               <button
                 type="button"
                 onClick={() => setIsFloatingCartOpen(true)}
-                className={`fixed bottom-3 right-3 z-30 flex h-12 w-12 items-center justify-center rounded-full border border-border bg-white text-accent shadow-(--shadow-pop) transition hover:bg-surface-sunken ${cartHideClass}`}
+                className={`fixed bottom-3 right-3 z-30 flex h-12 w-12 items-center justify-center rounded-2xl border border-[rgba(184,146,46,0.28)] bg-[linear-gradient(145deg,#fffefb,#f7f0e3)] text-[#b8922e] shadow-(--shadow-caisse-pop) transition hover:brightness-[1.03] ${cartHideClass}`}
                 aria-label="Ouvrir le panier"
               >
                 <IconReceipt className="h-5 w-5" />
@@ -1698,11 +1710,11 @@ export function Shell({ staff, online, onLogout }: Props) {
                 <button
                   type="button"
                   aria-label="Fermer le panier"
-                  className="absolute inset-0 animate-ui-fade-in bg-zinc-950/50 backdrop-blur-[2px]"
+                  className="absolute inset-0 animate-ui-fade-in bg-[#1a2332]/35 backdrop-blur-[3px]"
                   onClick={() => setIsFloatingCartOpen(false)}
                 />
                 <div className="absolute inset-y-0 right-0 w-full animate-ui-slide-up sm:w-[min(420px,92vw)]">
-                  <div className="flex h-full flex-col border-l border-zinc-200 bg-white shadow-(--shadow-overlay)">
+                  <div className="flex h-full flex-col border-l border-[rgba(184,146,46,0.2)] bg-[#fffefb] shadow-(--shadow-overlay)">
                     <CartPanel
                       lines={cart}
                       products={displayProducts}

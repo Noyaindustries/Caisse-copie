@@ -1,5 +1,6 @@
 import { Reveal } from './Reveal'
 import { MarketingSectionHeader } from './MarketingSectionHeader'
+import { MarketingBlobs } from './MarketingBlobs'
 
 const STEPS = [
   { n: '01', title: 'Créez votre magasin', desc: 'Choisissez Starter, Pro ou Business. Essai 1 mois inclus.' },
@@ -9,8 +10,9 @@ const STEPS = [
 
 export function MarketingStepsSection() {
   return (
-    <section className="border-y border-border/50 bg-linear-to-b from-white to-[#f8f9fc] py-24">
-      <div className="mx-auto max-w-7xl px-4 sm:px-6">
+    <section className="relative border-y border-border/50 bg-linear-to-b from-white to-[#f8f9fc] py-24">
+      <MarketingBlobs preset="section" />
+      <div className="relative z-10 mx-auto max-w-7xl px-4 sm:px-6">
         <Reveal>
           <MarketingSectionHeader
             eyebrow="Démarrage"

@@ -10,6 +10,7 @@ import { storefrontRouter } from './routes/storefront.js'
 import { startSubscriptionReminderScheduler } from './lib/subscriptionReminders.js'
 import { handleCinetpayNotify, handleWaveWebhook, mobileMoneyRouter } from './routes/mobileMoney.js'
 import { platformAdminRouter } from './routes/platformAdmin.js'
+import { uploadsRouter } from './routes/uploads.js'
 import { syncRouter } from './routes/sync.js'
 import { webhookRouter } from './routes/webhooks.js'
 
@@ -53,6 +54,7 @@ app.use('/api', billingRouter)
 app.use('/api', storefrontRouter)
 app.use('/api', mobileMoneyRouter)
 app.use('/api', platformAdminRouter)
+app.use('/api', uploadsRouter)
 
 app.use(express.static(distPath))
 

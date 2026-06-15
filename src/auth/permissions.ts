@@ -17,6 +17,7 @@ export const ROLE_DEFAULT_PERMISSIONS: Record<UserRole, StaffPermissions> = {
     canViewTeamPointage: true,
     canConfigureStoresAdmin: true,
     canManageIntegrations: true,
+    canConfigureAppSettings: true,
   },
   gerant: {
     maxDiscountPct: 20,
@@ -33,6 +34,7 @@ export const ROLE_DEFAULT_PERMISSIONS: Record<UserRole, StaffPermissions> = {
     canViewTeamPointage: true,
     canConfigureStoresAdmin: false,
     canManageIntegrations: false,
+    canConfigureAppSettings: true,
   },
   caissier: {
     maxDiscountPct: 5,
@@ -49,6 +51,7 @@ export const ROLE_DEFAULT_PERMISSIONS: Record<UserRole, StaffPermissions> = {
     canViewTeamPointage: false,
     canConfigureStoresAdmin: false,
     canManageIntegrations: false,
+    canConfigureAppSettings: false,
   },
 }
 

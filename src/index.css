@@ -20,6 +20,21 @@
   --shadow-pop: 0 1px 2px rgba(23, 32, 51, 0.06), 0 18px 50px -22px rgba(23, 32, 51, 0.3);
   --shadow-overlay: 0 40px 80px -34px rgba(23, 32, 51, 0.45);
 
+  --color-caisse-ivory: #fffdf9;
+  --color-caisse-cream: #faf6f0;
+  --color-caisse-pearl: #f3eee6;
+  --color-caisse-gold: #b8922e;
+  --color-caisse-gold-light: #d4b56a;
+  --color-caisse-gold-soft: #f7f0e3;
+  --color-caisse-ink: #1a2332;
+  --color-caisse-muted: #5c6678;
+  --shadow-caisse-card:
+    0 1px 0 rgba(184, 146, 46, 0.08),
+    0 12px 40px -20px rgba(26, 35, 50, 0.14);
+  --shadow-caisse-pop:
+    0 2px 0 rgba(184, 146, 46, 0.1),
+    0 22px 56px -24px rgba(26, 35, 50, 0.22);
+
   --ease-out-quart: cubic-bezier(0.22, 1, 0.36, 1);
 }
 
@@ -885,7 +900,78 @@ body {
   backdrop-filter: blur(16px);
 }
 
+/* Marketing — organic blob backgrounds */
+.marketing-blob {
+  filter: blur(48px);
+  will-change: transform;
+}
+
+.marketing-blob-tone-violet {
+  color: rgba(139, 92, 246, 0.9);
+}
+
+.marketing-blob-tone-indigo {
+  color: rgba(99, 102, 241, 0.9);
+}
+
+.marketing-blob-tone-sky {
+  color: rgba(56, 189, 248, 0.85);
+}
+
+.marketing-blob-tone-amber {
+  color: rgba(251, 191, 36, 0.85);
+}
+
+.marketing-blob-tone-emerald {
+  color: rgba(52, 211, 153, 0.8);
+}
+
+.marketing-blob-tone-rose {
+  color: rgba(244, 114, 182, 0.75);
+}
+
+.marketing-blob-float {
+  animation: marketing-blob-float 14s ease-in-out infinite;
+}
+
+.marketing-blob-float-slow {
+  animation: marketing-blob-float 20s ease-in-out infinite;
+}
+
+.marketing-blob-drift {
+  animation: marketing-blob-drift 18s ease-in-out infinite;
+}
+
+@keyframes marketing-blob-float {
+  0%,
+  100% {
+    transform: translate(0, 0) scale(1) rotate(0deg);
+  }
+  33% {
+    transform: translate(12px, -18px) scale(1.06) rotate(4deg);
+  }
+  66% {
+    transform: translate(-10px, 14px) scale(0.96) rotate(-3deg);
+  }
+}
+
+@keyframes marketing-blob-drift {
+  0%,
+  100% {
+    transform: translate(0, 0) scale(1);
+  }
+  50% {
+    transform: translate(24px, -12px) scale(1.08);
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
+  .marketing-blob-float,
+  .marketing-blob-float-slow,
+  .marketing-blob-drift {
+    animation: none;
+  }
+
   .marketing-hero-animate,
   .marketing-hero-animate-delay-1,
   .marketing-hero-animate-delay-2,
@@ -895,5 +981,270 @@ body {
     animation: none;
     opacity: 1;
     transform: none;
+  }
+}
+
+/* ——— Caisse POS · thème luxe clair ——— */
+@layer utilities {
+  .caisse-main {
+    background:
+      radial-gradient(ellipse 80% 50% at 10% -5%, rgba(212, 181, 106, 0.14), transparent 55%),
+      radial-gradient(ellipse 60% 40% at 95% 0%, rgba(255, 250, 240, 0.9), transparent 50%),
+      linear-gradient(180deg, var(--color-caisse-ivory) 0%, var(--color-caisse-cream) 100%);
+  }
+
+  .caisse-header {
+    position: relative;
+    overflow: hidden;
+    border-radius: 20px;
+    border: 1px solid rgba(184, 146, 46, 0.2);
+    background:
+      linear-gradient(145deg, rgba(255, 253, 249, 0.98) 0%, rgba(250, 246, 240, 0.96) 100%);
+    box-shadow: var(--shadow-caisse-card);
+  }
+
+  .caisse-header::before {
+    content: '';
+    position: absolute;
+    inset: 0 0 auto;
+    height: 3px;
+    background: linear-gradient(
+      90deg,
+      transparent,
+      var(--color-caisse-gold-light) 20%,
+      var(--color-caisse-gold) 50%,
+      var(--color-caisse-gold-light) 80%,
+      transparent
+    );
+  }
+
+  .caisse-session-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.375rem;
+    border-radius: 9999px;
+    border: 1px solid rgba(184, 146, 46, 0.28);
+    background: linear-gradient(180deg, #fffefb 0%, var(--color-caisse-gold-soft) 100%);
+    padding: 0.25rem 0.75rem;
+    font-size: 0.6875rem;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--color-caisse-gold);
+  }
+
+  .caisse-clock {
+    font-variant-numeric: tabular-nums;
+    font-size: 1.75rem;
+    font-weight: 600;
+    letter-spacing: -0.03em;
+    line-height: 1;
+    color: var(--color-caisse-ink);
+  }
+
+  .caisse-input-luxe {
+    border-radius: 14px !important;
+    border-color: rgba(184, 146, 46, 0.22) !important;
+    background: rgba(255, 255, 255, 0.92) !important;
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.8);
+  }
+
+  .caisse-input-luxe:focus {
+    border-color: rgba(184, 146, 46, 0.55) !important;
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.8),
+      0 0 0 3px rgba(212, 181, 106, 0.22);
+  }
+
+  .caisse-cat-pill {
+    border-radius: 9999px;
+    border: 1px solid rgba(184, 146, 46, 0.18);
+    background: rgba(255, 255, 255, 0.85);
+    padding: 0.4375rem 1rem;
+    font-size: 0.75rem;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+    color: var(--color-caisse-muted);
+    transition:
+      background 180ms var(--ease-out-quart),
+      border-color 180ms var(--ease-out-quart),
+      color 180ms var(--ease-out-quart),
+      box-shadow 180ms var(--ease-out-quart),
+      transform 180ms var(--ease-out-quart);
+  }
+
+  .caisse-cat-pill:hover {
+    border-color: rgba(184, 146, 46, 0.35);
+    color: var(--color-caisse-ink);
+  }
+
+  .caisse-cat-pill-active {
+    border-color: rgba(184, 146, 46, 0.45);
+    background: linear-gradient(180deg, #fffefb 0%, var(--color-caisse-gold-soft) 100%);
+    color: var(--color-caisse-gold);
+    box-shadow: 0 4px 14px -8px rgba(184, 146, 46, 0.45);
+  }
+
+  .caisse-product-card {
+    position: relative;
+    overflow: hidden;
+    border-radius: 18px;
+    border: 1px solid rgba(184, 146, 46, 0.16);
+    background:
+      linear-gradient(165deg, rgba(255, 253, 249, 0.98) 0%, rgba(250, 246, 240, 0.94) 100%);
+    box-shadow: var(--shadow-caisse-card);
+    transition:
+      border-color 200ms var(--ease-out-quart),
+      box-shadow 200ms var(--ease-out-quart),
+      transform 200ms var(--ease-out-quart);
+  }
+
+  .caisse-product-card::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    pointer-events: none;
+    opacity: 0;
+    background: linear-gradient(
+      135deg,
+      rgba(212, 181, 106, 0.12) 0%,
+      transparent 55%
+    );
+    transition: opacity 200ms var(--ease-out-quart);
+  }
+
+  .caisse-product-card:hover:not(:disabled) {
+    border-color: rgba(184, 146, 46, 0.38);
+    box-shadow: var(--shadow-caisse-pop);
+    transform: translateY(-2px);
+  }
+
+  .caisse-product-card:hover:not(:disabled)::after {
+    opacity: 1;
+  }
+
+  .caisse-price {
+    color: var(--color-caisse-gold);
+    font-weight: 700;
+  }
+
+  .caisse-cart {
+    border-left: 1px solid rgba(184, 146, 46, 0.2) !important;
+    background:
+      linear-gradient(180deg, #fffefb 0%, var(--color-caisse-cream) 100%) !important;
+    box-shadow: -12px 0 48px -24px rgba(26, 35, 50, 0.12);
+  }
+
+  .caisse-cart-header {
+    border-bottom: 1px solid rgba(184, 146, 46, 0.14);
+    background: linear-gradient(180deg, rgba(255, 254, 251, 0.98) 0%, rgba(247, 240, 227, 0.5) 100%);
+  }
+
+  .caisse-cart-line {
+    border-radius: 14px;
+    border: 1px solid rgba(184, 146, 46, 0.14);
+    background: rgba(255, 255, 255, 0.72);
+    backdrop-filter: blur(6px);
+  }
+
+  .caisse-cart-footer {
+    border-top: 1px solid rgba(184, 146, 46, 0.16);
+    background: linear-gradient(0deg, rgba(247, 240, 227, 0.55) 0%, rgba(255, 254, 251, 0.92) 100%);
+  }
+
+  .caisse-total-display {
+    font-size: 1.375rem;
+    font-weight: 700;
+    letter-spacing: -0.02em;
+    background: linear-gradient(135deg, var(--color-caisse-gold) 0%, #8f6f1f 100%);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+  }
+
+  .caisse-checkout-btn {
+    border: 1px solid rgba(143, 111, 31, 0.35) !important;
+    background: linear-gradient(
+      135deg,
+      var(--color-caisse-gold-light) 0%,
+      var(--color-caisse-gold) 48%,
+      #9a7724 100%
+    ) !important;
+    color: #fffef9 !important;
+    font-weight: 700 !important;
+    letter-spacing: 0.02em;
+    box-shadow:
+      0 1px 0 rgba(255, 255, 255, 0.35) inset,
+      0 10px 28px -12px rgba(184, 146, 46, 0.65) !important;
+  }
+
+  .caisse-checkout-btn:hover:not(:disabled) {
+    filter: brightness(1.04);
+    box-shadow:
+      0 1px 0 rgba(255, 255, 255, 0.4) inset,
+      0 14px 32px -10px rgba(184, 146, 46, 0.72) !important;
+  }
+
+  .caisse-mobile-cart {
+    border: 1px solid rgba(184, 146, 46, 0.28) !important;
+    background: linear-gradient(
+      135deg,
+      rgba(255, 254, 251, 0.97) 0%,
+      rgba(247, 240, 227, 0.95) 100%
+    ) !important;
+    box-shadow: var(--shadow-caisse-pop) !important;
+  }
+
+  .caisse-mobile-cart-cta {
+    background: linear-gradient(135deg, var(--color-caisse-gold-light), var(--color-caisse-gold)) !important;
+    color: #fffef9 !important;
+  }
+
+  .caisse-qty-control {
+    border-radius: 12px;
+    border: 1px solid rgba(184, 146, 46, 0.2);
+    background: rgba(255, 255, 255, 0.9);
+  }
+
+  .caisse-pay-tab-active {
+    border-color: rgba(184, 146, 46, 0.45) !important;
+    background: linear-gradient(180deg, #fffefb, var(--color-caisse-gold-soft)) !important;
+    color: var(--color-caisse-gold) !important;
+  }
+
+  .caisse-operator-active {
+    border-color: var(--color-caisse-gold) !important;
+    background: linear-gradient(135deg, var(--color-caisse-gold-light), var(--color-caisse-gold)) !important;
+    color: #fffef9 !important;
+  }
+
+  .catalogue-hero {
+    border-radius: 20px;
+    border: 1px solid rgba(184, 146, 46, 0.18);
+    background:
+      linear-gradient(145deg, rgba(255, 253, 249, 0.98) 0%, rgba(250, 246, 240, 0.94) 100%);
+    box-shadow: var(--shadow-caisse-card);
+  }
+
+  .catalogue-filter-bar {
+    border-radius: 16px;
+    border: 1px solid rgba(184, 146, 46, 0.14);
+    background: rgba(255, 255, 255, 0.82);
+    backdrop-filter: blur(8px);
+  }
+
+  .catalogue-cat-row {
+    border-radius: 14px;
+    border: 1px solid rgba(184, 146, 46, 0.12);
+    background: linear-gradient(165deg, rgba(255, 253, 249, 0.96), rgba(250, 246, 240, 0.9));
+    transition:
+      border-color 200ms var(--ease-out-quart),
+      box-shadow 200ms var(--ease-out-quart);
+  }
+
+  .catalogue-cat-row:hover {
+    border-color: rgba(184, 146, 46, 0.28);
+    box-shadow: var(--shadow-caisse-card);
   }
 }

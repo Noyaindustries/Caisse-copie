@@ -1,4 +1,5 @@
 import Dexie, { type Table } from 'dexie'
+import { kitchenIngredientStockRowId } from '../lib/kitchenStock'
 import { storeStockRowId } from '../lib/storeStockId'
 import { locationStockRowId } from '../lib/locationStockId'
 import type {
@@ -484,7 +485,41 @@ export class CaisseDB extends Dexie {
       terminalNodes: 'id, storeId, online, lastSeenAt, [storeId+lastSeenAt]',
       tableReservations:
         'id, storeId, tableId, status, startAt, endAt, [storeId+startAt], [tableId+startAt]',
-      kitchenIngredients: 'id, name, archived',
+      kitchenIngredients: 'id, name, archived, productId',
+      kitchenIngredientStocks: 'id, storeId, ingredientId, [storeId+ingredientId]',
+      productRecipeIngredients: 'id, productId, ingredientId, [productId+ingredientId]',
+    })
+    this.version(20).stores({
+      products: 'id, barcode, category, archived',
+      sales: 'id, createdAt, synced, storeId',
+      syncQueue: '++id, createdAt',
+      stores: 'id, sortOrder',
+      storeStocks: 'id, storeId, productId, [storeId+productId]',
+      stockLocations: 'id, storeId, active, sortOrder, [storeId+sortOrder]',
+      locationStocks:
+        'id, storeId, locationId, productId, [storeId+productId], [storeId+locationId]',
+      locationTransfers: 'id, createdAt, storeId, productId, fromLocationId, toLocationId',
+      stockTransfers: 'id, createdAt, fromStoreId, toStoreId',
+      dayClosures: 'dateYmd',
+      refunds: 'id, saleId, createdAt',
+      auditEvents: 'id, createdAt, kind',
+      onlineOrders:
+        'id, createdAt, status, storeId, sourcePlatform, externalOrderRef, [storeId+createdAt]',
+      onlineOrderMessages: 'id, orderId, createdAt',
+      productCategories: 'id, sortOrder',
+      timePunches: 'id, profileId, storeId, createdAt',
+      diningTables: 'id, storeId, status, sortOrder, [storeId+sortOrder]',
+      promotions: 'id, code, active, storeId, [active+code]',
+      loyaltyCustomers: 'id, phone, updatedAt',
+      loyaltyTransactions: 'id, customerId, createdAt, type',
+      hrRequests: 'id, createdAt, staffProfileId, status, type, [staffProfileId+createdAt]',
+      crmInteractions:
+        'id, createdAt, customerId, customerPhone, kind, [customerId+createdAt]',
+      ticketInvoices: 'id, createdAt, updatedAt, kind, status, storeId, reference, [storeId+createdAt]',
+      terminalNodes: 'id, storeId, online, lastSeenAt, [storeId+lastSeenAt]',
+      tableReservations:
+        'id, storeId, tableId, status, startAt, endAt, [storeId+startAt], [tableId+startAt]',
+      kitchenIngredients: 'id, name, archived, productId',
       kitchenIngredientStocks: 'id, storeId, ingredientId, [storeId+ingredientId]',
       productRecipeIngredients: 'id, productId, ingredientId, [productId+ingredientId]',
     })
@@ -553,6 +588,186 @@ async function ensureStores(): Promise<void> {
   if ((await db.stores.count()) === 0) {
     await db.stores.bulkAdd(SEED_STORES)
   }
+}
+
+const KITCHEN_DEMO_STOCK_BY_INGREDIENT: Record<string, number> = {
+  'ing-poulet': 15,
+  'ing-poisson': 6,
+  'ing-huile': 5,
+  'ing-oignon': 8,
+  'ing-attieke': 20,
+  'ing-riz': 25,
+}
+
+async function ensureKitchenIngredientStocksForAllStores(): Promise<void> {
+  const ingredients = await db.kitchenIngredients.toArray()
+  if (ingredients.length === 0) return
+
+  const stores = await db.stores.toArray()
+  const existing = new Set(
+    (await db.kitchenIngredientStocks.toArray()).map((row) => row.id),
+  )
+  const toPut: KitchenIngredientStock[] = []
+
+  for (const store of stores) {
+    for (const ingredient of ingredients) {
+      const id = kitchenIngredientStockRowId(store.id, ingredient.id)
+      if (existing.has(id)) continue
+      toPut.push({
+        id,
+        storeId: store.id,
+        ingredientId: ingredient.id,
+        stock:
+          store.id === DEFAULT_STORE_ID
+            ? (KITCHEN_DEMO_STOCK_BY_INGREDIENT[ingredient.id] ?? 0)
+            : 0,
+      })
+    }
+  }
+
+  if (toPut.length > 0) {
+    await db.kitchenIngredientStocks.bulkPut(toPut)
+  }
+}
+
+async function ensureKitchenStockSeed(): Promise<void> {
+  if ((await db.kitchenIngredients.count()) > 0) {
+    await ensureKitchenIngredientStocksForAllStores()
+    return
+  }
+
+  const ingredients: KitchenIngredient[] = [
+    {
+      id: 'ing-poulet',
+      name: 'Poulet',
+      unit: 'kg',
+      lowStockThreshold: 5,
+      archived: false,
+    },
+    {
+      id: 'ing-poisson',
+      name: 'Poisson',
+      unit: 'kg',
+      lowStockThreshold: 4,
+      archived: false,
+    },
+    {
+      id: 'ing-huile',
+      name: 'Huile',
+      unit: 'l',
+      lowStockThreshold: 2,
+      archived: false,
+    },
+    {
+      id: 'ing-oignon',
+      name: 'Oignons',
+      unit: 'kg',
+      lowStockThreshold: 3,
+      archived: false,
+    },
+    {
+      id: 'ing-attieke',
+      name: 'Attiéké',
+      unit: 'kg',
+      lowStockThreshold: 8,
+      archived: false,
+    },
+    {
+      id: 'ing-riz',
+      name: 'Riz',
+      unit: 'kg',
+      lowStockThreshold: 10,
+      archived: false,
+    },
+  ]
+
+  const stocks: KitchenIngredientStock[] = ingredients.map((ingredient) => ({
+    id: kitchenIngredientStockRowId(DEFAULT_STORE_ID, ingredient.id),
+    storeId: DEFAULT_STORE_ID,
+    ingredientId: ingredient.id,
+    stock: KITCHEN_DEMO_STOCK_BY_INGREDIENT[ingredient.id] ?? 0,
+  }))
+
+  const recipes: ProductRecipeIngredient[] = [
+    { id: 'recipe-p1-poulet', productId: 'p1', ingredientId: 'ing-poulet', qtyPerUnit: 0.2 },
+    { id: 'recipe-p1-huile', productId: 'p1', ingredientId: 'ing-huile', qtyPerUnit: 0.05 },
+    { id: 'recipe-p1-oignon', productId: 'p1', ingredientId: 'ing-oignon', qtyPerUnit: 0.1 },
+    { id: 'recipe-p1-riz', productId: 'p1', ingredientId: 'ing-riz', qtyPerUnit: 0.15 },
+    { id: 'recipe-p2-poisson', productId: 'p2', ingredientId: 'ing-poisson', qtyPerUnit: 0.25 },
+    { id: 'recipe-p2-attieke', productId: 'p2', ingredientId: 'ing-attieke', qtyPerUnit: 0.3 },
+    { id: 'recipe-p3-poisson', productId: 'p3', ingredientId: 'ing-poisson', qtyPerUnit: 0.18 },
+    { id: 'recipe-p3-attieke', productId: 'p3', ingredientId: 'ing-attieke', qtyPerUnit: 0.25 },
+  ]
+
+  await db.kitchenIngredients.bulkAdd(ingredients)
+  await db.kitchenIngredientStocks.bulkAdd(stocks)
+  await db.productRecipeIngredients.bulkAdd(recipes)
+  await ensureKitchenIngredientStocksForAllStores()
+}
+
+/** Charge ingrédients, stocks et recettes de démo (si la liste est vide). */
+export async function loadKitchenStockDemo(): Promise<boolean> {
+  const ingredientCountBefore = await db.kitchenIngredients.count()
+  const stockCountBefore = await db.kitchenIngredientStocks.count()
+  await ensureKitchenStockSeed()
+  const ingredientCountAfter = await db.kitchenIngredients.count()
+  const stockCountAfter = await db.kitchenIngredientStocks.count()
+  return (
+    ingredientCountAfter > ingredientCountBefore ||
+    stockCountAfter > stockCountBefore
+  )
+}
+
+async function ensureTimePunchSeed(): Promise<void> {
+  if ((await db.timePunches.count()) > 0) return
+
+  const now = Date.now()
+  const dayMs = 24 * 60 * 60 * 1000
+
+  const atDayTime = (
+    dayOffset: number,
+    hour: number,
+    minute: number,
+  ): number => {
+    const d = new Date(now + dayOffset * dayMs)
+    d.setHours(hour, minute, 0, 0)
+    return d.getTime()
+  }
+
+  const mk = (
+    profileId: string,
+    profileDisplayName: string,
+    kind: TimePunch['kind'],
+    dayOffset: number,
+    hour: number,
+    minute: number,
+    note?: string,
+  ): TimePunch => ({
+    id: crypto.randomUUID(),
+    createdAt: atDayTime(dayOffset, hour, minute),
+    profileId,
+    profileDisplayName,
+    storeId: DEFAULT_STORE_ID,
+    storeName: 'Magasin principal',
+    kind,
+    note,
+    source: 'self',
+  })
+
+  const rows: TimePunch[] = [
+    mk('profile-caissier', 'Awa Konaté', 'in', 0, 7, 55),
+    mk('profile-caissier', 'Awa Konaté', 'in', -1, 8, 5),
+    mk('profile-caissier', 'Awa Konaté', 'out', -1, 17, 30),
+    mk('profile-caissier', 'Awa Konaté', 'in', -2, 8, 20, 'Retard transport'),
+    mk('profile-caissier', 'Awa Konaté', 'out', -2, 16, 45),
+    mk('profile-gerant', 'Koffi N’Guessan', 'in', 0, 8, 2),
+    mk('profile-gerant', 'Koffi N’Guessan', 'in', -1, 7, 45),
+    mk('profile-gerant', 'Koffi N’Guessan', 'out', -1, 18, 0),
+    mk('profile-admin', 'Kouadio Yao', 'in', -1, 9, 0),
+    mk('profile-admin', 'Kouadio Yao', 'out', -1, 19, 15),
+  ]
+
+  await db.timePunches.bulkAdd(rows)
 }
 
 async function ensureDiningTablesSeed(): Promise<void> {
@@ -711,4 +926,6 @@ export async function ensureSeed(): Promise<void> {
   await syncProductCategoriesFromProducts()
   await ensureDiningTablesSeed()
   await ensurePromotionsSeed()
+  await ensureKitchenStockSeed()
+  await ensureTimePunchSeed()
 }

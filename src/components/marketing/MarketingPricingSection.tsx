@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { MarketingSectionHeader } from './MarketingSectionHeader'
+import { MarketingBlobs } from './MarketingBlobs'
 import { Reveal } from './Reveal'
 import { fetchPlans } from '../../lib/subscription/api'
 import { formatTrialPeriod } from '../../lib/subscription/plans'
@@ -196,6 +197,7 @@ export function MarketingPricingSection({
 
   return (
     <section ref={pricingRef} id="tarifs" className="relative overflow-hidden py-24">
+      <MarketingBlobs preset="pricing" />
       <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_80%_50%_at_50%_-10%,rgba(139,92,246,0.12),transparent)]" />
       <div className="pointer-events-none absolute inset-0 bg-linear-to-b from-violet-50/40 via-transparent to-amber-50/30" />
       <div className="relative mx-auto max-w-7xl px-4 sm:px-6">

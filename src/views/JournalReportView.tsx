@@ -25,6 +25,7 @@ import { Field, Input } from '../ui/Input'
 import { Kpi } from '../ui/Kpi'
 import { PageHeader, SectionHeader } from '../ui/PageHeader'
 import { Table, TBody, Td, Th, THead, Tr } from '../ui/Table'
+import { Tabs } from '../ui/Tabs'
 import { useToast } from '../ui/Toast'
 import {
   IconDownload,
@@ -32,36 +33,10 @@ import {
   IconEye,
   IconPrinter,
   IconRefund,
+  IconSearch,
 } from '../ui/icons'
 
-const DEBUG_LOG_ENDPOINT =
-  'http://127.0.0.1:27772/ingest/cd30ae75-d94c-4f4b-a62c-8232a969c0d0'
-
-function debugLog(
-  location: string,
-  message: string,
-  hypothesisId: string,
-  data: Record<string, unknown>,
-): void {
-  // #region agent log
-  fetch(DEBUG_LOG_ENDPOINT, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'X-Debug-Session-Id': '5007b8',
-    },
-    body: JSON.stringify({
-      sessionId: '5007b8',
-      runId: 'run1',
-      hypothesisId,
-      location,
-      message,
-      data,
-      timestamp: Date.now(),
-    }),
-  }).catch(() => {})
-  // #endregion
-}
+type ReportTab = 'overview' | 'sales' | 'audit' | 'closure'
 
 function auditKindLabel(k: AuditEventKind): string {
   switch (k) {
@@ -237,6 +212,8 @@ export function JournalReportView({
   const [refundSale, setRefundSale] = useState<Sale | null>(null)
   const [pendingClosureUntil, setPendingClosureUntil] = useState(0)
   const [pendingReopenUntil, setPendingReopenUntil] = useState(0)
+  const [reportTab, setReportTab] = useState<ReportTab>('overview')
+  const [saleSearch, setSaleSearch] = useState('')
 
   useEffect(() => {
     if (dayRow) setOpeningEdit(String(dayRow.openingFloat))
@@ -257,6 +234,19 @@ export function JournalReportView({
   const totalNet = isClosed ? (dayRow?.snapshotTotalTTC ?? total) : total
   const avgTicket =
     ticketCount > 0 ? Math.round(totalNet / ticketCount) : 0
+
+  const filteredToday = useMemo(() => {
+    const q = saleSearch.trim().toLowerCase()
+    const sorted = [...today].sort((a, b) => b.createdAt - a.createdAt)
+    if (!q) return sorted
+    return sorted.filter(
+      (s) =>
+        s.id.toLowerCase().includes(q) ||
+        (s.cashierDisplayName ?? '').toLowerCase().includes(q) ||
+        (s.storeName ?? '').toLowerCase().includes(q) ||
+        paymentMethodShortLabel(s.paymentMethod).toLowerCase().includes(q),
+    )
+  }, [today, saleSearch])
 
   const saveOpeningFloat = useCallback(async () => {
     if (!canDailyClosure || isClosed) return
@@ -280,20 +270,7 @@ export function JournalReportView({
 
   const performClosure = useCallback(async () => {
     if (!canDailyClosure || isClosed) return
-    debugLog(
-      'src/views/JournalReportView.tsx:performClosure:entry',
-      'Closure attempt started',
-      'H1',
-      {
-        canDailyClosure,
-        isClosed,
-        pendingClosureUntil,
-        salesCount: today.length,
-        openingFloat: dayRow?.openingFloat ?? 0,
-        countedEdit,
-      },
-    )
-    const now = new Date().getTime()
+    const now = Date.now()
     if (now > pendingClosureUntil) {
       setPendingClosureUntil(now + 7000)
       toast.warning(
@@ -311,21 +288,6 @@ export function JournalReportView({
       countedRaw === ''
         ? undefined
         : Number.parseInt(countedRaw.replace(/\s/g, ''), 10)
-    debugLog(
-      'src/views/JournalReportView.tsx:performClosure:computed',
-      'Computed closure financials',
-      'H2',
-      {
-        opening,
-        cashTot,
-        expected,
-        countedRaw,
-        counted: counted ?? null,
-        statsCashCount: stats.cash.count,
-        statsCardCount: stats.card.count,
-        statsMobileCount: stats.mobile.count,
-      },
-    )
     if (countedRaw !== '' && (!Number.isFinite(counted) || counted! < 0)) {
       toast.error('Montant compté invalide')
       return
@@ -385,18 +347,6 @@ export function JournalReportView({
           totalTTC: sumTotalTTC(today),
         },
       })
-      debugLog(
-        'src/views/JournalReportView.tsx:performClosure:saved',
-        'Day closure persisted',
-        'H1',
-        {
-          dateYmd: todayYmd,
-          closedByProfileId: currentProfile.id,
-          expectedCashAtClose: expected,
-          countedCash: counted ?? null,
-          snapshotTransactionCount: today.length,
-        },
-      )
       setCountedEdit('')
       setClosureNote('')
       setPendingClosureUntil(0)
@@ -476,9 +426,7 @@ export function JournalReportView({
       ['Panier moyen', String(avgTicket)],
       [],
       ['Réf vente', 'Heure', 'Magasin', 'Caissier', 'Paiement', 'Net TTC'],
-      ...[...today]
-        .sort((a, b) => b.createdAt - a.createdAt)
-        .map((s) => [
+      ...filteredToday.map((s) => [
           s.id.slice(0, 8).toUpperCase(),
           new Date(s.createdAt).toLocaleTimeString('fr-FR', {
             hour: '2-digit',
@@ -492,7 +440,7 @@ export function JournalReportView({
     ]
     downloadTextFile(`journal-caisse-${todayYmd}.csv`, toCsvSemicolon(rows))
     toast.success('Export journal prêt')
-  }, [todayYmd, totalNet, ticketCount, avgTicket, today, toast])
+  }, [todayYmd, totalNet, ticketCount, avgTicket, filteredToday, toast])
 
   const exportClosureHistoryCsv = useCallback(() => {
     const rows: string[][] = [
@@ -597,7 +545,21 @@ export function JournalReportView({
         </Card>
       ) : null}
 
+      <Tabs
+        variant="segmented"
+        active={reportTab}
+        onChange={setReportTab}
+        items={[
+          { id: 'overview', label: 'Synthèse' },
+          { id: 'sales', label: 'Ventes', count: today.length },
+          { id: 'audit', label: 'Audit', count: auditEvents.length },
+          { id: 'closure', label: 'Clôture' },
+        ]}
+      />
+
       <div id="print-journal" className="space-y-5">
+        {(reportTab === 'overview' || reportTab === 'sales') ? (
+        <div className="catalogue-hero p-4 sm:p-5">
         <div className="grid gap-2.5 sm:grid-cols-2 xl:grid-cols-4">
           <Kpi label="Total ventes (TTC)" value={formatFCFA(totalNet)} tone="accent" />
           <Kpi label="Tickets" value={String(ticketCount)} tone="neutral" />
@@ -613,7 +575,11 @@ export function JournalReportView({
             tone="amber"
           />
         </div>
+        </div>
+        ) : null}
 
+        {reportTab === 'overview' ? (
+        <>
         <Card className="rounded-2xl">
           <CardContent>
             <h3 className="text-[14px] font-semibold text-zinc-900">
@@ -732,8 +698,10 @@ export function JournalReportView({
             </ul>
           </CardContent>
         </Card>
+        </>
+        ) : null}
 
-        {!isClosed && canDailyClosure ? (
+        {reportTab === 'closure' && !isClosed && canDailyClosure ? (
           <Card className="rounded-2xl">
             <CardContent>
               <h3 className="text-[14px] font-semibold text-zinc-900">
@@ -773,14 +741,68 @@ export function JournalReportView({
           </Card>
         ) : null}
 
+        {reportTab === 'closure' ? (
+        <>
+        <SectionHeader
+          title="Historique clôtures / réouvertures"
+          subtitle="Traçabilité opérationnelle exportable"
+        />
+        {closureHistory.length === 0 ? (
+          <EmptyState title="Aucun historique" variant="flat" />
+        ) : (
+          <Card className="rounded-2xl">
+            <CardContent className="p-0!">
+              <ul className="divide-y divide-zinc-100">
+                {closureHistory.map((ev) => (
+                  <li key={ev.id} className="px-4 py-2.5 text-[12px]">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <span className="font-semibold text-zinc-800">
+                        {auditKindLabel(ev.kind)}
+                      </span>
+                      <time
+                        className="font-mono-nums text-[11px] text-zinc-500"
+                        dateTime={new Date(ev.createdAt).toISOString()}
+                      >
+                        {new Date(ev.createdAt).toLocaleString('fr-FR', {
+                          dateStyle: 'short',
+                          timeStyle: 'medium',
+                        })}
+                      </time>
+                    </div>
+                    <p className="mt-0.5 text-zinc-600">
+                      <span className="font-medium text-zinc-700">
+                        {ev.actorDisplayName}
+                      </span>{' '}
+                      — <span className="italic">« {ev.reason} »</span>
+                    </p>
+                  </li>
+                ))}
+              </ul>
+            </CardContent>
+          </Card>
+        )}
+        </>
+        ) : null}
+
+        {reportTab === 'sales' ? (
+        <>
+        <div className="catalogue-filter-bar p-4">
+          <Input
+            type="search"
+            value={saleSearch}
+            onChange={(e) => setSaleSearch(e.target.value)}
+            placeholder="Rechercher vente, caissier, paiement…"
+            iconLeft={<IconSearch />}
+          />
+        </div>
         <SectionHeader
           title="Ventes du jour"
           subtitle="Montants nets après remboursements · profil connecté"
         />
-        {today.length === 0 ? (
+        {filteredToday.length === 0 ? (
           <EmptyState
             title="Aucune vente aujourd’hui"
-            description="Aucune vente enregistrée pour ce profil."
+            description="Aucune vente enregistrée pour ce profil ou ce filtre."
             variant="flat"
           />
         ) : (
@@ -797,9 +819,7 @@ export function JournalReportView({
               </Tr>
             </THead>
             <TBody>
-              {[...today]
-                .sort((a, b) => b.createdAt - a.createdAt)
-                .map((s) => (
+              {filteredToday.map((s) => (
                   <Tr key={s.id}>
                     <Td mono>
                       {new Date(s.createdAt).toLocaleTimeString('fr-FR', {
@@ -864,7 +884,11 @@ export function JournalReportView({
             </TBody>
           </Table>
         )}
+        </>
+        ) : null}
 
+        {reportTab === 'audit' ? (
+        <>
         <SectionHeader
           title="Journal d’audit"
           subtitle="Append-only · données locales IndexedDB"
@@ -911,45 +935,8 @@ export function JournalReportView({
             </CardContent>
           </Card>
         )}
-
-        <SectionHeader
-          title="Historique clôtures / réouvertures"
-          subtitle="Traçabilité opérationnelle exportable"
-        />
-        {closureHistory.length === 0 ? (
-          <EmptyState title="Aucun historique" variant="flat" />
-        ) : (
-          <Card className="rounded-2xl">
-            <CardContent className="p-0!">
-              <ul className="divide-y divide-zinc-100">
-                {closureHistory.map((ev) => (
-                  <li key={ev.id} className="px-4 py-2.5 text-[12px]">
-                    <div className="flex flex-wrap items-center justify-between gap-2">
-                      <span className="font-semibold text-zinc-800">
-                        {auditKindLabel(ev.kind)}
-                      </span>
-                      <time
-                        className="font-mono-nums text-[11px] text-zinc-500"
-                        dateTime={new Date(ev.createdAt).toISOString()}
-                      >
-                        {new Date(ev.createdAt).toLocaleString('fr-FR', {
-                          dateStyle: 'short',
-                          timeStyle: 'medium',
-                        })}
-                      </time>
-                    </div>
-                    <p className="mt-0.5 text-zinc-600">
-                      <span className="font-medium text-zinc-700">
-                        {ev.actorDisplayName}
-                      </span>{' '}
-                      — <span className="italic">« {ev.reason} »</span>
-                    </p>
-                  </li>
-                ))}
-              </ul>
-            </CardContent>
-          </Card>
-        )}
+        </>
+        ) : null}
       </div>
 
       {refundSale ? (

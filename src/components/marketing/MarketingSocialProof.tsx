@@ -1,5 +1,6 @@
 import { MARKETING_IMAGES } from '../../lib/marketingImages'
 import { MarketingSectionHeader } from './MarketingSectionHeader'
+import { MarketingBlobs } from './MarketingBlobs'
 import { Reveal } from './Reveal'
 import { MarketingImage } from './MarketingImage'
 import { IconStar } from '../../ui/icons'
@@ -32,8 +33,9 @@ const SECTORS = ['Restaurants', 'Boutiques', 'Pharmacies', 'Superettes', 'Maquis
 
 export function MarketingSocialProof() {
   return (
-    <section className="border-y border-border/50 bg-white py-24">
-      <div className="mx-auto max-w-7xl px-4 sm:px-6">
+    <section className="relative border-y border-border/50 bg-white py-24">
+      <MarketingBlobs preset="light" className="opacity-70" />
+      <div className="relative z-10 mx-auto max-w-7xl px-4 sm:px-6">
         <Reveal>
           <MarketingSectionHeader
             eyebrow="Confiance"

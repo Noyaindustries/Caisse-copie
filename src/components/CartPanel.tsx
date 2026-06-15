@@ -154,9 +154,9 @@ export function CartPanel({
   const quickAmounts = quickCashSuggestions(cashDue)
 
   return (
-    <aside className="flex h-full w-full min-w-0 shrink-0 flex-col border-l border-zinc-200 bg-white lg:w-[360px]">
+    <aside className="caisse-cart flex h-full w-full min-w-0 shrink-0 flex-col lg:w-[380px] xl:w-[400px]">
       {/* Header */}
-      <div className="flex shrink-0 items-center justify-between gap-2 border-b border-zinc-100 px-3 py-2.5 sm:px-4">
+      <div className="caisse-cart-header flex shrink-0 items-center justify-between gap-2 px-3 py-3 sm:px-4">
         <div className="flex min-w-0 items-center gap-2">
           {onClose ? (
             <button
@@ -170,12 +170,14 @@ export function CartPanel({
           ) : (
             <IconReceipt className="h-4 w-4 text-zinc-400" />
           )}
-          <h2 className="text-[14px] font-semibold text-zinc-900">Panier</h2>
+          <h2 className="text-[14px] font-semibold tracking-tight text-[#1a2332]">
+            Panier
+          </h2>
           <span
             ref={countBadgeRef}
-            className="inline-block text-[12px] text-zinc-500 transition-transform duration-300 ease-out"
+            className="inline-flex min-h-5 min-w-5 items-center justify-center rounded-full border border-[rgba(184,146,46,0.25)] bg-[#f7f0e3] px-1.5 text-[11px] font-bold text-[#b8922e] transition-transform duration-300 ease-out"
           >
-            ({count})
+            {count}
           </span>
         </div>
         <div className="flex shrink-0 items-center gap-1">
@@ -203,26 +205,21 @@ export function CartPanel({
       {/* Lines */}
       <div className="ui-scroll min-h-0 flex-1 overflow-y-auto px-4 py-3">
         {lines.length === 0 ? (
-          <div className="flex h-full flex-col items-center justify-center gap-2 py-12 text-center">
-            <span className="flex h-10 w-10 items-center justify-center rounded-full bg-zinc-100 text-zinc-400">
-              <IconReceipt className="h-5 w-5" />
+          <div className="flex h-full flex-col items-center justify-center gap-3 py-14 text-center">
+            <span className="flex h-14 w-14 items-center justify-center rounded-2xl border border-[rgba(184,146,46,0.2)] bg-[linear-gradient(145deg,#fffefb,#f7f0e3)] text-[#b8922e]">
+              <IconReceipt className="h-6 w-6" />
             </span>
-            <p className="text-[13px] font-semibold text-zinc-700">
-              Panier vide
-            </p>
-            <p className="text-[12px] text-zinc-500">
-              Scannez ou cliquez un article pour commencer.
+            <p className="text-[14px] font-semibold text-[#1a2332]">Panier vide</p>
+            <p className="max-w-[220px] text-[12px] leading-relaxed text-[#5c6678]">
+              Scannez un code-barres ou sélectionnez un article du catalogue.
             </p>
           </div>
         ) : (
-          <ul className="flex flex-col gap-1.5">
+          <ul className="flex flex-col gap-2">
             {lines.map((line) => {
               const max = stockFor(products, line.productId)
               return (
-                <li
-                  key={line.productId}
-                  className="rounded-lg border border-zinc-200 bg-white p-2.5"
-                >
+                <li key={line.productId} className="caisse-cart-line p-3">
                   <div className="flex items-start justify-between gap-2">
                     <div className="min-w-0 flex-1">
                       <p className="truncate text-[13px] font-medium text-zinc-900">
@@ -241,8 +238,8 @@ export function CartPanel({
                       <IconClose className="h-3.5 w-3.5" />
                     </button>
                   </div>
-                  <div className="mt-2 flex items-center justify-between">
-                    <div className="inline-flex items-center gap-1 rounded-md border border-zinc-200">
+                  <div className="mt-2.5 flex items-center justify-between">
+                    <div className="caisse-qty-control inline-flex items-center gap-0.5 p-0.5">
                       <button
                         type="button"
                         onClick={() => onDec(line.productId)}
@@ -276,7 +273,7 @@ export function CartPanel({
       </div>
 
       {/* Footer (sticky) */}
-      <div className="border-t border-zinc-100 bg-zinc-50/40 px-4 py-3">
+      <div className="caisse-cart-footer px-4 py-3.5">
         {/* Promo */}
         {tableOptions.length > 0 && onSelectedTableIdChange ? (
           <div className="mb-2">
@@ -363,11 +360,11 @@ export function CartPanel({
               <span className="font-mono-nums">{formatFCFA(s.tva)}</span>
             </div>
           ))}
-          <div className="mt-1 flex items-baseline justify-between border-t border-zinc-200/80 pt-2">
-            <span className="text-[12px] font-medium text-zinc-700">
+          <div className="mt-1 flex items-baseline justify-between border-t border-[rgba(184,146,46,0.14)] pt-2.5">
+            <span className="text-[12px] font-semibold uppercase tracking-wide text-[#5c6678]">
               Total TTC
             </span>
-            <span className="font-mono-nums text-[18px] font-bold text-zinc-900">
+            <span className="caisse-total-display font-mono-nums">
               {formatFCFA(totals.totalTTC)}
             </span>
           </div>
@@ -509,10 +506,10 @@ export function CartPanel({
                       })
                     }
                     className={cn(
-                      'rounded-md border px-2 py-1 text-[11px] font-semibold transition',
+                      'rounded-lg border px-2.5 py-1 text-[11px] font-semibold transition',
                       payment.mobileOperator === id
-                        ? 'border-zinc-900 bg-zinc-900 text-white'
-                        : 'border-zinc-200 bg-white text-zinc-700 hover:border-zinc-300',
+                        ? 'caisse-operator-active'
+                        : 'border-[rgba(184,146,46,0.2)] bg-white text-[#5c6678] hover:border-[rgba(184,146,46,0.35)]',
                     )}
                   >
                     {label}
@@ -543,10 +540,10 @@ export function CartPanel({
                       type="button"
                       onClick={() => onPaymentPatch({ cashReceived: String(value) })}
                       className={cn(
-                        'rounded-md border px-2 py-1 text-[11px] font-mono-nums font-semibold transition',
+                        'rounded-lg border px-2.5 py-1 text-[11px] font-mono-nums font-semibold transition',
                         payment.cashReceived.replace(/\s/g, '') === String(value)
-                          ? 'border-emerald-700 bg-emerald-700 text-white'
-                          : 'border-zinc-200 bg-white text-zinc-700 hover:border-zinc-300',
+                          ? 'caisse-operator-active'
+                          : 'border-[rgba(184,146,46,0.2)] bg-white text-[#5c6678] hover:border-[rgba(184,146,46,0.35)]',
                       )}
                     >
                       {formatFCFA(value)}
@@ -585,10 +582,10 @@ export function CartPanel({
                       type="button"
                       onClick={() => onPaymentPatch({ cashReceived: String(value) })}
                       className={cn(
-                        'rounded-md border px-2 py-1 text-[11px] font-mono-nums font-semibold transition',
+                        'rounded-lg border px-2.5 py-1 text-[11px] font-mono-nums font-semibold transition',
                         payment.cashReceived.replace(/\s/g, '') === String(value)
-                          ? 'border-emerald-700 bg-emerald-700 text-white'
-                          : 'border-zinc-200 bg-white text-zinc-700 hover:border-zinc-300',
+                          ? 'caisse-operator-active'
+                          : 'border-[rgba(184,146,46,0.2)] bg-white text-[#5c6678] hover:border-[rgba(184,146,46,0.35)]',
                       )}
                     >
                       {formatFCFA(value)}
@@ -645,7 +642,7 @@ export function CartPanel({
           loading={checkoutBusy}
           onClick={onCheckout}
           disabled={checkoutDisabled}
-          className="mt-4"
+          className="caisse-checkout-btn mt-4"
         >
           {checkoutBusy ? 'Traitement…' : `Encaisser · ${formatFCFA(totalRounded)}`}
         </Button>

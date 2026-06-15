@@ -3,6 +3,7 @@ import { useLiveQuery } from 'dexie-react-hooks'
 import type { Product, ProductCategory } from '../db/types'
 import { db } from '../db/db'
 import { DEFAULT_VAT_RATE_PCT } from '../lib/money'
+import { resolveProductImageFields, type ProductImageFields } from '../lib/uploads/blob'
 import { Button } from '../ui/Button'
 import { cn } from '../ui/cn'
 import { Field, Input, Select } from '../ui/Input'
@@ -61,8 +62,8 @@ export function EditProductModal({
   const [vatRatePct, setVatRatePct] = useState(
     String(product.vatRatePct ?? DEFAULT_VAT_RATE_PCT),
   )
-  const [imageDataUrl, setImageDataUrl] = useState<string | undefined>(
-    product.imageDataUrl,
+  const [imagePreview, setImagePreview] = useState<string | undefined>(
+    product.imageDataUrl ?? product.imageUrl,
   )
   const [busy, setBusy] = useState(false)
   const [err, setErr] = useState<string | null>(null)
@@ -78,7 +79,7 @@ export function EditProductModal({
     setStock(String(stockAtActiveStore))
     setLowTh(String(product.lowStockThreshold))
     setVatRatePct(String(product.vatRatePct ?? DEFAULT_VAT_RATE_PCT))
-    setImageDataUrl(product.imageDataUrl)
+    setImagePreview(product.imageDataUrl ?? product.imageUrl)
   }, [product, stockAtActiveStore])
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -125,13 +126,23 @@ export function EditProductModal({
         delete next.purchasePriceTTC
       }
     }
-    if (imageDataUrl) {
-      next.imageDataUrl = imageDataUrl
-    } else {
-      delete next.imageDataUrl
-    }
     setBusy(true)
     try {
+      let imageFields: ProductImageFields = {}
+      if (imagePreview) {
+        if (imagePreview.startsWith('data:')) {
+          imageFields = await resolveProductImageFields(product.id, imagePreview)
+        } else if (imagePreview === product.imageUrl && product.imageUrl) {
+          imageFields = { imageUrl: product.imageUrl }
+        } else if (imagePreview === product.imageDataUrl && product.imageDataUrl) {
+          imageFields = { imageDataUrl: product.imageDataUrl }
+        } else {
+          imageFields = { imageUrl: imagePreview }
+        }
+      }
+      delete next.imageDataUrl
+      delete next.imageUrl
+      Object.assign(next, imageFields)
       await onSave(next, st)
       onClose()
     } catch (e2) {
@@ -241,7 +252,7 @@ export function EditProductModal({
             </div>
           </Field>
         </div>
-        <Field label="Photo" hint="Max 500 Ko">
+        <Field label="Photo" hint="Max 500 Ko · Vercel Blob si configuré">
           <input
             type="file"
             accept="image/*"
@@ -259,22 +270,22 @@ export function EditProductModal({
               r.onload = () => {
                 const url =
                   typeof r.result === 'string' ? r.result : undefined
-                setImageDataUrl(url)
+                setImagePreview(url)
               }
               r.readAsDataURL(f)
             }}
           />
-          {imageDataUrl ? (
+          {imagePreview ? (
             <div className="mt-2 flex items-center gap-3">
               <img
-                src={imageDataUrl}
+                src={imagePreview}
                 alt=""
                 className="h-14 w-14 rounded-lg border border-zinc-200 object-cover"
               />
               <Button
                 size="sm"
                 variant="ghost"
-                onClick={() => setImageDataUrl(undefined)}
+                onClick={() => setImagePreview(undefined)}
               >
                 Retirer
               </Button>

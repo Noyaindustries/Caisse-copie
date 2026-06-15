@@ -47,6 +47,7 @@ const publishedProductSchema = z.object({
   category: z.string().min(1),
   vatRatePct: z.number().nonnegative(),
   imageDataUrl: z.string().optional(),
+  imageUrl: z.string().url().optional(),
   stock: z.number().nonnegative(),
   barcode: z.string().optional(),
   lowStockThreshold: z.number().nonnegative().optional(),

@@ -19,6 +19,7 @@ export type NavViewId =
   | 'pointage'
   | 'analytique'
   | 'integrations'
+  | 'parametres'
   | 'network'
   | 'subscription'
 
@@ -41,6 +42,7 @@ export const VIEW_LABELS: Record<NavViewId, string> = {
   pointage: 'Pointage',
   analytique: 'Analytique',
   integrations: 'Intégrations',
+  parametres: 'Paramètres',
   network: 'Multi-magasins',
   subscription: 'Abonnement',
 }
@@ -68,6 +70,8 @@ export const VIEW_SUBTITLES: Record<NavViewId, string> = {
   analytique:
     'Périodes, top produits, heures de pointe, marges, exports CSV / Excel / PDF',
   integrations: 'Marketplace, API partenaires, app mobile gérant',
+  parametres:
+    'Magasin, terminal, caisse, cuisine, tables, périphériques et modules',
   network: 'Stocks par site, transferts, vue consolidée gérant',
   subscription: 'Plan, essai gratuit, facturation et paiements récurrents',
 }
@@ -188,6 +192,12 @@ export const VIEW_ACCENTS: Record<NavViewId, ViewAccent> = {
     labelActive: 'text-slate-900',
     chip: 'bg-slate-200 text-slate-800',
   },
+  parametres: {
+    icon: 'text-zinc-600 bg-zinc-100',
+    iconActive: 'text-zinc-800 bg-zinc-200',
+    labelActive: 'text-zinc-900',
+    chip: 'bg-zinc-200 text-zinc-800',
+  },
   network: {
     icon: 'text-green-600 bg-green-50',
     iconActive: 'text-green-700 bg-green-100',
@@ -250,6 +260,7 @@ export const NAV_SECTIONS: readonly NavSection[] = [
   {
     title: 'Écosystème',
     items: [
+      { id: 'parametres', label: 'Paramètres' },
       { id: 'integrations', label: 'Intégrations' },
       { id: 'subscription', label: 'Abonnement' },
     ],
@@ -284,6 +295,10 @@ const NAV_SECTIONS_GERANT: readonly NavSection[] = [
       { id: 'pointage', label: 'Pointage' },
       { id: 'analytique', label: 'Analytique' },
     ],
+  },
+  {
+    title: 'Configuration',
+    items: [{ id: 'parametres', label: 'Paramètres' }],
   },
 ] as const
 

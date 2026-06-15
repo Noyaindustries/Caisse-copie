@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { MarketingSectionHeader } from './MarketingSectionHeader'
+import { MarketingBlobs } from './MarketingBlobs'
 import { Reveal } from './Reveal'
 import { cn } from '../../ui/cn'
 import { IconChevronDown } from '../../ui/icons'
@@ -35,8 +36,9 @@ export function MarketingFaqAccordion() {
   const [open, setOpen] = useState<number | null>(0)
 
   return (
-    <section id="faq" className="bg-[#f8f9fc] py-24">
-      <div className="mx-auto max-w-3xl px-4 sm:px-6">
+    <section id="faq" className="relative bg-[#f8f9fc] py-24">
+      <MarketingBlobs preset="section" />
+      <div className="relative z-10 mx-auto max-w-3xl px-4 sm:px-6">
         <Reveal>
           <MarketingSectionHeader
             eyebrow="FAQ"

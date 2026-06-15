@@ -44,6 +44,8 @@ export interface KitchenIngredient {
   name: string
   unit: KitchenStockUnit
   lowStockThreshold: number
+  /** Produit catalogue source (matière première liée). */
+  productId?: string
   archived?: boolean
 }
 
@@ -268,6 +270,7 @@ export interface StockTransfer {
 
 /** Entrée / sortie pointage (magasin courant au moment du pointage). */
 export type TimePunchKind = 'in' | 'out'
+export type TimePunchSource = 'self' | 'manager'
 
 export interface TimePunch {
   id: string
@@ -279,6 +282,10 @@ export interface TimePunch {
   storeName?: string
   kind: TimePunchKind
   note?: string
+  /** Origine du pointage (auto par défaut = self). */
+  source?: TimePunchSource
+  addedByProfileId?: string
+  addedByDisplayName?: string
 }
 
 export interface Product {
@@ -293,8 +300,9 @@ export interface Product {
   lowStockThreshold: number
   /** Taux de TVA en % (ex. 18). Sert à ventiler HT / TVA sur le ticket. */
   vatRatePct: number
-  /** Aperçu catalogue / grille caisse (data URL ou URL https). */
+  /** Aperçu catalogue / grille caisse (data URL locale ou URL https — ex. Vercel Blob). */
   imageDataUrl?: string
+  imageUrl?: string
   /** Masqué de la caisse ; réactivable depuis le catalogue. */
   archived: boolean
 }
@@ -407,8 +415,10 @@ export interface OnlineOrder {
   kitchenStation?: string
   kitchenTicketCode?: string
   kitchenUpdatedAt?: number
-  /** Horodatage de la déduction de stock liée à la préparation cuisine. */
+  /** Horodatage de la déduction de stock produit (vente / préparation). */
   stockDeductedAt?: number
+  /** Horodatage de la déduction des ingrédients cuisine (recettes). */
+  kitchenIngredientDeductedAt?: number
 }
 
 export interface OnlineOrderMessage {
