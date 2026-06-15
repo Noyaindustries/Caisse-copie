@@ -1,12 +1,22 @@
 import { Router, type Request, type Response } from 'express'
 import {
   checkCinetpayPayment,
+  cinetpayConfigured,
   cinetpayDemoMode,
   generateTransactionId,
   initCinetpayPayment,
   mobileMoneyEnabled,
   parseNotifyStatus,
 } from '../lib/cinetpay.js'
+import {
+  checkWaveCheckoutByReference,
+  initWaveCheckout,
+  parseWaveWebhookEvent,
+  verifyWaveWebhookSignature,
+  waveApiKeyConfigured,
+  waveDemoMode,
+  waveEnabled,
+} from '../lib/wave.js'
 import {
   MOBILE_MONEY_CHANNELS_CI,
   channelById,
@@ -15,8 +25,17 @@ import {
 } from '../lib/mobileMoneyChannels.js'
 import { prisma } from '../lib/prisma.js'
 import { activateMobileMoneySubscription } from '../lib/subscriptionActivation.js'
+import {
+  findStorefrontOrderByExternalId,
+  markStorefrontOrderPaid,
+  markStorefrontOrderPaymentRefused,
+} from '../lib/storefrontWave.js'
 import { SUBSCRIPTION_PLANS, type PlanId } from '../lib/subscriptionPlans.js'
 import { publicAppUrl } from '../lib/stripe.js'
+import {
+  renderWaveCheckoutPage,
+  waveOpenPath,
+} from '../lib/waveCheckoutPage.js'
 
 export const mobileMoneyRouter = Router()
 
@@ -44,9 +63,12 @@ async function markPaymentAccepted(paymentId: string, extra?: {
       notifyPayload: extra?.notifyPayload as object | undefined,
     },
   })
+  const billingProvider =
+    extra?.paymentMethod?.startsWith('wave') ? 'wave' : 'mobile_money'
   await activateMobileMoneySubscription(
     payment.organizationId,
     parsePlanId(payment.planId),
+    billingProvider,
   )
   const org = await prisma.organization.findUnique({
     where: { id: payment.organizationId },
@@ -61,11 +83,90 @@ async function markPaymentAccepted(paymentId: string, extra?: {
   return payment
 }
 
+function isWaveDirectChannel(channelId: string): boolean {
+  return channelId === 'wave' && waveEnabled()
+}
+
+type WaveCheckoutContext = {
+  amountFcfa: number
+  merchantLabel: string
+  customerPhone?: string
+  launchUrl: string | null
+  demo: boolean
+  acceptAction: string
+  refuseAction: string
+}
+
+async function resolveWaveCheckoutContext(
+  transactionId: string,
+): Promise<WaveCheckoutContext | null> {
+  const payment = await prisma.mobileMoneyPayment.findUnique({
+    where: { transactionId },
+    include: { organization: true },
+  })
+
+  if (payment) {
+    const notify =
+      typeof payment.notifyPayload === 'object' && payment.notifyPayload !== null
+        ? (payment.notifyPayload as { waveLaunchUrl?: string })
+        : {}
+    const plan = SUBSCRIPTION_PLANS[parsePlanId(payment.planId)]
+    return {
+      amountFcfa: payment.amountFcfa,
+      merchantLabel: `Wave — ${plan.name}`,
+      customerPhone: payment.customerPhone,
+      launchUrl: notify.waveLaunchUrl ?? null,
+      demo: payment.paymentMethod === 'wave_demo' || waveDemoMode(),
+      acceptAction: `/api/billing/wave/demo/${encodeURIComponent(transactionId)}/accept`,
+      refuseAction: `/api/billing/wave/demo/${encodeURIComponent(transactionId)}/refuse`,
+    }
+  }
+
+  const storefrontOrder = await findStorefrontOrderByExternalId(transactionId)
+  if (!storefrontOrder) return null
+
+  const payload =
+    typeof storefrontOrder.payload === 'object' && storefrontOrder.payload !== null
+      ? (storefrontOrder.payload as Record<string, unknown>)
+      : {}
+  const totalTTC = typeof payload.totalTTC === 'number' ? payload.totalTTC : 0
+  const storeName =
+    typeof payload.storeName === 'string' ? payload.storeName : 'Boutique'
+  const customerPhone =
+    typeof payload.customerPhone === 'string' ? payload.customerPhone : undefined
+  const launchUrl =
+    typeof payload.waveLaunchUrl === 'string' ? payload.waveLaunchUrl : null
+
+  return {
+    amountFcfa: totalTTC,
+    merchantLabel: storeName,
+    customerPhone,
+    launchUrl,
+    demo: launchUrl === null || waveDemoMode(),
+    acceptAction: `/api/billing/wave/demo/${encodeURIComponent(transactionId)}/accept?kind=storefront`,
+    refuseAction: `/api/billing/wave/demo/${encodeURIComponent(transactionId)}/refuse?kind=storefront`,
+  }
+}
+
 mobileMoneyRouter.get('/billing/mobile-money/channels', (_req, res) => {
+  const cinetpayOn = cinetpayConfigured() || (cinetpayDemoMode() && !waveEnabled())
   res.json({
-    channels: MOBILE_MONEY_CHANNELS_CI,
+    channels: MOBILE_MONEY_CHANNELS_CI.map((channel) => ({
+      ...channel,
+      provider:
+        channel.id === 'wave' && waveEnabled()
+          ? 'wave'
+          : cinetpayOn
+            ? 'cinetpay'
+            : null,
+    })),
     enabled: mobileMoneyEnabled(),
-    demo: cinetpayDemoMode() && !process.env.CINETPAY_API_KEY?.trim(),
+    demo:
+      (cinetpayDemoMode() && !cinetpayConfigured() && !waveApiKeyConfigured()) ||
+      (waveDemoMode() && !waveApiKeyConfigured() && !cinetpayConfigured()),
+    waveEnabled: waveEnabled(),
+    waveDirect: waveEnabled(),
+    cinetpayEnabled: cinetpayOn,
     country: 'CI',
   })
 })
@@ -74,7 +175,7 @@ mobileMoneyRouter.post('/billing/mobile-money/checkout', async (req, res) => {
   try {
     if (!mobileMoneyEnabled()) {
       res.status(503).json({
-        error: 'Mobile money indisponible. Configurez CinetPay ou le mode démo.',
+        error: 'Mobile money indisponible. Configurez Wave, CinetPay ou le mode démo.',
       })
       return
     }
@@ -112,8 +213,8 @@ mobileMoneyRouter.post('/billing/mobile-money/checkout', async (req, res) => {
     const plan = SUBSCRIPTION_PLANS[planId]
     const transactionId = generateTransactionId()
     const baseUrl = publicAppUrl(req)
-    const notifyUrl = `${baseUrl}/api/billing/cinetpay/notify`
     const returnUrl = `${baseUrl}/staff?subscription=success&tx=${encodeURIComponent(transactionId)}`
+    const errorUrl = `${baseUrl}/staff?subscription=cancel`
 
     const payment = await prisma.mobileMoneyPayment.create({
       data: {
@@ -126,6 +227,46 @@ mobileMoneyRouter.post('/billing/mobile-money/checkout', async (req, res) => {
         status: 'pending',
       },
     })
+
+    if (isWaveDirectChannel(channelId)) {
+      const waveInit = await initWaveCheckout({
+        transactionId,
+        amountFcfa: plan.priceFcfa,
+        successUrl: returnUrl,
+        errorUrl,
+        payerPhoneE164: phone,
+      })
+
+      await prisma.mobileMoneyPayment.update({
+        where: { id: payment.id },
+        data: {
+          paymentToken: waveInit.sessionId,
+          paymentMethod: waveInit.demo ? 'wave_demo' : 'wave',
+          notifyPayload: {
+            waveLaunchUrl: waveInit.launchUrl,
+          },
+        },
+      })
+
+      res.json({
+        transactionId,
+        paymentUrl: waveInit.paymentUrl,
+        demo: waveInit.demo,
+        channel: channelId,
+        provider: 'wave',
+        amountFcfa: plan.priceFcfa,
+      })
+      return
+    }
+
+    if (!cinetpayConfigured() && !cinetpayDemoMode()) {
+      res.status(503).json({
+        error: 'CinetPay non configuré pour cet opérateur. Utilisez Wave ou configurez CinetPay.',
+      })
+      return
+    }
+
+    const notifyUrl = `${baseUrl}/api/billing/cinetpay/notify`
 
     const init = await initCinetpayPayment({
       transactionId,
@@ -155,6 +296,7 @@ mobileMoneyRouter.post('/billing/mobile-money/checkout', async (req, res) => {
       paymentUrl: init.paymentUrl,
       demo: init.demo,
       channel: channelId,
+      provider: 'cinetpay',
       amountFcfa: plan.priceFcfa,
     })
   } catch (err) {
@@ -190,6 +332,29 @@ mobileMoneyRouter.get('/billing/mobile-money/verify/:transactionId', async (req,
 
     if (payment.status === 'accepted') {
       res.json({ status: 'accepted', planId: payment.planId })
+      return
+    }
+
+    if (payment.channel === 'wave' && (payment.paymentMethod?.startsWith('wave') ?? false)) {
+      const check = await checkWaveCheckoutByReference(transactionId)
+      if (check.status === 'ACCEPTED') {
+        await markPaymentAccepted(payment.id, {
+          operatorId: check.transactionId,
+          paymentMethod: 'wave',
+          notifyPayload: check.raw,
+        })
+        res.json({ status: 'accepted', planId: payment.planId })
+        return
+      }
+      if (check.status === 'REFUSED') {
+        await prisma.mobileMoneyPayment.update({
+          where: { id: payment.id },
+          data: { status: 'refused', notifyPayload: check.raw as object },
+        })
+        res.json({ status: 'refused' })
+        return
+      }
+      res.json({ status: 'pending' })
       return
     }
 
@@ -264,6 +429,239 @@ export async function handleCinetpayNotify(req: Request, res: Response) {
     res.status(500).send('ERR')
   }
 }
+
+export async function handleWaveWebhook(req: Request, res: Response) {
+  try {
+    const rawBody =
+      typeof req.body === 'string'
+        ? req.body
+        : Buffer.isBuffer(req.body)
+          ? req.body.toString('utf8')
+          : ''
+
+    const signature = req.get('Wave-Signature') ?? req.get('wave-signature') ?? undefined
+    if (process.env.WAVE_WEBHOOK_SECRET?.trim()) {
+      if (!verifyWaveWebhookSignature(rawBody, signature)) {
+        res.status(401).send('Invalid signature')
+        return
+      }
+    }
+
+    const event = parseWaveWebhookEvent(rawBody)
+    if (!event) {
+      res.status(400).send('Invalid payload')
+      return
+    }
+
+    if (
+      event.type !== 'checkout.session.completed' &&
+      event.type !== 'checkout.session.payment_failed'
+    ) {
+      res.status(200).send('OK')
+      return
+    }
+
+    const clientReference = event.data.client_reference?.trim()
+    if (!clientReference) {
+      res.status(200).send('OK')
+      return
+    }
+
+    const payment = await prisma.mobileMoneyPayment.findUnique({
+      where: { transactionId: clientReference },
+    })
+
+    const succeeded =
+      event.type === 'checkout.session.completed' &&
+      event.data.payment_status === 'succeeded' &&
+      event.data.checkout_status === 'complete'
+
+    if (payment) {
+      if (payment.status === 'accepted') {
+        res.status(200).send('OK')
+        return
+      }
+
+      if (succeeded) {
+        await markPaymentAccepted(payment.id, {
+          operatorId: event.data.transaction_id,
+          paymentMethod: 'wave',
+          notifyPayload: { webhook: event },
+        })
+      } else if (event.type === 'checkout.session.payment_failed') {
+        await prisma.mobileMoneyPayment.update({
+          where: { id: payment.id },
+          data: {
+            status: 'refused',
+            notifyPayload: { webhook: event } as object,
+          },
+        })
+      }
+
+      res.status(200).send('OK')
+      return
+    }
+
+    const storefrontOrder = await findStorefrontOrderByExternalId(clientReference)
+    if (storefrontOrder) {
+      if (succeeded) {
+        await markStorefrontOrderPaid(clientReference, {
+          waveSessionId: event.data.id,
+          waveTransactionId: event.data.transaction_id,
+          notifyPayload: { webhook: event },
+        })
+      } else if (event.type === 'checkout.session.payment_failed') {
+        await markStorefrontOrderPaymentRefused(clientReference, { webhook: event })
+      }
+      res.status(200).send('OK')
+      return
+    }
+
+    res.status(200).send('OK')
+  } catch (err) {
+    console.error('[wave/webhook]', err)
+    res.status(500).send('ERR')
+  }
+}
+
+mobileMoneyRouter.get('/billing/wave/open/:transactionId', async (req, res) => {
+  const transactionId = req.params.transactionId?.trim()
+  if (!transactionId) {
+    res.status(400).send('transactionId manquant')
+    return
+  }
+
+  const ctx = await resolveWaveCheckoutContext(transactionId)
+  if (!ctx) {
+    res.status(404).send('Transaction introuvable')
+    return
+  }
+
+  if (ctx.launchUrl && !ctx.demo) {
+    res.redirect(302, ctx.launchUrl)
+    return
+  }
+
+  try {
+    const html = await renderWaveCheckoutPage({
+      amountFcfa: ctx.amountFcfa,
+      merchantLabel: ctx.merchantLabel,
+      customerPhone: ctx.customerPhone,
+      launchUrl: ctx.launchUrl,
+      demo: ctx.demo,
+      transactionId,
+      acceptAction: ctx.acceptAction,
+      refuseAction: ctx.refuseAction,
+    })
+    res.type('html').send(html)
+  } catch (err) {
+    console.error('[wave/open]', err)
+    res.status(500).send('Impossible d’ouvrir le paiement Wave.')
+  }
+})
+
+mobileMoneyRouter.get('/billing/wave/demo', async (req, res) => {
+  if (!waveDemoMode()) {
+    res.status(404).send('Mode démo Wave désactivé')
+    return
+  }
+
+  const transactionId =
+    typeof req.query.transactionId === 'string' ? req.query.transactionId : ''
+  if (!transactionId) {
+    res.status(400).send('transactionId manquant')
+    return
+  }
+
+  res.redirect(
+    302,
+    `${publicAppUrl(req)}${waveOpenPath(transactionId)}`,
+  )
+})
+
+mobileMoneyRouter.post('/billing/wave/demo/:transactionId/accept', async (req, res) => {
+  if (!waveDemoMode()) {
+    res.status(404).send('Mode démo Wave désactivé')
+    return
+  }
+  const transactionId = req.params.transactionId
+  const kind = typeof req.query.kind === 'string' ? req.query.kind : ''
+
+  if (kind === 'storefront') {
+    const order = await findStorefrontOrderByExternalId(transactionId)
+    if (!order) {
+      res.status(404).send('Commande introuvable')
+      return
+    }
+    await markStorefrontOrderPaid(transactionId, {
+      notifyPayload: { demo: true, action: 'accept', provider: 'wave' },
+    })
+    const payload =
+      typeof order.payload === 'object' && order.payload !== null
+        ? (order.payload as Record<string, unknown>)
+        : {}
+    const storeCode =
+      typeof payload.storeCode === 'string' ? payload.storeCode : order.storeCode
+    const returnUrl = `${publicAppUrl(req)}/boutique/${encodeURIComponent(storeCode)}?order=${encodeURIComponent(transactionId)}&payment=success`
+    res.redirect(returnUrl)
+    return
+  }
+
+  const payment = await prisma.mobileMoneyPayment.findUnique({
+    where: { transactionId },
+  })
+  if (!payment) {
+    res.status(404).send('Transaction introuvable')
+    return
+  }
+  await markPaymentAccepted(payment.id, {
+    paymentMethod: 'wave_demo',
+    notifyPayload: { demo: true, action: 'accept', provider: 'wave' },
+  })
+  const returnUrl = `${publicAppUrl(req)}/staff?subscription=success&tx=${encodeURIComponent(transactionId)}`
+  res.redirect(returnUrl)
+})
+
+mobileMoneyRouter.post('/billing/wave/demo/:transactionId/refuse', async (req, res) => {
+  if (!waveDemoMode()) {
+    res.status(404).send('Mode démo Wave désactivé')
+    return
+  }
+  const transactionId = req.params.transactionId
+  const kind = typeof req.query.kind === 'string' ? req.query.kind : ''
+
+  if (kind === 'storefront') {
+    const order = await findStorefrontOrderByExternalId(transactionId)
+    if (!order) {
+      res.status(404).send('Commande introuvable')
+      return
+    }
+    await markStorefrontOrderPaymentRefused(transactionId, {
+      demo: true,
+      action: 'refuse',
+      provider: 'wave',
+    })
+    const payload =
+      typeof order.payload === 'object' && order.payload !== null
+        ? (order.payload as Record<string, unknown>)
+        : {}
+    const storeCode =
+      typeof payload.storeCode === 'string' ? payload.storeCode : order.storeCode
+    res.redirect(
+      `${publicAppUrl(req)}/boutique/${encodeURIComponent(storeCode)}?order=${encodeURIComponent(transactionId)}&payment=cancel`,
+    )
+    return
+  }
+
+  await prisma.mobileMoneyPayment.updateMany({
+    where: { transactionId },
+    data: {
+      status: 'refused',
+      notifyPayload: { demo: true, action: 'refuse', provider: 'wave' },
+    },
+  })
+  res.redirect(`${publicAppUrl(req)}/staff?subscription=cancel`)
+})
 
 mobileMoneyRouter.get('/billing/mobile-money/demo', async (req, res) => {
   if (!cinetpayDemoMode()) {

@@ -12,6 +12,7 @@ import {
 } from '../lib/subscriptionPlans.js'
 import { MOBILE_MONEY_CHANNELS_CI } from '../lib/mobileMoneyChannels.js'
 import { mobileMoneyEnabled } from '../lib/cinetpay.js'
+import { waveEnabled } from '../lib/wave.js'
 import { runSubscriptionReminders } from '../lib/subscriptionReminders.js'
 import { getStripe, publicAppUrl, stripeConfigured } from '../lib/stripe.js'
 import {
@@ -107,6 +108,7 @@ function orgPayload(org: {
     currentPeriodEnd: org.currentPeriodEnd?.toISOString() ?? null,
     stripeEnabled: stripeConfigured(),
     mobileMoneyEnabled: mobileMoneyEnabled(),
+    waveEnabled: waveEnabled(),
     billingPhone: org.billingPhone ?? null,
     smsRemindersEnabled: org.smsRemindersEnabled ?? true,
   }
@@ -143,6 +145,7 @@ billingRouter.get('/billing/plans', (_req, res) => {
     trialDays: TRIAL_DAYS,
     stripeEnabled: stripeConfigured(),
     mobileMoneyEnabled: mobileMoneyEnabled(),
+    waveEnabled: waveEnabled(),
   })
 })
 

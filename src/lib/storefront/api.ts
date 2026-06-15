@@ -47,7 +47,14 @@ export async function fetchStorefrontMenu(
 export async function submitPublicStorefrontOrder(
   storeCode: string,
   order: PublicStorefrontOrderInput,
-): Promise<{ orderId: string; reference: string }> {
+): Promise<{
+  orderId: string
+  reference: string
+  requiresPayment?: boolean
+  paymentUrl?: string
+  demo?: boolean
+  provider?: 'wave'
+}> {
   const res = await fetch(
     `${API_BASE}/billing/storefront/${encodeURIComponent(storeCode)}/orders`,
     {
@@ -55,6 +62,16 @@ export async function submitPublicStorefrontOrder(
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(order),
     },
+  )
+  return parseJson(res)
+}
+
+export async function verifyStorefrontOrderPayment(
+  storeCode: string,
+  orderId: string,
+): Promise<{ status: 'paid' | 'pending' | 'failed' | 'unknown'; orderId: string }> {
+  const res = await fetch(
+    `${API_BASE}/billing/storefront/${encodeURIComponent(storeCode)}/orders/${encodeURIComponent(orderId)}/payment-status`,
   )
   return parseJson(res)
 }

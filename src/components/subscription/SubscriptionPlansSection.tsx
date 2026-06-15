@@ -534,15 +534,15 @@ export function SubscriptionPlansSection({
 
               <p className="mt-1 text-sm text-ink-muted">
 
-                Orange Money · Wave · MTN MoMo · Moov — paiement sécurisé via CinetPay.
+                Orange Money · Wave · MTN MoMo · Moov — Wave en API directe, autres via CinetPay.
 
               </p>
 
             </div>
 
-            <div className="flex flex-wrap gap-2">
+            <div className="flex flex-wrap items-center gap-2">
 
-              {['Orange', 'Wave', 'MTN', 'Moov'].map((op) => (
+              {(['Orange', 'MTN', 'Moov'] as const).map((op) => (
 
                 <span
 
@@ -557,6 +557,13 @@ export function SubscriptionPlansSection({
                 </span>
 
               ))}
+
+              <img
+                src="/branding/wave-logo.png"
+                alt="Wave"
+                className="h-8 w-8 rounded-lg object-cover shadow-sm ring-1 ring-orange-200/80"
+                title="Wave — paiement direct"
+              />
 
             </div>
 

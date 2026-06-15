@@ -1,4 +1,5 @@
 import { MARKETING_IMAGES } from '../../lib/marketingImages'
+import { MarketingSectionHeader } from './MarketingSectionHeader'
 import { Reveal } from './Reveal'
 import { MarketingImage } from './MarketingImage'
 import { IconStar } from '../../ui/icons'
@@ -31,46 +32,51 @@ const SECTORS = ['Restaurants', 'Boutiques', 'Pharmacies', 'Superettes', 'Maquis
 
 export function MarketingSocialProof() {
   return (
-    <section className="border-y border-border/50 bg-white py-20">
+    <section className="border-y border-border/50 bg-white py-24">
       <div className="mx-auto max-w-7xl px-4 sm:px-6">
         <Reveal>
-          <p className="text-center text-[11px] font-bold uppercase tracking-[0.2em] text-ink-subtle">
-            Ils nous font confiance
-          </p>
-          <div className="mt-6 flex flex-wrap items-center justify-center gap-x-10 gap-y-4">
+          <MarketingSectionHeader
+            eyebrow="Confiance"
+            title="Ils nous font confiance"
+            description="Des commerces de toute la Côte d’Ivoire modernisent leur point de vente avec CaisseCI."
+          />
+        </Reveal>
+
+        <Reveal delay={80} className="mt-10">
+          <div className="flex flex-wrap items-center justify-center gap-x-10 gap-y-4">
             {SECTORS.map((s) => (
-              <span key={s} className="text-lg font-bold tracking-tight text-ink/20 transition hover:text-ink/40">
+              <span key={s} className="marketing-sector-logo">
                 {s}
               </span>
             ))}
           </div>
         </Reveal>
 
-        <div className="mt-16 grid gap-10 lg:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)] lg:items-stretch">
-          <Reveal className="relative min-h-[280px] overflow-hidden rounded-3xl shadow-lg ring-1 ring-border/50 lg:min-h-0">
+        <div className="mt-16 grid gap-10 lg:grid-cols-2 lg:items-stretch">
+          <Reveal className="relative min-h-[300px] overflow-hidden rounded-3xl shadow-xl ring-1 ring-border/40 lg:min-h-0">
             <MarketingImage
               src={MARKETING_IMAGES.testimonials}
               alt="Équipe de commerçants utilisant CaisseCI"
-              className="h-full min-h-[280px]"
+              className="h-full min-h-[300px]"
               overlay="gradient"
             />
-            <div className="absolute bottom-0 left-0 right-0 z-10 p-6 text-white">
-              <p className="text-2xl font-bold leading-tight">+500 commerces</p>
-              <p className="mt-1 text-sm text-slate-300">prêts à moderniser leur caisse en CI</p>
+            <div className="absolute bottom-0 left-0 right-0 z-10 bg-linear-to-t from-[#0c1222]/90 via-[#0c1222]/50 to-transparent p-8 text-white">
+              <p className="font-display text-3xl font-bold leading-tight">+500 commerces</p>
+              <p className="mt-2 text-sm text-slate-300">prêts à moderniser leur caisse en Côte d’Ivoire</p>
             </div>
           </Reveal>
 
-          <div className="grid gap-4 sm:grid-cols-1">
+          <div className="grid gap-4">
             {TESTIMONIALS.map((t, i) => (
               <Reveal key={t.name} delay={i * 80}>
-                <blockquote className="flex h-full flex-col rounded-2xl border border-border/60 bg-linear-to-br from-surface-muted/50 to-white p-5 shadow-sm sm:p-6">
+                <blockquote className="marketing-card-premium flex h-full flex-col rounded-3xl p-6">
                   <div className="flex gap-0.5">
                     {Array.from({ length: t.rating }).map((_, j) => (
-                      <IconStar key={j} className="h-4 w-4 fill-amber-400 text-amber-400" />
+                      <IconStar key={`${t.name}-star-${j}`} className="h-4 w-4 fill-amber-400 text-amber-400" />
                     ))}
                   </div>
                   <p className="mt-3 flex-1 text-sm leading-relaxed text-ink-muted">&ldquo;{t.quote}&rdquo;</p>
-                  <footer className="mt-4 border-t border-border/40 pt-3">
+                  <footer className="mt-4 border-t border-border/40 pt-4">
                     <p className="font-bold text-ink">{t.name}</p>
                     <p className="text-xs text-ink-subtle">{t.role}</p>
                   </footer>

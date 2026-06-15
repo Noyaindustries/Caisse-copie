@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { openWaveCheckout } from '../lib/wavePayment'
 import {
   fetchMobileMoneyChannels,
   startMobileMoneyCheckout,
@@ -38,7 +39,8 @@ export function MobileMoneyCheckoutModal({
   const toast = useToast()
   const [channels, setChannels] = useState<MobileMoneyChannel[]>([])
   const [demo, setDemo] = useState(false)
-  const [channelId, setChannelId] = useState<MobileMoneyChannelId>('orange_money')
+  const [waveDirect, setWaveDirect] = useState(false)
+  const [channelId, setChannelId] = useState<MobileMoneyChannelId>('wave')
   const [phone, setPhone] = useState('')
   const [busy, setBusy] = useState(false)
 
@@ -48,7 +50,12 @@ export function MobileMoneyCheckoutModal({
       .then((data) => {
         setChannels(data.channels)
         setDemo(data.demo)
-        if (data.channels[0]) setChannelId(data.channels[0].id)
+        setWaveDirect(data.waveDirect)
+        const preferred =
+          data.channels.find((c) => c.id === 'wave' && c.provider === 'wave') ??
+          data.channels.find((c) => c.provider) ??
+          data.channels[0]
+        if (preferred) setChannelId(preferred.id)
       })
       .catch(() => {
         toast.error('Mobile money', 'Impossible de charger les opérateurs.')
@@ -56,6 +63,7 @@ export function MobileMoneyCheckoutModal({
   }, [open, toast])
 
   const selected = channels.find((c) => c.id === channelId)
+  const usesWaveApi = selected?.provider === 'wave' || (channelId === 'wave' && waveDirect)
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -67,9 +75,18 @@ export function MobileMoneyCheckoutModal({
         phone,
       })
       if (result.demo) {
-        toast.info('Mode démo', 'Simulation du paiement mobile money.')
+        toast.info(
+          'Mode démo',
+          usesWaveApi
+            ? 'Simulation Wave — en production, l’app Wave ou le QR s’ouvrent automatiquement.'
+            : 'Simulation du paiement mobile money.',
+        )
       }
-      window.location.href = result.paymentUrl
+      if (usesWaveApi) {
+        openWaveCheckout(result.paymentUrl)
+      } else {
+        window.location.href = result.paymentUrl
+      }
     } catch (err) {
       toast.error(
         'Paiement',
@@ -92,6 +109,18 @@ export function MobileMoneyCheckoutModal({
             Mode démo actif : aucun débit réel. Vous pourrez confirmer ou refuser le
             paiement sur la page suivante.
           </p>
+        ) : usesWaveApi ? (
+          <div className="flex items-center gap-3 rounded-xl border border-sky-200 bg-sky-50 px-3 py-3">
+            <img
+              src="/branding/wave-logo.png"
+              alt="Wave"
+              className="h-12 w-12 shrink-0 rounded-lg object-cover shadow-sm"
+            />
+            <p className="text-sm text-sky-950">
+              Vous serez redirigé vers l’application <strong>Wave</strong> pour valider le
+              paiement en F CFA sur votre numéro ivoirien.
+            </p>
+          </div>
         ) : (
           <p className="text-sm text-zinc-600">
             Vous serez redirigé vers CinetPay pour valider le paiement sur votre
@@ -107,6 +136,7 @@ export function MobileMoneyCheckoutModal({
             {channels.map((c) => (
               <option key={c.id} value={c.id}>
                 {c.label}
+                {c.provider === 'wave' ? ' (Wave direct)' : ''}
               </option>
             ))}
           </Select>
@@ -131,7 +161,11 @@ export function MobileMoneyCheckoutModal({
 
         <div className="flex flex-col gap-2 pt-2 sm:flex-row-reverse">
           <Button type="submit" className="sm:flex-1" disabled={busy}>
-            {busy ? 'Redirection…' : 'Continuer vers le paiement'}
+            {busy
+              ? 'Redirection…'
+              : usesWaveApi
+                ? 'Payer avec Wave'
+                : 'Continuer vers le paiement'}
           </Button>
           <Button type="button" variant="secondary" onClick={onClose} disabled={busy}>
             Annuler

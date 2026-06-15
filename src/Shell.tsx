@@ -1498,11 +1498,6 @@ export function Shell({ staff, online, onLogout }: Props) {
               {activeView === 'dash' ? (
                 <DashboardView
                   onOpenOnlineOrders={() => handleSelectView('onlineOrders')}
-                  onOpenTicketsFactures={
-                    staff.role === 'admin'
-                      ? () => handleSelectView('ticketsFactures')
-                      : undefined
-                  }
                 />
               ) : null}
               {activeView === 'catalogue' ? (

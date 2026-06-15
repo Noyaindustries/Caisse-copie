@@ -8,7 +8,8 @@ import { prisma } from './lib/prisma.js'
 import { billingRouter, handleStripeWebhook } from './routes/billing.js'
 import { storefrontRouter } from './routes/storefront.js'
 import { startSubscriptionReminderScheduler } from './lib/subscriptionReminders.js'
-import { handleCinetpayNotify, mobileMoneyRouter } from './routes/mobileMoney.js'
+import { handleCinetpayNotify, handleWaveWebhook, mobileMoneyRouter } from './routes/mobileMoney.js'
+import { platformAdminRouter } from './routes/platformAdmin.js'
 import { syncRouter } from './routes/sync.js'
 import { webhookRouter } from './routes/webhooks.js'
 
@@ -16,6 +17,7 @@ const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
 const projectRoot = path.resolve(__dirname, '..')
 const distPath = path.join(projectRoot, 'dist')
+const publicBrandingPath = path.join(projectRoot, 'public', 'branding')
 
 const app = express()
 const port = Number(process.env.PORT ?? 4000)
@@ -32,8 +34,14 @@ app.post(
   handleCinetpayNotify,
 )
 app.post('/api/billing/cinetpay/notify', express.json(), handleCinetpayNotify)
+app.post(
+  '/api/billing/wave/webhook',
+  express.raw({ type: 'application/json' }),
+  handleWaveWebhook,
+)
 app.use(express.json({ limit: '2mb' }))
 app.use(morgan('dev'))
+app.use('/branding', express.static(publicBrandingPath))
 
 app.get('/health', (_req, res) => {
   res.status(200).json({ ok: true })
@@ -44,6 +52,7 @@ app.use('/api', webhookRouter)
 app.use('/api', billingRouter)
 app.use('/api', storefrontRouter)
 app.use('/api', mobileMoneyRouter)
+app.use('/api', platformAdminRouter)
 
 app.use(express.static(distPath))
 

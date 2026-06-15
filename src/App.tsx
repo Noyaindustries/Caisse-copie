@@ -15,6 +15,7 @@ import { ensureSeed } from './db/db'
 import { useOnlineStatus } from './hooks/useOnlineStatus'
 import { Shell } from './Shell'
 import {
+  isPlatformAdminPath,
   isSignupPath,
   isStaffPath,
   isSubscriptionPath,
@@ -29,6 +30,7 @@ import { MarketingSiteView } from './views/MarketingSiteView'
 import { LuxuryStorefrontView } from './views/LuxuryStorefrontView'
 import { SubscriptionManagementPage } from './views/SubscriptionManagementPage'
 import { PublicStorefrontPage } from './views/PublicStorefrontPage'
+import { PlatformAdminPage } from './views/PlatformAdminPage'
 
 function AppContent() {
   const online = useOnlineStatus()
@@ -99,6 +101,10 @@ function AppContent() {
   }, [disconnect, navigate])
 
   const storefrontCode = parseStorefrontCode(pathname)
+
+  if (isPlatformAdminPath(pathname)) {
+    return <PlatformAdminPage onExit={() => navigate(ROUTES.home)} />
+  }
 
   if (!subscriptionReady) {
     return (

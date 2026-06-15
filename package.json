@@ -18,7 +18,8 @@
     "db:up": "docker compose up -d mongo",
     "db:down": "docker compose down",
     "prisma:generate": "prisma generate",
-    "prisma:push": "prisma db push"
+    "prisma:push": "prisma db push",
+    "admin:subscriptions": "tsx server/scripts/admin-subscriptions.ts"
   },
   "dependencies": {
     "@fontsource/dm-sans": "^5.2.8",

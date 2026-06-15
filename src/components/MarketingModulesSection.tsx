@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react'
 import { MARKETING_IMAGES } from '../lib/marketingImages'
 import { MarketingImage } from './marketing/MarketingImage'
+import { MarketingSectionHeader } from './marketing/MarketingSectionHeader'
 import { Reveal } from './marketing/Reveal'
 import { NavIcon } from './NavIcons'
 import {
@@ -55,7 +56,7 @@ function ModuleCard({
   return (
     <article
       className={cn(
-        'group relative overflow-hidden rounded-2xl border border-border/60 bg-white shadow-sm transition duration-200 hover:border-accent/30 hover:shadow-lg',
+        'marketing-card-premium group relative overflow-hidden rounded-3xl',
         compact ? 'flex items-center gap-4 p-4' : 'p-5',
       )}
     >
@@ -85,7 +86,7 @@ function PlatformCard({ feature, compact }: { feature: PlatformFeature; compact?
   return (
     <article
       className={cn(
-        'flex gap-4 rounded-2xl border border-dashed border-accent/25 bg-accent/5',
+        'marketing-card-premium flex gap-4 rounded-3xl border-dashed border-accent/25 bg-accent/5',
         compact ? 'items-center p-4' : 'p-5',
       )}
     >
@@ -108,9 +109,9 @@ function ComparisonMatrix() {
 
   return (
     <Reveal>
-      <div className="mt-20 overflow-hidden rounded-3xl border border-border/60 bg-white shadow-[0_16px_48px_-20px_rgba(23,32,51,0.15)]">
+      <div className="marketing-card-premium mt-20 overflow-hidden rounded-3xl">
         <div className="border-b border-border/50 bg-linear-to-r from-surface-muted to-white px-6 py-5 sm:px-8">
-          <h3 className="text-xl font-bold text-ink">Matrice comparative complète</h3>
+          <h3 className="font-display text-xl font-bold text-ink">Matrice comparative complète</h3>
           <p className="mt-1 text-sm text-ink-muted">
             {ALL_MODULES.length} modules · {PLATFORM_FEATURES.length} capacités plateforme
           </p>
@@ -245,8 +246,8 @@ export function MarketingModulesSection() {
             />
             <div className="pointer-events-none absolute inset-0 bg-linear-to-r from-[#0c1222]/92 via-[#0c1222]/70 to-[#0c1222]/35" />
             <div className="relative flex h-full min-h-[280px] flex-col justify-center p-8 text-white sm:min-h-[320px] sm:p-10 lg:min-h-[360px] lg:max-w-xl lg:p-12 xl:max-w-2xl">
-              <p className="text-[11px] font-bold uppercase tracking-[0.2em] text-indigo-300">Plateforme complète</p>
-              <h2 className="mt-3 text-2xl font-bold leading-tight sm:text-3xl lg:text-4xl">
+              <p className="marketing-eyebrow marketing-eyebrow-light">Plateforme complète</p>
+              <h2 className="mt-3 font-display text-2xl font-bold leading-tight sm:text-3xl lg:text-4xl">
                 Chaque module conçu pour le terrain ivoirien
               </h2>
               <p className="mt-4 text-sm leading-relaxed text-slate-300 sm:text-base">
@@ -254,10 +255,7 @@ export function MarketingModulesSection() {
               </p>
               <div className="mt-6 flex flex-wrap gap-2">
                 {['Caisse offline', 'Stocks', 'Cuisine', 'CRM', 'RH', 'Analytique'].map((tag) => (
-                  <span
-                    key={tag}
-                    className="rounded-full border border-white/15 bg-white/10 px-3 py-1 text-[11px] font-semibold text-slate-200 backdrop-blur-sm"
-                  >
+                  <span key={tag} className="marketing-chip">
                     {tag}
                   </span>
                 ))}
@@ -266,19 +264,19 @@ export function MarketingModulesSection() {
           </div>
         </div>
 
-        <Reveal delay={60} className="mx-auto mt-14 max-w-3xl text-center">
-          <p className="text-[11px] font-bold uppercase tracking-[0.2em] text-ink-subtle">
-            Modules & fonctionnalités
-          </p>
-          <h2 className="mt-3 text-3xl font-bold tracking-tight sm:text-4xl lg:text-[2.75rem]">
-            L’intégralité de la plateforme,{' '}
-            <span className="bg-linear-to-r from-accent to-violet-600 bg-clip-text text-transparent">
-              exposée en détail
-            </span>
-          </h2>
-          <p className="mt-4 text-lg text-ink-muted">
-            Explorez, filtrez et comparez chaque module — du ticket de caisse au CRM multi-sites.
-          </p>
+        <Reveal delay={60} className="mt-14">
+          <MarketingSectionHeader
+            eyebrow="Modules & fonctionnalités"
+            title={
+              <>
+                L’intégralité de la plateforme,{' '}
+                <span className="bg-linear-to-r from-accent to-violet-600 bg-clip-text text-transparent">
+                  exposée en détail
+                </span>
+              </>
+            }
+            description="Explorez, filtrez et comparez chaque module — du ticket de caisse au CRM multi-sites."
+          />
         </Reveal>
 
         <Reveal delay={80} className="mt-10 grid gap-3 sm:grid-cols-3">
@@ -286,10 +284,8 @@ export function MarketingModulesSection() {
             <div
               key={s.plan}
               className={cn(
-                'rounded-2xl border px-5 py-4 text-center transition',
-                s.plan === 'pro'
-                  ? 'border-violet-200 bg-violet-50/50 shadow-sm'
-                  : 'border-border/60 bg-white',
+                'marketing-card-premium rounded-3xl px-5 py-4 text-center',
+                s.plan === 'pro' && 'ring-1 ring-violet-200/60',
               )}
             >
               <p className="text-xs font-bold uppercase tracking-wider text-ink-subtle">
@@ -302,9 +298,7 @@ export function MarketingModulesSection() {
         </Reveal>
 
         <Reveal delay={120} className="mt-10">
-          <p className="mb-4 text-center text-xs font-bold uppercase tracking-wider text-ink-subtle">
-            Modules phares
-          </p>
+          <p className="marketing-eyebrow marketing-eyebrow-center mb-4 justify-center">Modules phares</p>
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
             {spotlight.map((m) => (
               <ModuleCard key={m.id} module={m} compact />
@@ -312,7 +306,7 @@ export function MarketingModulesSection() {
           </div>
         </Reveal>
 
-        <Reveal delay={160} className="mt-12 flex flex-col gap-4 rounded-2xl border border-border/60 bg-white p-4 shadow-sm sm:flex-row sm:items-center sm:p-5">
+        <Reveal delay={160} className="marketing-filter-bar mt-12 flex flex-col gap-4 rounded-3xl p-4 sm:flex-row sm:items-center sm:p-5">
           <Field label="Rechercher un module" className="flex-1">
             <Input
               value={search}
@@ -362,10 +356,8 @@ export function MarketingModulesSection() {
           {visibleSections.map((section, si) => (
             <Reveal key={section.title} delay={si * 40}>
               <div id={`mod-${section.title.replace(/\s/g, '-')}`}>
-                <h3 className="mb-5 flex items-center gap-3 text-lg font-bold text-ink">
-                  <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-accent/10 text-xs font-bold text-accent">
-                    {section.modules.length}
-                  </span>
+                <h3 className="marketing-section-title mb-5">
+                  <span className="marketing-section-title-badge">{section.modules.length}</span>
                   {section.title}
                 </h3>
                 <div
@@ -386,8 +378,8 @@ export function MarketingModulesSection() {
 
           {filteredPlatform.length > 0 ? (
             <Reveal>
-              <h3 className="mb-5 flex items-center gap-3 text-lg font-bold text-ink">
-                <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-emerald-100 text-xs font-bold text-emerald-700">
+              <h3 className="marketing-section-title mb-5">
+                <span className="marketing-section-title-badge bg-emerald-100 text-emerald-700">
                   {filteredPlatform.length}
                 </span>
                 Plateforme & abonnement

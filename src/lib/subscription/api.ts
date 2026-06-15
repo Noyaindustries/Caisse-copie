@@ -33,6 +33,9 @@ export async function fetchMobileMoneyChannels(): Promise<{
   channels: MobileMoneyChannel[]
   enabled: boolean
   demo: boolean
+  waveEnabled: boolean
+  waveDirect: boolean
+  cinetpayEnabled: boolean
 }> {
   const res = await fetch(`${API_BASE}/billing/mobile-money/channels`)
   return parseJson(res)
@@ -41,7 +44,12 @@ export async function fetchMobileMoneyChannels(): Promise<{
 export async function startMobileMoneyCheckout(
   licenseKey: string,
   input: { planId: string; channelId: MobileMoneyChannelId; phone: string },
-): Promise<{ transactionId: string; paymentUrl: string; demo: boolean }> {
+): Promise<{
+  transactionId: string
+  paymentUrl: string
+  demo: boolean
+  provider?: 'wave' | 'cinetpay'
+}> {
   const res = await fetch(`${API_BASE}/billing/mobile-money/checkout`, {
     method: 'POST',
     headers: {

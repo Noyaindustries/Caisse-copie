@@ -6,7 +6,6 @@ import { db } from '../db/db'
 import type {
   CartLine,
   OnlineOrder,
-  PaymentMethod,
   ProductWithStock,
 } from '../db/types'
 import {
@@ -27,15 +26,23 @@ import {
   isKitchenModuleDemoOn,
 } from '../lib/integrationsConfig'
 
-import type { PublicStorefrontOrderInput } from '../lib/storefront/types'
+import type { PublicStorefrontOrderInput, StorefrontPaymentMethod } from '../lib/storefront/types'
+import { openWaveCheckout } from '../lib/wavePayment'
 
 type PublicStorefrontConfig = {
   storeName: string
   storeId: string
   products: ProductWithStock[]
+  waveEnabled?: boolean
   submitOrder: (
     order: PublicStorefrontOrderInput,
-  ) => Promise<{ orderId: string; reference: string }>
+  ) => Promise<{
+    orderId: string
+    reference: string
+    requiresPayment?: boolean
+    paymentUrl?: string
+    demo?: boolean
+  }>
 }
 
 type Props = {
@@ -168,7 +175,7 @@ export function LuxuryStorefrontView({
   const [promoCode, setPromoCode] = useState('')
   const [promoFeedback, setPromoFeedback] = useState<string | null>(null)
   const [discountPct, setDiscountPct] = useState(0)
-  const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('mobile')
+  const [paymentMethod, setPaymentMethod] = useState<StorefrontPaymentMethod>('mobile')
   const [submitting, setSubmitting] = useState(false)
   const [confirmation, setConfirmation] = useState<string | null>(null)
   const [confirmationTone, setConfirmationTone] = useState<'success' | 'error'>(
@@ -579,6 +586,15 @@ export function LuxuryStorefrontView({
       )
       return
     }
+    if (
+      isPublicStorefront &&
+      paymentMethod === 'wave' &&
+      !customerPhone.trim()
+    ) {
+      setConfirmationTone('error')
+      setConfirmation('Votre numéro Wave est requis pour payer par Wave.')
+      return
+    }
 
     setSubmitting(true)
     try {
@@ -598,7 +614,7 @@ export function LuxuryStorefrontView({
         customerAddress: customerAddress.trim() || undefined,
         customerNote: customerNote.trim() || undefined,
         desiredTimeSlot: desiredTimeSlot.trim() || undefined,
-        paymentMethod,
+        paymentMethod: paymentMethod === 'wave' ? 'mobile' : paymentMethod,
         lines: cart.map((line) => ({
           productId: line.productId,
           name: line.name,
@@ -669,13 +685,15 @@ export function LuxuryStorefrontView({
       }
 
       if (isPublicStorefront && publicStorefront) {
+        const orderPaymentMethod =
+          paymentMethod === 'wave' ? 'wave' : paymentMethod
         const result = await publicStorefront.submitOrder({
           customerName: customerLabel,
           customerPhone: customerPhone.trim() || undefined,
           customerAddress: customerAddress.trim() || undefined,
           customerNote: customerNote.trim() || undefined,
           desiredTimeSlot: desiredTimeSlot.trim() || undefined,
-          paymentMethod,
+          paymentMethod: orderPaymentMethod,
           fulfillmentMode,
           lines: cart.map((line) => ({
             productId: line.productId,
@@ -692,6 +710,12 @@ export function LuxuryStorefrontView({
           promoCode: promoCode.trim().toUpperCase() || undefined,
           deliveryFeeTTC: deliveryFeeTTC || undefined,
         })
+
+        if (result.requiresPayment && result.paymentUrl) {
+          openWaveCheckout(result.paymentUrl)
+          return
+        }
+
         setCart([])
         setCustomerName('')
         setCustomerPhone('')
@@ -1146,14 +1170,34 @@ export function LuxuryStorefrontView({
               ) : null}
               <select
                 value={paymentMethod}
-                onChange={(e) => setPaymentMethod(e.target.value as PaymentMethod)}
+                onChange={(e) =>
+                  setPaymentMethod(e.target.value as StorefrontPaymentMethod)
+                }
                 aria-label="Mode de paiement"
                 className="premium-input w-full rounded-xl bg-slate-950/80 px-3 py-2 text-sm text-slate-100"
               >
+                {isPublicStorefront && publicStorefront?.waveEnabled ? (
+                  <option value="wave">Wave (paiement immédiat)</option>
+                ) : null}
                 <option value="mobile">Mobile Money</option>
                 <option value="card">Carte bancaire</option>
                 <option value="cash">Especes a la livraison</option>
               </select>
+              {isPublicStorefront &&
+              publicStorefront?.waveEnabled &&
+              paymentMethod === 'wave' ? (
+                <div className="flex items-center gap-3 rounded-xl border border-sky-400/30 bg-sky-950/40 px-3 py-2">
+                  <img
+                    src="/branding/wave-logo.png"
+                    alt="Wave"
+                    className="h-10 w-10 rounded-lg object-cover"
+                  />
+                  <p className="text-xs text-sky-100">
+                    Vous serez redirigé vers l’application Wave CI ou la page Wave
+                    pour scanner le QR code et valider le paiement.
+                  </p>
+                </div>
+              ) : null}
               <div className="grid grid-cols-2 gap-2 text-[11px] text-slate-300">
                 <p className="rounded-lg border border-white/10 bg-slate-950/70 px-2.5 py-2">
                   Paiement securise SSL
@@ -1168,7 +1212,11 @@ export function LuxuryStorefrontView({
                 disabled={submitting || cart.length === 0}
                 className="premium-btn w-full rounded-xl px-4 py-2 text-sm font-semibold disabled:cursor-not-allowed disabled:bg-slate-700 disabled:text-slate-400"
               >
-                {submitting ? 'Validation en cours...' : 'Valider la commande'}
+                {submitting
+                  ? 'Validation en cours...'
+                  : paymentMethod === 'wave'
+                    ? 'Payer avec Wave'
+                    : 'Valider la commande'}
               </button>
             </div>
 

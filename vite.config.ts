@@ -22,6 +22,7 @@ export default defineConfig({
         'favicon.svg',
         'branding/digitalpro-solutions-logo.png',
         'branding/logo-circle.svg',
+        'branding/wave-logo.png',
       ],
       manifest: {
         name: 'Digitalpro Solutions — Point de vente',

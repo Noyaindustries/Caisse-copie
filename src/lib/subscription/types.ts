@@ -62,6 +62,7 @@ export type MobileMoneyChannel = {
   label: string
   description: string
   prefixes: string[]
+  provider?: 'wave' | 'cinetpay' | null
 }
 
 export type OrganizationCredentials = {

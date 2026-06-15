@@ -6,6 +6,7 @@ const SUBSCRIPTION_DAYS = 30
 export async function activateMobileMoneySubscription(
   organizationId: string,
   planId: PlanId,
+  billingProvider: 'mobile_money' | 'wave' = 'mobile_money',
 ): Promise<void> {
   const currentPeriodEnd = new Date()
   currentPeriodEnd.setDate(currentPeriodEnd.getDate() + SUBSCRIPTION_DAYS)
@@ -16,7 +17,7 @@ export async function activateMobileMoneySubscription(
       planId,
       status: 'active',
       currentPeriodEnd,
-      billingProvider: 'mobile_money',
+      billingProvider,
       trialEndsAt: null,
     },
   })

@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { MARKETING_IMAGES } from '../../lib/marketingImages'
 import { formatTrialPeriod } from '../../lib/subscription/plans'
 import { Badge } from '../../ui/Badge'
@@ -13,9 +13,6 @@ import {
   IconTrendingUp,
 } from '../../ui/icons'
 
-const HERO_MESH =
-  'radial-gradient(circle at 18% 22%, rgba(99,102,241,0.45) 0%, transparent 48%), radial-gradient(circle at 82% 12%, rgba(20,99,255,0.38) 0%, transparent 42%), radial-gradient(circle at 55% 88%, rgba(168,85,247,0.28) 0%, transparent 52%)'
-
 const STATIC_STATS = [
   { value: '7j', label: 'Hors ligne' },
   { value: '29+', label: 'Fonctionnalités' },
@@ -27,6 +24,8 @@ const PREVIEW_TABS = [
   { id: 'caisse', label: 'Caisse' },
   { id: 'kitchen', label: 'Cuisine' },
 ] as const
+
+const AVATAR_TONES = ['bg-violet-500', 'bg-sky-500', 'bg-emerald-500', 'bg-amber-500'] as const
 
 type PreviewTab = (typeof PREVIEW_TABS)[number]['id']
 
@@ -142,43 +141,57 @@ export function MarketingHero({
     ...STATIC_STATS,
   ]
 
-  return (
-    <section className="relative overflow-hidden bg-linear-to-br from-[#060a14] via-[#0c1222] to-[#1a1040] pt-16 text-white">
-      <div className="pointer-events-none absolute inset-0 opacity-45" style={{ backgroundImage: HERO_MESH }} />
-      <div className="marketing-grid-pattern pointer-events-none absolute inset-0 opacity-[0.07]" />
-      <div className="pointer-events-none absolute -right-32 top-20 h-[28rem] w-[28rem] rounded-full bg-indigo-500/25 blur-3xl marketing-float-slow" />
-      <div className="pointer-events-none absolute -bottom-40 -left-20 h-80 w-80 rounded-full bg-violet-600/20 blur-3xl" />
+  useEffect(() => {
+    const order = PREVIEW_TABS.map((t) => t.id)
+    const timer = window.setInterval(() => {
+      setPreview((current) => {
+        const index = order.indexOf(current)
+        return order[(index + 1) % order.length] ?? 'dash'
+      })
+    }, 5000)
+    return () => window.clearInterval(timer)
+  }, [])
 
-      <div className="relative mx-auto grid max-w-7xl items-center gap-14 px-4 py-20 sm:px-6 lg:grid-cols-[1fr_1.12fr] lg:gap-10 xl:gap-12 lg:py-28">
-        <div>
-          <div className="mb-6 flex flex-wrap items-center gap-3">
+  return (
+    <section
+      id="marketing-hero"
+      className="relative overflow-hidden bg-linear-to-br from-[#04070f] via-[#0a1020] to-[#16103a] pt-16 text-white"
+    >
+      <div className="marketing-hero-mesh pointer-events-none absolute inset-0 overflow-hidden opacity-50" />
+      <div className="marketing-hero-noise pointer-events-none absolute inset-0 opacity-60 mix-blend-overlay" />
+      <div className="marketing-grid-pattern pointer-events-none absolute inset-0 overflow-hidden opacity-[0.06]" />
+      <div className="pointer-events-none absolute -right-32 top-16 h-[28rem] w-[28rem] rounded-full bg-indigo-500/20 blur-3xl marketing-float-slow" />
+      <div className="pointer-events-none absolute -bottom-40 -left-20 h-80 w-80 rounded-full bg-violet-600/15 blur-3xl" />
+      <div className="pointer-events-none absolute left-1/2 top-1/3 h-64 w-64 -translate-x-1/2 rounded-full bg-sky-500/10 blur-3xl" />
+
+      <div className="relative mx-auto grid max-w-7xl min-w-0 items-center gap-14 px-4 py-20 pb-24 sm:px-6 sm:pb-28 lg:grid-cols-[5fr_6fr] lg:gap-10 xl:gap-12 lg:py-28 lg:pb-32">
+        <div className="min-w-0">
+          <div className="marketing-hero-animate mb-6 flex flex-wrap items-center gap-3">
             <Badge className="border-white/15 bg-white/10 text-white backdrop-blur-sm">
               {formatTrialPeriod(trialDays)} d’essai · Sans engagement
             </Badge>
-            <span className="inline-flex items-center gap-1.5 text-xs font-medium text-emerald-300">
+            <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-400/20 bg-emerald-500/10 px-2.5 py-1 text-xs font-medium text-emerald-300">
               <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-emerald-400" />
               Disponible en Côte d’Ivoire
             </span>
           </div>
 
-          <h1 className="font-display text-4xl font-bold leading-[1.06] tracking-tight sm:text-5xl xl:text-[3.5rem]">
-            L’OS commercial{' '}
-            <span className="bg-linear-to-r from-white via-indigo-100 to-violet-300 bg-clip-text text-transparent">
-              tout-en-un
-            </span>{' '}
-            pour vendre sans limites
+          <h1 className="marketing-hero-animate marketing-hero-animate-delay-1 font-display text-4xl font-bold leading-[1.05] tracking-tight sm:text-5xl xl:text-[3.55rem]">
+            La plateforme{' '}
+            <span className="marketing-gradient-text">tout-en-un</span>{' '}
+            pour vendre, encaisser et piloter
           </h1>
 
-          <p className="mt-6 max-w-xl text-lg leading-relaxed text-slate-300">
-            Caisse offline-first, 20 modules métier, mobile money natif et multi-postes.
-            Du food-truck au réseau de boutiques — une seule plateforme, zéro compromis.
+          <p className="marketing-hero-animate marketing-hero-animate-delay-2 mt-6 max-w-xl text-lg leading-relaxed text-slate-300">
+            Caisse offline-first, 20 modules métier et mobile money natif.
+            Du food-truck au réseau de boutiques — une seule solution professionnelle.
           </p>
 
-          <ul className="mt-8 space-y-3">
+          <ul className="marketing-hero-animate marketing-hero-animate-delay-3 mt-8 space-y-3">
             {[
               '29+ fonctionnalités : ventes, stocks, RH, CRM, analytique…',
               'Code magasin pour déployer vos caisses en 30 secondes',
-              'Paiement abonnement Orange Money, Wave, MTN, Moov ou carte',
+              'Abonnement via Orange Money, Wave, MTN, Moov ou carte',
             ].map((line) => (
               <li key={line} className="flex items-start gap-2.5 text-sm text-slate-300">
                 <IconCheckCircle className="mt-0.5 h-4 w-4 shrink-0 text-emerald-400" />
@@ -187,8 +200,15 @@ export function MarketingHero({
             ))}
           </ul>
 
-          <div className="mt-10 flex flex-col gap-3 sm:flex-row sm:items-center">
-            <Button type="button" size="lg" variant="primary" onClick={onStart} iconRight={<IconArrowRight className="h-4 w-4" />}>
+          <div className="marketing-hero-animate marketing-hero-animate-delay-4 mt-10 flex flex-col gap-3 sm:flex-row sm:items-center">
+            <Button
+              type="button"
+              size="lg"
+              variant="primary"
+              className="marketing-cta-glow"
+              onClick={onStart}
+              iconRight={<IconArrowRight className="h-4 w-4" />}
+            >
               Démarrer gratuitement
             </Button>
             <Button
@@ -198,15 +218,29 @@ export function MarketingHero({
               className="border-white/20 bg-white/10 text-white hover:bg-white/20"
               onClick={onPricing}
             >
-              Explorer les tarifs
+              Voir les tarifs
             </Button>
+          </div>
+
+          <div className="marketing-hero-animate marketing-hero-animate-delay-5 mt-8 flex items-center gap-3">
+            <div className="flex -space-x-2.5" aria-hidden>
+              {AVATAR_TONES.map((tone) => (
+                <span
+                  key={tone}
+                  className={cn('h-9 w-9 rounded-full border-2 border-[#0a1020] shadow-md', tone)}
+                />
+              ))}
+            </div>
+            <p className="text-sm text-slate-400">
+              <span className="font-semibold text-white">+500 commerces</span> nous font confiance en CI
+            </p>
           </div>
 
           {mobileMoney ? (
             <div className="marketing-marquee mt-8 overflow-hidden rounded-xl border border-white/10 bg-white/5 py-2.5">
               <div className="marketing-marquee-track flex gap-8 text-xs font-semibold uppercase tracking-wider text-slate-400">
-                {[...Array(2)].map((_, i) => (
-                  <span key={i} className="flex shrink-0 items-center gap-8">
+                {[0, 1].map((copy) => (
+                  <span key={copy} className="flex shrink-0 items-center gap-8">
                     <span className="flex items-center gap-2">
                       <IconMobile className="h-3.5 w-3.5 text-orange-400" />
                       Orange Money
@@ -223,96 +257,96 @@ export function MarketingHero({
           ) : null}
         </div>
 
-        <div className="grid gap-5 sm:gap-6 lg:grid-cols-[1.05fr_0.95fr] lg:items-end lg:gap-5">
-          <div className="marketing-hero-photo relative lg:row-span-1">
-            <div className="pointer-events-none absolute -inset-1 rounded-[1.75rem] bg-linear-to-br from-indigo-400/25 via-violet-500/10 to-transparent opacity-80 blur-sm" />
-            <MarketingImage
-              src={MARKETING_IMAGES.hero}
-              alt="Commerçante utilisant CaisseCI dans sa boutique en Côte d’Ivoire"
-              className="aspect-[4/5] w-full rounded-3xl shadow-[0_24px_60px_-20px_rgba(0,0,0,0.65)] ring-1 ring-white/20"
-              overlay="none"
-              objectPosition="left center"
-              priority
-            />
-            <div
-              className="pointer-events-none absolute inset-0 rounded-3xl ring-1 ring-inset ring-white/10"
-              aria-hidden
-            />
-            <div
-              className="pointer-events-none absolute inset-x-0 bottom-0 h-20 rounded-b-3xl bg-linear-to-t from-[#060a14]/50 to-transparent"
-              aria-hidden
-            />
+        <div className="marketing-hero-visual-glow relative min-w-0">
+          <div className="relative z-10 grid min-w-0 gap-5 sm:gap-6 lg:grid-cols-2 lg:items-end lg:gap-5">
+            <div className="marketing-hero-photo relative min-w-0">
+              <div className="pointer-events-none absolute -inset-1 rounded-[1.75rem] bg-linear-to-br from-indigo-400/30 via-violet-500/15 to-transparent opacity-90 blur-sm" />
+              <MarketingImage
+                src={MARKETING_IMAGES.hero}
+                alt="Commerçante utilisant CaisseCI dans sa boutique en Côte d’Ivoire"
+                className="aspect-[4/5] w-full rounded-3xl shadow-[0_28px_70px_-24px_rgba(0,0,0,0.75)] ring-1 ring-white/20"
+                overlay="none"
+                objectPosition="left center"
+                priority
+              />
+              <div
+                className="pointer-events-none absolute inset-0 rounded-3xl ring-1 ring-inset ring-white/10"
+                aria-hidden
+              />
+              <div
+                className="pointer-events-none absolute inset-x-0 bottom-0 h-24 rounded-b-3xl bg-linear-to-t from-[#04070f]/60 to-transparent"
+                aria-hidden
+              />
 
-            <div className="absolute right-4 top-4 rounded-full border border-white/15 bg-[#0a0f1c]/80 px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wider text-emerald-300 shadow-lg backdrop-blur-md">
-              <span className="mr-1.5 inline-block h-1.5 w-1.5 animate-pulse rounded-full bg-emerald-400" />
-              En situation réelle
-            </div>
-
-            <div className="pointer-events-none absolute inset-x-0 top-0 rounded-t-3xl bg-linear-to-b from-[#060a14]/85 via-[#060a14]/40 to-transparent p-6 pb-16 lg:hidden">
-              <p className="text-[11px] font-bold uppercase tracking-[0.2em] text-indigo-300">CaisseCI</p>
-              <p className="mt-2 text-xl font-bold leading-tight text-white">
-                La caisse qui fonctionne même sans internet
-              </p>
-            </div>
-
-            <div className="marketing-float-delayed absolute bottom-4 right-4 rounded-xl border border-white/15 bg-[#0f1628]/90 px-4 py-3 shadow-xl backdrop-blur-md">
-              <p className="text-[10px] uppercase tracking-wider text-slate-500">Ticket #1847</p>
-              <p className="font-mono text-lg font-bold text-white">+24 500 F</p>
-              <p className="text-[10px] text-emerald-400">Encaissé · Orange Money</p>
-            </div>
-          </div>
-
-          <div className="marketing-hero-mockup marketing-float overflow-hidden rounded-2xl border border-white/15 bg-[#0a0f1c]/95 shadow-[0_20px_50px_-16px_rgba(0,0,0,0.7)] backdrop-blur-xl lg:-ml-2 lg:mb-1 lg:translate-y-2">
-            <div className="flex items-center gap-2 border-b border-white/10 bg-white/[0.03] px-4 py-3">
-              <span className="h-2.5 w-2.5 rounded-full bg-rose-400/90" />
-              <span className="h-2.5 w-2.5 rounded-full bg-amber-400/90" />
-              <span className="h-2.5 w-2.5 rounded-full bg-emerald-400/90" />
-              <span className="ml-2 flex items-center gap-1.5 text-[11px] font-medium text-slate-400">
-                <IconSparkles className="h-3 w-3 text-violet-400" />
-                CaisseCI — Aperçu live
-              </span>
-            </div>
-
-            <div className="flex gap-1 border-b border-white/10 px-3 py-2">
-              {PREVIEW_TABS.map((t) => (
-                <button
-                  key={t.id}
-                  type="button"
-                  onClick={() => setPreview(t.id)}
-                  className={cn(
-                    'rounded-lg px-3 py-1.5 text-[11px] font-semibold transition',
-                    preview === t.id ? 'bg-white/15 text-white' : 'text-slate-500 hover:text-slate-300',
-                  )}
-                >
-                  {t.label}
-                </button>
-              ))}
-            </div>
-
-            <PreviewPanel tab={preview} />
-
-            <div className="mx-4 mb-4 flex items-center justify-between rounded-xl border border-emerald-500/25 bg-emerald-500/10 px-3 py-2.5">
-              <div className="flex items-center gap-2">
-                <IconTrendingUp className="h-4 w-4 text-emerald-400" />
-                <p className="text-xs font-medium text-emerald-200">Sync cloud · Mode offline actif</p>
+              <div className="absolute left-4 top-4 rounded-full border border-white/15 bg-[#0a0f1c]/85 px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wider text-sky-300 shadow-lg backdrop-blur-md">
+                Photo réelle
               </div>
-              <span className="font-mono text-[10px] text-emerald-300/80">7j cache</span>
+
+              <div className="absolute right-4 top-4 rounded-full border border-white/15 bg-[#0a0f1c]/80 px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wider text-emerald-300 shadow-lg backdrop-blur-md">
+                <span className="mr-1.5 inline-block h-1.5 w-1.5 animate-pulse rounded-full bg-emerald-400" />
+                Live
+              </div>
+
+              <div className="marketing-float-delayed absolute bottom-4 right-4 z-10 rounded-xl border border-white/15 bg-[#0f1628]/95 px-4 py-3 shadow-2xl backdrop-blur-md">
+                <p className="text-[10px] uppercase tracking-wider text-slate-500">Ticket #1847</p>
+                <p className="font-mono text-lg font-bold text-white">+24 500 F</p>
+                <p className="text-[10px] text-emerald-400">Encaissé · Orange Money</p>
+              </div>
+            </div>
+
+            <div className="marketing-mockup-ring min-w-0 lg:-ml-2 lg:mb-1">
+              <div className="marketing-hero-mockup marketing-float overflow-hidden rounded-2xl border border-white/15 bg-[#0a0f1c]/95 shadow-[0_24px_60px_-16px_rgba(0,0,0,0.75)] backdrop-blur-xl">
+                <div className="flex items-center gap-2 border-b border-white/10 bg-white/3 px-4 py-3">
+                  <span className="h-2.5 w-2.5 rounded-full bg-rose-400/90" />
+                  <span className="h-2.5 w-2.5 rounded-full bg-amber-400/90" />
+                  <span className="h-2.5 w-2.5 rounded-full bg-emerald-400/90" />
+                  <span className="ml-2 flex items-center gap-1.5 text-[11px] font-medium text-slate-400">
+                    <IconSparkles className="h-3 w-3 text-violet-400" />
+                    CaisseCI — Aperçu live
+                  </span>
+                </div>
+
+                <div className="flex gap-1 border-b border-white/10 px-3 py-2">
+                  {PREVIEW_TABS.map((t) => (
+                    <button
+                      key={t.id}
+                      type="button"
+                      onClick={() => setPreview(t.id)}
+                      className={cn(
+                        'rounded-lg px-3 py-1.5 text-[11px] font-semibold transition',
+                        preview === t.id
+                          ? 'bg-white/15 text-white shadow-sm'
+                          : 'text-slate-500 hover:text-slate-300',
+                      )}
+                    >
+                      {t.label}
+                    </button>
+                  ))}
+                </div>
+
+                <PreviewPanel tab={preview} />
+
+                <div className="mx-4 mb-4 flex items-center justify-between rounded-xl border border-emerald-500/25 bg-emerald-500/10 px-3 py-2.5">
+                  <div className="flex items-center gap-2">
+                    <IconTrendingUp className="h-4 w-4 text-emerald-400" />
+                    <p className="text-xs font-medium text-emerald-200">Sync cloud · Mode offline actif</p>
+                  </div>
+                  <span className="font-mono text-[10px] text-emerald-300/80">7j cache</span>
+                </div>
+              </div>
             </div>
           </div>
         </div>
       </div>
 
-      <div className="relative border-t border-white/10 bg-black/25 backdrop-blur-md">
-        <div className="mx-auto grid max-w-7xl grid-cols-2 sm:grid-cols-4">
-          {stats.map((s, i) => (
+      <div className="relative border-t border-white/10 bg-black/30 backdrop-blur-md">
+        <div className="mx-auto grid max-w-7xl grid-cols-2 gap-3 px-4 py-8 sm:grid-cols-4 sm:px-6">
+          {stats.map((s) => (
             <div
               key={s.label}
-              className={cn(
-                'px-6 py-8 text-center',
-                i > 0 && 'border-l border-white/10',
-              )}
+              className="marketing-stat-glass group rounded-2xl px-4 py-6 text-center transition hover:bg-white/10"
             >
-              <p className="font-mono text-3xl font-bold text-white">{s.value}</p>
+              <p className="font-mono text-3xl font-bold text-white transition group-hover:scale-105">{s.value}</p>
               <p className="mt-1 text-[11px] font-semibold uppercase tracking-[0.15em] text-slate-400">
                 {s.label}
               </p>
@@ -320,6 +354,18 @@ export function MarketingHero({
           ))}
         </div>
       </div>
+
+      <button
+        type="button"
+        onClick={() => document.getElementById('fonctionnalites')?.scrollIntoView({ behavior: 'smooth' })}
+        className="absolute bottom-8 left-1/2 hidden -translate-x-1/2 flex-col items-center gap-2 text-slate-500 transition hover:text-slate-300 lg:flex"
+        aria-label="Découvrir les fonctionnalités"
+      >
+        <span className="text-[10px] font-semibold uppercase tracking-[0.2em]">Découvrir</span>
+        <span className="flex h-9 w-5 items-start justify-center rounded-full border border-white/20 p-1">
+          <span className="h-1.5 w-1 animate-bounce rounded-full bg-white/70" />
+        </span>
+      </button>
     </section>
   )
 }

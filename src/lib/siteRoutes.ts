@@ -7,6 +7,7 @@ export const ROUTES = {
   login: '/connexion',
   staff: '/staff',
   subscription: '/abonnement',
+  platformAdmin: '/admin',
   storefrontBase: '/boutique',
 } as const
 
@@ -50,6 +51,11 @@ export function isOwnerAuthPath(pathname: string): boolean {
 
 export function isSubscriptionPath(pathname: string): boolean {
   return pathname.toLowerCase().startsWith(ROUTES.subscription)
+}
+
+export function isPlatformAdminPath(pathname: string): boolean {
+  const p = pathname.toLowerCase()
+  return p === ROUTES.platformAdmin || p.startsWith(`${ROUTES.platformAdmin}/`)
 }
 
 export function parseStorefrontCode(pathname: string): string | null {

@@ -1,4 +1,5 @@
 import { MARKETING_IMAGES } from '../../lib/marketingImages'
+import { MarketingSectionHeader } from './MarketingSectionHeader'
 import { Reveal } from './Reveal'
 import { MarketingImage } from './MarketingImage'
 import { cn } from '../../ui/cn'
@@ -57,14 +58,19 @@ export function MarketingUseCases() {
     <section className="relative overflow-hidden bg-[#f8f9fc] py-24">
       <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_50%_0%,rgba(20,99,255,0.06),transparent_50%)]" />
       <div className="relative mx-auto max-w-7xl px-4 sm:px-6">
-        <Reveal className="mx-auto max-w-2xl text-center">
-          <p className="text-[11px] font-bold uppercase tracking-[0.2em] text-ink-subtle">Secteurs</p>
-          <h2 className="mt-3 text-3xl font-bold tracking-tight sm:text-4xl">
-            Une plateforme, trois univers métier
-          </h2>
-          <p className="mt-4 text-ink-muted">
-            Chaque vertical active les modules dont vous avez besoin — sans surcoût inutile.
-          </p>
+        <Reveal>
+          <MarketingSectionHeader
+            eyebrow="Secteurs"
+            title={
+              <>
+                Une plateforme,{' '}
+                <span className="bg-linear-to-r from-accent to-violet-600 bg-clip-text text-transparent">
+                  trois univers métier
+                </span>
+              </>
+            }
+            description="Chaque vertical active les modules dont vous avez besoin — sans surcoût inutile."
+          />
         </Reveal>
 
         <div className="mt-14 grid gap-8 lg:grid-cols-3">
@@ -72,8 +78,8 @@ export function MarketingUseCases() {
             <Reveal key={c.title} delay={i * 80}>
               <article
                 className={cn(
-                  'group relative flex h-full flex-col overflow-hidden rounded-2xl border bg-white shadow-sm transition duration-300 hover:-translate-y-1 hover:shadow-xl',
-                  c.featured ? 'border-violet-200/80 ring-1 ring-violet-200/50 lg:-mt-2 lg:mb-2' : 'border-border/60',
+                  'marketing-card-premium group relative flex h-full flex-col overflow-hidden rounded-3xl',
+                  c.featured && 'ring-1 ring-violet-200/50 lg:-mt-2 lg:mb-2',
                 )}
               >
                 <div className="relative h-52 overflow-hidden sm:h-56">

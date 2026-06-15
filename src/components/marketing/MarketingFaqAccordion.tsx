@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { MarketingSectionHeader } from './MarketingSectionHeader'
 import { Reveal } from './Reveal'
 import { cn } from '../../ui/cn'
 import { IconChevronDown } from '../../ui/icons'
@@ -34,11 +35,14 @@ export function MarketingFaqAccordion() {
   const [open, setOpen] = useState<number | null>(0)
 
   return (
-    <section id="faq" className="bg-white py-24">
+    <section id="faq" className="bg-[#f8f9fc] py-24">
       <div className="mx-auto max-w-3xl px-4 sm:px-6">
-        <Reveal className="text-center">
-          <p className="text-[11px] font-bold uppercase tracking-[0.2em] text-ink-subtle">FAQ</p>
-          <h2 className="mt-3 text-3xl font-bold tracking-tight">Questions fréquentes</h2>
+        <Reveal>
+          <MarketingSectionHeader
+            eyebrow="FAQ"
+            title="Questions fréquentes"
+            description="Tout ce qu’il faut savoir avant de démarrer votre essai gratuit."
+          />
         </Reveal>
 
         <dl className="mt-12 space-y-3">
@@ -48,10 +52,8 @@ export function MarketingFaqAccordion() {
               <Reveal key={item.q} delay={i * 50}>
                 <div
                   className={cn(
-                    'overflow-hidden rounded-2xl border transition duration-200',
-                    isOpen
-                      ? 'border-accent/30 bg-accent/5 shadow-sm'
-                      : 'border-border/60 bg-surface-muted/20 hover:border-border-strong',
+                    'marketing-card-premium overflow-hidden rounded-3xl transition duration-200',
+                    isOpen && 'ring-1 ring-accent/15',
                   )}
                 >
                   <dt>

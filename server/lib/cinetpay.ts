@@ -1,6 +1,7 @@
 import { randomBytes } from 'node:crypto'
 import type { MobileMoneyChannelId } from './mobileMoneyChannels.js'
 import { channelById, splitCiPhone } from './mobileMoneyChannels.js'
+import { waveEnabled } from './wave.js'
 
 const CHECKOUT_URL = 'https://api-checkout.cinetpay.com/v2/payment'
 const CHECK_URL = 'https://api-checkout.cinetpay.com/v2/payment/check'
@@ -30,7 +31,7 @@ export function cinetpayDemoMode(): boolean {
 }
 
 export function mobileMoneyEnabled(): boolean {
-  return cinetpayConfigured() || cinetpayDemoMode()
+  return cinetpayConfigured() || cinetpayDemoMode() || waveEnabled()
 }
 
 export function generateTransactionId(): string {

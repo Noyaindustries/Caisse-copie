@@ -1,5 +1,4 @@
-import type { ProductWithStock } from '../../db/types'
-import type { PaymentMethod } from '../../db/types'
+import type { ProductWithStock, PaymentMethod } from '../../db/types'
 
 export type PublishedStorefrontMenu = {
   storeId: string
@@ -17,7 +16,10 @@ export type StorefrontInfo = {
   storefrontUrl: string
   menuPublished: boolean
   publishedAt: string | null
+  waveEnabled: boolean
 }
+
+export type StorefrontPaymentMethod = PaymentMethod | 'wave'
 
 export type PublicStorefrontOrderInput = {
   customerName: string
@@ -25,7 +27,7 @@ export type PublicStorefrontOrderInput = {
   customerAddress?: string
   customerNote?: string
   desiredTimeSlot?: string
-  paymentMethod: PaymentMethod
+  paymentMethod: StorefrontPaymentMethod
   fulfillmentMode: 'pickup' | 'delivery'
   lines: Array<{
     productId: string

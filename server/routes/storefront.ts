@@ -1,8 +1,18 @@
 import { randomUUID } from 'node:crypto'
 import { Router, type Request } from 'express'
 import { z } from 'zod'
+import { normalizeCiPhone } from '../lib/mobileMoneyChannels.js'
 import { prisma } from '../lib/prisma.js'
 import { publicAppUrl } from '../lib/stripe.js'
+import {
+  markStorefrontOrderPaid,
+  markStorefrontOrderPaymentRefused,
+} from '../lib/storefrontWave.js'
+import {
+  checkWaveCheckoutByReference,
+  initWaveCheckout,
+  waveEnabled,
+} from '../lib/wave.js'
 import {
   isSubscriptionUsable,
   type PlanId,
@@ -62,7 +72,7 @@ const submitOrderSchema = z.object({
   customerAddress: z.string().optional(),
   customerNote: z.string().optional(),
   desiredTimeSlot: z.string().optional(),
-  paymentMethod: z.enum(['cash', 'card', 'mobile', 'mixed']),
+  paymentMethod: z.enum(['cash', 'card', 'mobile', 'mixed', 'wave']),
   fulfillmentMode: z.enum(['pickup', 'delivery']),
   lines: z.array(orderLineSchema).min(1),
   subtotalHT: z.number().nonnegative(),
@@ -113,6 +123,7 @@ storefrontRouter.get('/billing/storefront/:storeCode', async (req, res) => {
       storefrontUrl: publicStorefrontUrl(req, org.storeCode),
       menuPublished: Boolean(org.storefrontMenu),
       publishedAt: org.storefrontPublishedAt?.toISOString() ?? null,
+      waveEnabled: waveEnabled(),
     })
   } catch (err) {
     console.error('[storefront/info]', err)
@@ -159,6 +170,29 @@ storefrontRouter.post('/billing/storefront/:storeCode/orders', async (req, res) 
     const body = submitOrderSchema.parse(req.body)
     const externalId = randomUUID()
     const createdAt = Date.now()
+    const amountFcfa = Math.round(body.totalTTC)
+    if (amountFcfa <= 0) {
+      res.status(400).json({ error: 'Montant de commande invalide.' })
+      return
+    }
+
+    const isWavePayment = body.paymentMethod === 'wave'
+    if (isWavePayment && !waveEnabled()) {
+      res.status(503).json({ error: 'Paiement Wave indisponible pour cette boutique.' })
+      return
+    }
+
+    const phoneE164 = body.customerPhone
+      ? normalizeCiPhone(body.customerPhone)
+      : null
+    if (isWavePayment && !phoneE164) {
+      res.status(400).json({
+        error: 'Numéro Wave requis (ex. 07 XX XX XX XX).',
+      })
+      return
+    }
+
+    const initialStatus = isWavePayment ? 'awaiting_payment' : 'pending'
     const payload = {
       ...body,
       id: externalId,
@@ -171,7 +205,9 @@ storefrontRouter.post('/billing/storefront/:storeCode/orders', async (req, res) 
         : org.name,
       storeCode: org.storeCode,
       source: 'public_storefront',
-      status: 'pending',
+      status: initialStatus,
+      paymentStatus: isWavePayment ? 'awaiting' : 'not_required',
+      paymentProvider: isWavePayment ? 'wave' : null,
     }
 
     await prisma.storefrontOrder.create({
@@ -179,14 +215,52 @@ storefrontRouter.post('/billing/storefront/:storeCode/orders', async (req, res) 
         organizationId: org.id,
         storeCode: org.storeCode,
         externalId,
-        status: 'pending',
+        status: initialStatus,
         payload,
+      },
+    })
+
+    if (!isWavePayment) {
+      res.status(201).json({
+        orderId: externalId,
+        reference: externalId.slice(0, 8).toUpperCase(),
+        requiresPayment: false,
+      })
+      return
+    }
+
+    const baseUrl = publicAppUrl(req)
+    const boutiquePath = storefrontPath(org.storeCode)
+    const successUrl = `${baseUrl}${boutiquePath}?order=${encodeURIComponent(externalId)}&payment=success`
+    const errorUrl = `${baseUrl}${boutiquePath}?order=${encodeURIComponent(externalId)}&payment=cancel`
+
+    const waveInit = await initWaveCheckout({
+      transactionId: externalId,
+      amountFcfa,
+      successUrl,
+      errorUrl,
+      payerPhoneE164: phoneE164 ?? undefined,
+    })
+
+    await prisma.storefrontOrder.update({
+      where: { externalId },
+      data: {
+        payload: {
+          ...payload,
+          waveSessionId: waveInit.sessionId,
+          waveLaunchUrl: waveInit.launchUrl,
+          customerPhone: phoneE164,
+        },
       },
     })
 
     res.status(201).json({
       orderId: externalId,
       reference: externalId.slice(0, 8).toUpperCase(),
+      requiresPayment: true,
+      paymentUrl: waveInit.paymentUrl,
+      demo: waveInit.demo,
+      provider: 'wave',
     })
   } catch (err) {
     if (err instanceof z.ZodError) {
@@ -197,6 +271,68 @@ storefrontRouter.post('/billing/storefront/:storeCode/orders', async (req, res) 
     res.status(500).json({ error: 'Impossible d’enregistrer la commande.' })
   }
 })
+
+storefrontRouter.get(
+  '/billing/storefront/:storeCode/orders/:externalId/payment-status',
+  async (req, res) => {
+    try {
+      const org = await findOrgByStoreCodeParam(req.params.storeCode)
+      if (!org || !org.storeCode) {
+        res.status(404).json({ error: 'Boutique introuvable.' })
+        return
+      }
+
+      const externalId = req.params.externalId?.trim()
+      if (!externalId) {
+        res.status(400).json({ error: 'Commande introuvable.' })
+        return
+      }
+
+      const row = await prisma.storefrontOrder.findFirst({
+        where: { externalId, organizationId: org.id },
+      })
+      if (!row) {
+        res.status(404).json({ error: 'Commande introuvable.' })
+        return
+      }
+
+      if (row.status === 'pending') {
+        res.json({ status: 'paid', orderId: externalId })
+        return
+      }
+
+      if (row.status !== 'awaiting_payment') {
+        res.json({
+          status: row.status === 'payment_failed' ? 'failed' : 'unknown',
+          orderId: externalId,
+        })
+        return
+      }
+
+      const check = await checkWaveCheckoutByReference(externalId)
+      if (check.status === 'ACCEPTED') {
+        await markStorefrontOrderPaid(externalId, {
+          waveSessionId: check.sessionId,
+          waveTransactionId: check.transactionId,
+          notifyPayload: check.raw,
+        })
+        res.json({ status: 'paid', orderId: externalId })
+        return
+      }
+
+      if (check.status === 'REFUSED') {
+        await markStorefrontOrderPaymentRefused(externalId, check.raw)
+        res.json({ status: 'failed', orderId: externalId })
+        return
+      }
+
+      res.json({ status: 'pending', orderId: externalId })
+    } catch (err) {
+      console.error('[storefront/payment-status]', err)
+      res.status(500).json({ error: 'Vérification du paiement impossible.' })
+    }
+  },
+)
 
 storefrontRouter.post('/billing/storefront/publish', async (req, res) => {
   try {
