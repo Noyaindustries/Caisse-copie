@@ -8,7 +8,11 @@ import {
   loginOrganization,
   registerOrganization,
 } from '../lib/subscription/api'
-import { isGmailAddress, validateOwnerPassword } from '../lib/subscription/ownerAuth'
+import {
+  isGmailAddress,
+  normalizeGmail,
+  validateOwnerPassword,
+} from '../lib/subscription/ownerAuth'
 import type { SubscriptionSnapshot } from '../lib/subscription/types'
 import { formatTrialPeriod, planLabel } from '../lib/subscription/plans'
 import type { PlanDefinition, PlanId } from '../lib/subscription/types'
@@ -333,10 +337,21 @@ function WelcomeScreen({
   )
 }
 
-export function OrganizationSetup() {
+export function OrganizationSetup({
+  onNavigate,
+}: {
+  onNavigate: (to: string) => void
+}) {
   const { completeOnboarding } = useSubscription()
-  const [, navigate] = useSitePath()
-  const [mode, setMode] = useState<Mode>('create')
+  const [pathname] = useSitePath()
+  const [mode, setMode] = useState<Mode>(() => {
+    if (typeof window === 'undefined') return 'create'
+    const path = window.location.pathname.toLowerCase()
+    const hash = window.location.hash.toLowerCase()
+    if (path.startsWith('/connexion') || hash.includes('connexion')) return 'login'
+    if (hash.includes('rejoindre')) return 'attach'
+    return 'create'
+  })
   const [plans, setPlans] = useState<PlanDefinition[]>([])
   const [trialDays, setTrialDays] = useState(30)
   const [selectedPlanId, setSelectedPlanId] = useState<PlanId>('starter')
@@ -373,15 +388,14 @@ export function OrganizationSetup() {
     if (plan === 'starter' || plan === 'pro' || plan === 'business') {
       setSelectedPlanId(plan)
     }
-    const path = window.location.pathname.toLowerCase()
-    if (path.startsWith('/connexion')) {
+    const path = pathname.toLowerCase()
+    const hash = window.location.hash.toLowerCase()
+    if (path.startsWith('/connexion') || hash.includes('connexion')) {
       setMode('login')
-    } else if (window.location.hash.toLowerCase().includes('rejoindre')) {
+    } else if (hash.includes('rejoindre')) {
       setMode('attach')
-    } else if (window.location.hash.toLowerCase().includes('connexion')) {
-      setMode('login')
     }
-  }, [])
+  }, [pathname])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -389,8 +403,8 @@ export function OrganizationSetup() {
     setBusy(true)
     try {
       if (mode === 'create') {
-        const trimmedEmail = email.trim().toLowerCase()
-        if (!isGmailAddress(trimmedEmail)) {
+        const canonicalEmail = normalizeGmail(email)
+        if (!isGmailAddress(email)) {
           throw new Error('Utilisez une adresse Gmail (@gmail.com).')
         }
         const pwdError = validateOwnerPassword(password)
@@ -400,7 +414,7 @@ export function OrganizationSetup() {
         }
         const snap = await registerOrganization({
           name: name.trim(),
-          email: trimmedEmail,
+          email: canonicalEmail,
           password,
           planId: selectedPlanId,
         })
@@ -415,18 +429,19 @@ export function OrganizationSetup() {
           completeOnboarding(snap)
         }
       } else if (mode === 'login') {
-        const trimmedEmail = email.trim().toLowerCase()
-        if (!isGmailAddress(trimmedEmail)) {
+        const canonicalEmail = normalizeGmail(email)
+        if (!isGmailAddress(email)) {
           throw new Error('Utilisez votre adresse Gmail (@gmail.com).')
         }
         if (!password) throw new Error('Mot de passe requis.')
         const snap = await loginOrganization({
-          email: trimmedEmail,
+          email: canonicalEmail,
           password,
         })
         completeOnboarding(snap)
       } else {
-        const snap = await attachStoreCode(storeCode)
+        if (!password) throw new Error('Mot de passe gérant requis.')
+        const snap = await attachStoreCode(storeCode, password)
         completeOnboarding(snap)
       }
     } catch (err) {
@@ -464,18 +479,19 @@ export function OrganizationSetup() {
   const displayPlans = plans.length > 0 ? plans : DEFAULT_PLANS
 
   return (
-    <div className="flex min-h-svh bg-surface-muted">
+    <div className="flex min-h-svh overflow-x-hidden bg-surface-muted">
       {/* Panneau marque — desktop */}
       <div className="hidden w-[42%] max-w-xl shrink-0 lg:block">
         <BrandPanel trialDays={trialDays} />
       </div>
 
-      {/* Formulaire */}
-      <div className="flex flex-1 flex-col items-center justify-center px-4 py-8 sm:px-8 lg:px-12">
+      {/* Formulaire — colonne scrollable (évite le piège justify-center) */}
+      <div className="flex min-h-svh flex-1 flex-col overflow-y-auto overscroll-y-contain">
+        <div className="mx-auto flex w-full max-w-2xl flex-1 flex-col justify-center px-4 py-8 sm:px-8 lg:px-12">
         <button
           type="button"
-          onClick={() => navigate(ROUTES.home)}
-          className="mb-4 self-start text-sm font-medium text-ink-subtle transition hover:text-ink lg:self-center lg:max-w-2xl lg:w-full"
+          onClick={() => onNavigate(ROUTES.home)}
+          className="mb-4 self-start text-sm font-medium text-ink-subtle transition hover:text-ink"
         >
           ← Retour au site
         </button>
@@ -510,8 +526,12 @@ export function OrganizationSetup() {
                 className="w-full"
                 active={mode}
                 onChange={(v) => {
-                  setMode(v as Mode)
+                  const next = v as Mode
+                  setMode(next)
                   setError(null)
+                  if (next === 'login') onNavigate(ROUTES.login)
+                  else if (next === 'attach') onNavigate(`${ROUTES.signup}#rejoindre`)
+                  else onNavigate(ROUTES.signup)
                 }}
                 items={[
                   { id: 'create', label: 'Créer', icon: <IconSparkles /> },
@@ -550,6 +570,7 @@ export function OrganizationSetup() {
                         onClick={() => {
                           setMode('login')
                           setError(null)
+                          onNavigate(ROUTES.login)
                         }}
                       >
                         Connectez-vous avec Gmail
@@ -568,7 +589,7 @@ export function OrganizationSetup() {
                         autoComplete="organization"
                       />
                     </Field>
-                    <Field label="Compte Gmail du gérant" hint="Adresse @gmail.com obligatoire">
+                    <Field label="Compte Gmail du gérant" hint="Adresse @gmail.com (points et +alias = même compte)">
                       <Input
                         id="org-email"
                         type="email"
@@ -618,7 +639,7 @@ export function OrganizationSetup() {
                     </p>
                   </div>
                   <div className="space-y-4 rounded-2xl border border-border/50 bg-surface-muted/30 p-5">
-                    <Field label="Adresse Gmail">
+                    <Field label="Adresse Gmail" hint="Même boîte Gmail = même compte (points / +alias)">
                       <Input
                         id="login-email"
                         type="email"
@@ -649,6 +670,7 @@ export function OrganizationSetup() {
                       onClick={() => {
                         setMode('create')
                         setError(null)
+                        onNavigate(ROUTES.signup)
                       }}
                     >
                       Créer mon magasin
@@ -679,9 +701,19 @@ export function OrganizationSetup() {
                       autoComplete="off"
                     />
                   </Field>
+                  <Field label="Mot de passe du gérant">
+                    <Input
+                      id="attach-password"
+                      type="password"
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                      placeholder="••••••••"
+                      required
+                      autoComplete="current-password"
+                    />
+                  </Field>
                   <p className="text-center text-xs text-ink-subtle">
-                    Exemple : <span className="font-mono font-semibold text-ink">MAG-A1B2</span>{' '}
-                    — une seule saisie par appareil.
+                    Le code et le mot de passe sont requis une seule fois par appareil.
                   </p>
                 </div>
               )}
@@ -734,6 +766,7 @@ export function OrganizationSetup() {
               </li>
             ))}
           </ul>
+        </div>
         </div>
       </div>
     </div>

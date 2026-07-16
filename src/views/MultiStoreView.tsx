@@ -5,6 +5,7 @@ import type { StockTransfer, Store } from '../db/types'
 import type { AuditActor } from '../lib/auditLog'
 import { appendAuditEvent } from '../lib/auditLog'
 import { storeStockRowId } from '../lib/storeStockId'
+import { useSubscription } from '../context/SubscriptionContext'
 import { Badge } from '../ui/Badge'
 import { Button } from '../ui/Button'
 import { Card, CardContent } from '../ui/Card'
@@ -32,6 +33,8 @@ export function MultiStoreView({
   auditActor,
 }: Props) {
   const toast = useToast()
+  const { subscription } = useSubscription()
+  const maxStores = subscription?.plan.maxStores ?? 0
   const [tab, setTab] = useState<Tab>('consolidated')
   const stores =
     useLiveQuery(() => db.stores.orderBy('sortOrder').toArray(), [], []) ?? []
@@ -189,6 +192,13 @@ export function MultiStoreView({
       toast.error('Nom et code requis')
       return
     }
+    if (maxStores > 0 && stores.length >= maxStores) {
+      toast.error(
+        'Limite de magasins atteinte',
+        `Votre plan autorise ${maxStores} magasin(s). Passez à un plan supérieur.`,
+      )
+      return
+    }
     setStoreBusy(true)
     try {
       const maxSort = stores.reduce((m, s) => Math.max(m, s.sortOrder), -1) + 1
@@ -206,7 +216,7 @@ export function MultiStoreView({
     } finally {
       setStoreBusy(false)
     }
-  }, [newStoreName, newStoreCode, stores, toast])
+  }, [newStoreName, newStoreCode, stores, toast, maxStores])
 
   const tabs = useMemo(() => {
     const arr: Array<{ id: Tab; label: string }> = [
@@ -436,12 +446,16 @@ export function MultiStoreView({
               </div>
               <p className="mb-3 text-[12px] text-zinc-500">
                 Stocks initialisés à 0 pour tous les articles.
+                {maxStores > 0
+                  ? ` Quota plan : ${stores.length}/${maxStores} magasin(s).`
+                  : ''}
               </p>
               <div className="grid gap-2 sm:grid-cols-[1fr_auto_auto] sm:items-end">
                 <Field label="Nom" required>
                   <Input
                     value={newStoreName}
                     onChange={(e) => setNewStoreName(e.target.value)}
+                    disabled={maxStores > 0 && stores.length >= maxStores}
                   />
                 </Field>
                 <Field label="Code" required className="sm:w-32">
@@ -450,12 +464,14 @@ export function MultiStoreView({
                     onChange={(e) => setNewStoreCode(e.target.value)}
                     maxLength={6}
                     className="uppercase"
+                    disabled={maxStores > 0 && stores.length >= maxStores}
                   />
                 </Field>
                 <Button
                   variant="accent"
                   iconLeft={<IconPlus />}
                   loading={storeBusy}
+                  disabled={maxStores > 0 && stores.length >= maxStores}
                   onClick={() => void addStore()}
                   className="w-full sm:w-auto"
                 >

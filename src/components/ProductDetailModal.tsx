@@ -32,7 +32,20 @@ type Props = {
   variant?: 'storefront' | 'backoffice'
 }
 
-export function ProductDetailModal({
+type OpenProps = Omit<Props, 'product'> & { product: ProductWithStock }
+
+export function ProductDetailModal(props: Props) {
+  if (!props.product) return null
+  return (
+    <ProductDetailModalContent
+      key={props.product.id}
+      {...props}
+      product={props.product}
+    />
+  )
+}
+
+function ProductDetailModalContent({
   product,
   cartQty = 0,
   allProducts,
@@ -40,12 +53,8 @@ export function ProductDetailModal({
   onAdd,
   onSelect,
   variant = 'backoffice',
-}: Props) {
+}: OpenProps) {
   const [qty, setQty] = useState(1)
-
-  useEffect(() => {
-    setQty(1)
-  }, [product?.id])
 
   useEffect(() => {
     if (!product) return
@@ -73,8 +82,6 @@ export function ProductDetailModal({
       )
       .slice(0, 4)
   }, [product, allProducts])
-
-  if (!product) return null
 
   const description = productDescription(product)
   const highlights = productHighlights(product)

@@ -1,30 +1,41 @@
 # Documentation CaisseCI
 
-Index de la documentation de l’application.
+Index de la documentation de l’application **Infinitecore Système**.
 
-## Guides
+## Par où commencer ?
+
+### [Documentation complète](documentation-complete.md) — **recommandé**
+
+Vue d’ensemble : produit, plans, rôles, parcours, modules clés, dev et déploiement.
 
 ### [Documentation utilisateur](documentation-utilisateur.md)
 
-Guide pour les **gérants**, **caissiers** et **administrateurs** :
+Guide pour **gérants**, **caissiers** et **administrateurs** :
 
 - Création de compte et connexion
 - Abonnement et essai gratuit
-- Utilisation de la caisse et des modules
-- Boutique en ligne
+- Encaissement et mode hors ligne
 - Bonnes pratiques et dépannage
+
+### [Référence des modules](documentation-modules.md)
+
+Fiche **écran par écran** : Catalogue, Stocks, Tickets, Rapport, Caisse, KDS, etc.
 
 ### [Documentation technique](documentation-technique.md)
 
-Guide pour les **développeurs** et **intégrateurs** :
+Guide pour **développeurs** et **intégrateurs** :
 
 - Architecture fullstack
-- Structure du code
-- API REST
-- Base de données et schéma Prisma
+- API REST, Prisma / MongoDB, Dexie
 - Variables d’environnement
-- Déploiement et exploitation
+- PWA, responsive, déploiement
 
 ## Démarrage rapide
 
-Voir le [README](../README.md) à la racine du projet.
+```bash
+npm install && cp .env.example .env
+npm run db:up && npm run prisma:generate && npm run prisma:push
+npm run dev:full
+```
+
+Voir aussi le README à la racine du projet.

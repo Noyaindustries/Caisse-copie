@@ -24,6 +24,7 @@ export function CrmView({ actor }: Props) {
   const [kind, setKind] = useState<CrmInteractionKind>('call')
   const [note, setNote] = useState('')
   const [nextActionDate, setNextActionDate] = useState('')
+  const [now] = useState(Date.now)
 
   const customers = useLiveQuery(() => db.loyaltyCustomers.orderBy('updatedAt').reverse().toArray(), [], []) ?? []
   const interactions = useLiveQuery(() => db.crmInteractions.orderBy('createdAt').reverse().limit(400).toArray(), [], []) ?? []
@@ -53,9 +54,8 @@ export function CrmView({ actor }: Props) {
   }, [customers, sales, interactions])
 
   const overdueFollowups = useMemo(() => {
-    const now = Date.now()
     return interactions.filter((i) => i.nextActionAt != null && i.nextActionAt < now).length
-  }, [interactions])
+  }, [interactions, now])
 
   const addInteraction = async (): Promise<void> => {
     const customer = customers.find((c) => c.id === selectedCustomerId)

@@ -16,6 +16,7 @@ import {
 } from '../lib/subscription/moduleCatalog'
 import { planLabel } from '../lib/subscription/plans'
 import type { PlanId } from '../lib/subscription/types'
+import { VIEW_ACCENTS } from '../navigation'
 import { Badge } from '../ui/Badge'
 import { Field, Input } from '../ui/Input'
 import { cn } from '../ui/cn'
@@ -39,6 +40,18 @@ const PLAN_BADGE_TONE: Record<PlanId, 'neutral' | 'violet' | 'accent'> = {
 
 const SPOTLIGHT_IDS = ['caisse', 'kitchen', 'analytique', 'network', 'onlineOrders', 'crm'] as const
 
+const PLATFORM_ICON_TONE: Record<string, string> = {
+  offline: 'text-emerald-600 bg-emerald-50',
+  storeCode: 'text-sky-600 bg-sky-50',
+  pin: 'text-indigo-600 bg-indigo-50',
+  storefront: 'text-fuchsia-600 bg-fuchsia-50',
+  mobileMoney: 'text-orange-600 bg-orange-50',
+  stripe: 'text-violet-600 bg-violet-50',
+  sms: 'text-rose-600 bg-rose-50',
+  sync: 'text-cyan-600 bg-cyan-50',
+  pwa: 'text-amber-600 bg-amber-50',
+}
+
 function PlanBadge({ plan }: { plan: PlanId }) {
   return (
     <Badge tone={PLAN_BADGE_TONE[plan]} className="shrink-0">
@@ -54,6 +67,7 @@ function ModuleCard({
   module: ModuleEntry
   compact?: boolean
 }) {
+  const accent = VIEW_ACCENTS[module.id]
   return (
     <article
       className={cn(
@@ -64,7 +78,8 @@ function ModuleCard({
       <div className="pointer-events-none absolute inset-0 bg-linear-to-br from-accent/0 to-violet-500/0 opacity-0 transition group-hover:from-accent/5 group-hover:to-violet-500/5 group-hover:opacity-100" />
       <span
         className={cn(
-          'relative flex shrink-0 items-center justify-center rounded-xl bg-surface-sunken text-ink-muted [&_svg]:h-5 [&_svg]:w-5',
+          'relative flex shrink-0 items-center justify-center rounded-xl border border-white/80 shadow-sm [&_svg]:h-5 [&_svg]:w-5',
+          accent.icon,
           compact ? 'h-10 w-10' : 'h-12 w-12',
         )}
       >
@@ -84,6 +99,7 @@ function ModuleCard({
 }
 
 function PlatformCard({ feature, compact }: { feature: PlatformFeature; compact?: boolean }) {
+  const tone = PLATFORM_ICON_TONE[feature.id] ?? 'text-accent bg-accent/15'
   return (
     <article
       className={cn(
@@ -91,8 +107,13 @@ function PlatformCard({ feature, compact }: { feature: PlatformFeature; compact?
         compact ? 'items-center p-4' : 'p-5',
       )}
     >
-      <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-accent/15 text-accent">
-        <IconCheck className="h-5 w-5" />
+      <span
+        className={cn(
+          'flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-white/80 shadow-sm',
+          tone,
+        )}
+      >
+        <IconCheck className="h-5 w-5" strokeWidth={2.5} />
       </span>
       <div className="min-w-0 flex-1">
         <div className="flex flex-wrap items-center gap-2">
@@ -314,7 +335,7 @@ export function MarketingModulesSection() {
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder="Ex. cuisine, stocks, CRM…"
-              iconLeft={<IconSearch className="h-4 w-4" />}
+              iconLeft={<IconSearch className="h-4 w-4 text-violet-600" />}
             />
           </Field>
           <div className="flex flex-wrap items-center gap-2">

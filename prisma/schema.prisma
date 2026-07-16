@@ -8,15 +8,19 @@ datasource db {
 }
 
 model SyncBatch {
-  id         String     @id @default(auto()) @map("_id") @db.ObjectId
-  batchId    String     @unique
-  sentAt     DateTime
-  receivedAt DateTime   @default(now())
-  source     String?
-  raw        Json
-  status     String     @default("received")
-  error      String?
-  items      SyncItem[]
+  id             String        @id @default(auto()) @map("_id") @db.ObjectId
+  batchId        String        @unique
+  organization   Organization? @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  organizationId String?       @db.ObjectId
+  sentAt         DateTime
+  receivedAt     DateTime      @default(now())
+  source         String?
+  raw            Json
+  status         String        @default("received")
+  error          String?
+  items          SyncItem[]
+
+  @@index([organizationId, receivedAt])
 }
 
 model SyncItem {
@@ -38,28 +42,29 @@ model WebhookEvent {
 }
 
 model Organization {
-  id                  String    @id @default(auto()) @map("_id") @db.ObjectId
-  name                String
-  email               String
-  passwordHash        String?
-  licenseKey          String    @unique
-  storeCode           String?   @unique
-  planId              String    @default("starter")
-  status              String    @default("trialing")
-  stripeCustomerId    String?
-  stripeSubId         String?
-  trialEndsAt         DateTime?
-  currentPeriodEnd    DateTime?
-  billingProvider     String?
-  billingPhone        String?
-  smsRemindersEnabled Boolean   @default(true)
-  createdAt           DateTime  @default(now())
-  updatedAt           DateTime  @updatedAt
+  id                    String                    @id @default(auto()) @map("_id") @db.ObjectId
+  name                  String
+  email                 String                    @unique
+  passwordHash          String?
+  licenseKey            String                    @unique
+  storeCode             String?                   @unique
+  planId                String                    @default("starter")
+  status                String                    @default("trialing")
+  stripeCustomerId      String?
+  stripeSubId           String?
+  trialEndsAt           DateTime?
+  currentPeriodEnd      DateTime?
+  billingProvider       String?
+  billingPhone          String?
+  smsRemindersEnabled   Boolean                   @default(true)
+  createdAt             DateTime                  @default(now())
+  updatedAt             DateTime                  @updatedAt
   storefrontMenu        Json?
   storefrontPublishedAt DateTime?
-  mobilePayments      MobileMoneyPayment[]
-  reminderLogs        SubscriptionReminderLog[]
-  storefrontOrders    StorefrontOrder[]
+  mobilePayments        MobileMoneyPayment[]
+  reminderLogs          SubscriptionReminderLog[]
+  storefrontOrders      StorefrontOrder[]
+  syncBatches           SyncBatch[]
 }
 
 model StorefrontOrder {

@@ -1,3 +1,4 @@
+/* eslint-disable react-refresh/only-export-components -- Provider et hook partagent le même contexte typé. */
 import {
   createContext,
   useCallback,
@@ -8,6 +9,7 @@ import {
   type ReactNode,
 } from 'react'
 import type { NavViewId } from '../navigation'
+import { ROUTES } from '../lib/siteRoutes'
 import { refreshSubscription, verifyMobileMoneyPayment } from '../lib/subscription/api'
 import { planAtLeast, viewAllowedByPlan } from '../lib/subscription/plans'
 import {
@@ -133,6 +135,8 @@ export function SubscriptionProvider({
   const completeOnboarding = useCallback(
     (snap: SubscriptionSnapshot) => {
       applySnapshot(snap)
+      // Recharge l'application afin que Dexie ouvre la base isolée de l'organisation.
+      window.location.assign(ROUTES.subscription)
     },
     [applySnapshot],
   )

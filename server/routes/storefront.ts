@@ -53,43 +53,58 @@ const publishedProductSchema = z.object({
   lowStockThreshold: z.number().nonnegative().optional(),
 })
 
+const publishedPromotionSchema = z.object({
+  id: z.string().min(1).max(120),
+  code: z.string().trim().min(1).max(40),
+  label: z.string().min(1).max(160),
+  discountPct: z.number().positive().max(80),
+  active: z.boolean(),
+  startAt: z.number().int().nonnegative().optional(),
+  endAt: z.number().int().nonnegative().optional(),
+  minCartTTC: z.number().nonnegative().optional(),
+  maxUsage: z.number().int().positive().optional(),
+  usageCount: z.number().int().nonnegative(),
+  storeId: z.string().max(120).optional(),
+  createdAt: z.number().int().nonnegative(),
+  updatedAt: z.number().int().nonnegative(),
+})
+
 const publishMenuSchema = z.object({
-  storeId: z.string().min(1),
-  storeName: z.string().min(1),
-  products: z.array(publishedProductSchema),
+  storeId: z.string().min(1).max(120),
+  storeName: z.string().min(1).max(160),
+  products: z.array(publishedProductSchema).max(5_000),
+  promotions: z.array(publishedPromotionSchema).max(200).default([]),
 })
 
 const orderLineSchema = z.object({
-  productId: z.string().min(1),
-  name: z.string().min(1),
+  productId: z.string().min(1).max(120),
+  name: z.string().min(1).max(200),
   unitPriceTTC: z.number().nonnegative(),
-  qty: z.number().int().positive(),
-  vatRatePct: z.number().nonnegative(),
+  qty: z.number().int().positive().max(1_000),
+  vatRatePct: z.number().nonnegative().max(100),
 })
 
 const submitOrderSchema = z.object({
-  customerName: z.string().min(1),
-  customerPhone: z.string().optional(),
-  customerAddress: z.string().optional(),
-  customerNote: z.string().optional(),
-  desiredTimeSlot: z.string().optional(),
+  customerName: z.string().trim().min(1).max(160),
+  customerPhone: z.string().max(40).optional(),
+  customerAddress: z.string().max(500).optional(),
+  customerNote: z.string().max(1_000).optional(),
+  desiredTimeSlot: z.string().max(120).optional(),
   paymentMethod: z.enum(['cash', 'card', 'mobile', 'mixed', 'wave']),
   fulfillmentMode: z.enum(['pickup', 'delivery']),
-  lines: z.array(orderLineSchema).min(1),
+  lines: z.array(orderLineSchema).min(1).max(200),
   subtotalHT: z.number().nonnegative(),
   tva: z.number().nonnegative(),
   totalTTC: z.number().nonnegative(),
   netProductsTTC: z.number().nonnegative(),
-  discountPct: z.number().optional(),
-  promoCode: z.string().optional(),
-  deliveryFeeTTC: z.number().optional(),
+  discountPct: z.number().nonnegative().max(80).optional(),
+  promoCode: z.string().trim().max(40).optional(),
+  deliveryFeeTTC: z.number().nonnegative().max(1_000_000).optional(),
 })
 
 function readLicenseKey(req: Request): string | null {
   const header = req.get('x-license-key')?.trim()
-  if (header) return header
-  const query = typeof req.query.licenseKey === 'string' ? req.query.licenseKey.trim() : ''
-  return query || null
+  return header || null
 }
 
 function storefrontPath(storeCode: string): string {
@@ -114,7 +129,11 @@ storefrontRouter.get('/billing/storefront/:storeCode', async (req, res) => {
       return
     }
     const status = parseStatus(org.status)
-    const usable = isSubscriptionUsable(status, org.currentPeriodEnd)
+    const usable = isSubscriptionUsable(
+      status,
+      org.currentPeriodEnd,
+      org.trialEndsAt,
+    )
     res.json({
       organizationId: org.id,
       name: org.name,
@@ -164,27 +183,100 @@ storefrontRouter.post('/billing/storefront/:storeCode/orders', async (req, res) 
       return
     }
     const status = parseStatus(org.status)
-    if (!isSubscriptionUsable(status, org.currentPeriodEnd)) {
+    if (
+      !isSubscriptionUsable(
+        status,
+        org.currentPeriodEnd,
+        org.trialEndsAt,
+      )
+    ) {
       res.status(403).json({ error: 'Cette boutique n’accepte pas de commandes pour le moment.' })
       return
     }
     const body = submitOrderSchema.parse(req.body)
+    const menuResult = publishMenuSchema.safeParse(org.storefrontMenu)
+    if (!menuResult.success) {
+      res.status(409).json({ error: 'Catalogue publié invalide. Republiez la boutique.' })
+      return
+    }
+
+    const productsById = new Map(
+      menuResult.data.products.map((product) => [product.id, product]),
+    )
+    const canonicalLines = body.lines.map((line) => {
+      const product = productsById.get(line.productId)
+      if (!product || product.stock < line.qty) {
+        throw new Error(`Article indisponible : ${line.productId}`)
+      }
+      return {
+        productId: product.id,
+        name: product.name,
+        unitPriceTTC: product.priceTTC,
+        qty: line.qty,
+        vatRatePct: product.vatRatePct,
+      }
+    })
+
+    const grossProductsTTC = canonicalLines.reduce(
+      (sum, line) => sum + line.unitPriceTTC * line.qty,
+      0,
+    )
+    const promoCode = body.promoCode?.trim().toUpperCase()
+    const now = Date.now()
+    const promotion = promoCode
+      ? menuResult.data.promotions.find(
+          (candidate) =>
+            candidate.code.toUpperCase() === promoCode &&
+            candidate.active &&
+            (candidate.startAt == null || candidate.startAt <= now) &&
+            (candidate.endAt == null || candidate.endAt >= now) &&
+            (candidate.minCartTTC == null ||
+              grossProductsTTC >= candidate.minCartTTC) &&
+            (candidate.maxUsage == null ||
+              candidate.usageCount < candidate.maxUsage),
+        )
+      : undefined
+    if (promoCode && !promotion) {
+      res.status(400).json({ error: 'Code promotionnel invalide ou expiré.' })
+      return
+    }
+
+    const discountPct = promotion?.discountPct ?? 0
+    const discountFactor = 1 - discountPct / 100
+    const netProductsTTC = grossProductsTTC * discountFactor
+    const subtotalHT = canonicalLines.reduce((sum, line) => {
+      const lineTTC = line.unitPriceTTC * line.qty * discountFactor
+      return sum + lineTTC / (1 + line.vatRatePct / 100)
+    }, 0)
+    const tva = netProductsTTC - subtotalHT
+    const deliveryFeeTTC = body.fulfillmentMode === 'delivery' ? 1_000 : 0
+    const verifiedOrder = {
+      ...body,
+      lines: canonicalLines,
+      subtotalHT,
+      tva,
+      totalTTC: netProductsTTC + deliveryFeeTTC,
+      netProductsTTC,
+      discountPct: discountPct || undefined,
+      promoCode: promotion ? promoCode : undefined,
+      deliveryFeeTTC: deliveryFeeTTC || undefined,
+    }
     const externalId = randomUUID()
     const createdAt = Date.now()
-    const amountFcfa = Math.round(body.totalTTC)
+    const amountFcfa = Math.round(verifiedOrder.totalTTC)
     if (amountFcfa <= 0) {
       res.status(400).json({ error: 'Montant de commande invalide.' })
       return
     }
 
-    const isWavePayment = body.paymentMethod === 'wave'
+    const isWavePayment = verifiedOrder.paymentMethod === 'wave'
     if (isWavePayment && !waveEnabled()) {
       res.status(503).json({ error: 'Paiement Wave indisponible pour cette boutique.' })
       return
     }
 
-    const phoneE164 = body.customerPhone
-      ? normalizeCiPhone(body.customerPhone)
+    const phoneE164 = verifiedOrder.customerPhone
+      ? normalizeCiPhone(verifiedOrder.customerPhone)
       : null
     if (isWavePayment && !phoneE164) {
       res.status(400).json({
@@ -195,7 +287,7 @@ storefrontRouter.post('/billing/storefront/:storeCode/orders', async (req, res) 
 
     const initialStatus = isWavePayment ? 'awaiting_payment' : 'pending'
     const payload = {
-      ...body,
+      ...verifiedOrder,
       id: externalId,
       createdAt,
       storeId: typeof (org.storefrontMenu as { storeId?: string } | null)?.storeId === 'string'
@@ -266,6 +358,10 @@ storefrontRouter.post('/billing/storefront/:storeCode/orders', async (req, res) 
   } catch (err) {
     if (err instanceof z.ZodError) {
       res.status(400).json({ error: 'Commande invalide.' })
+      return
+    }
+    if (err instanceof Error && err.message.startsWith('Article indisponible')) {
+      res.status(409).json({ error: err.message })
       return
     }
     console.error('[storefront/orders]', err)

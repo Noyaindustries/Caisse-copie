@@ -8,7 +8,11 @@ type Props = {
   storeName?: string
 }
 
-export function StorefrontQrCode({ url, storeCode, storeName }: Props) {
+export function StorefrontQrCode(props: Props) {
+  return <StorefrontQrCodeContent key={props.url} {...props} />
+}
+
+function StorefrontQrCodeContent({ url, storeCode, storeName }: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const [ready, setReady] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -17,8 +21,6 @@ export function StorefrontQrCode({ url, storeCode, storeName }: Props) {
     const canvas = canvasRef.current
     if (!canvas || !url) return
     let cancelled = false
-    setReady(false)
-    setError(null)
     void QRCode.toCanvas(canvas, url, {
       width: 168,
       margin: 2,

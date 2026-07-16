@@ -36,6 +36,8 @@ export interface StaffProfile {
   pin: string
   /** Mot de passe optionnel (même champ de saisie à la connexion). */
   password?: string
+  /** false = désactivé (ne peut plus se connecter). Défaut : actif. */
+  active?: boolean
   /** Surcharge des droits du rôle (démo / cas particuliers). */
   permissionOverrides?: Partial<StaffPermissions>
 }

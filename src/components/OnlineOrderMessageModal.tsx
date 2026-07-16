@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import type { OnlineOrder, OnlineOrderMessage } from '../db/types'
 import { Button } from '../ui/Button'
 import { Field, Textarea } from '../ui/Input'
@@ -22,7 +22,11 @@ function formatDateTime(ts: number): string {
   })
 }
 
-export function OnlineOrderMessageModal({
+export function OnlineOrderMessageModal(props: Props) {
+  return <OnlineOrderMessageModalContent key={props.order.id} {...props} />
+}
+
+function OnlineOrderMessageModalContent({
   order,
   history,
   busy,
@@ -31,11 +35,6 @@ export function OnlineOrderMessageModal({
 }: Props) {
   const [customerMessage, setCustomerMessage] = useState(order.customerMessage ?? '')
   const [internalMessage, setInternalMessage] = useState(order.internalMessage ?? '')
-
-  useEffect(() => {
-    setCustomerMessage(order.customerMessage ?? '')
-    setInternalMessage(order.internalMessage ?? '')
-  }, [order.customerMessage, order.internalMessage, order.id])
 
   return (
     <Modal

@@ -26,11 +26,11 @@ const PLAN_ACCENT: Record<
   { ring: string; gradient: string; glow: string; badge: string; icon: string }
 > = {
   starter: {
-    ring: 'ring-slate-300/60',
-    gradient: 'from-slate-50 to-white',
-    glow: 'from-slate-400/15',
-    badge: 'bg-slate-100 text-slate-700 border-slate-200',
-    icon: 'text-slate-500',
+    ring: 'ring-emerald-300/60',
+    gradient: 'from-emerald-50/80 to-white',
+    glow: 'from-emerald-400/15',
+    badge: 'bg-emerald-50 text-emerald-800 border-emerald-200',
+    icon: 'text-emerald-600',
   },
   pro: {
     ring: 'ring-violet-400/70',
@@ -103,18 +103,26 @@ function PricingCard({
   return (
     <article
       className={cn(
-        'marketing-card-premium group relative flex h-full flex-col overflow-hidden rounded-3xl',
+        'marketing-card-premium group relative flex h-full flex-col rounded-3xl',
         featured && 'lg:-mt-3 lg:mb-3 lg:scale-[1.02] ring-2 ring-offset-2',
         featured && accent.ring,
       )}
     >
-      <div className={cn('pointer-events-none absolute inset-0 bg-linear-to-br', accent.gradient)} />
-      <div className={cn('pointer-events-none absolute -right-16 -top-16 h-48 w-48 rounded-full bg-linear-to-br blur-3xl', accent.glow)} />
+      {/* Décorations clipées — le badge reste hors de ce wrapper */}
+      <div className="pointer-events-none absolute inset-0 overflow-hidden rounded-3xl">
+        <div className={cn('absolute inset-0 bg-linear-to-br', accent.gradient)} />
+        <div
+          className={cn(
+            'absolute -right-16 -top-16 h-48 w-48 rounded-full bg-linear-to-br blur-3xl',
+            accent.glow,
+          )}
+        />
+      </div>
 
       {featured ? (
-        <div className="absolute left-1/2 top-0 z-10 -translate-x-1/2 -translate-y-1/2">
+        <div className="pointer-events-none absolute left-1/2 top-0 z-20 -translate-x-1/2 -translate-y-1/2">
           <span className="inline-flex items-center gap-1.5 rounded-full border border-violet-200 bg-violet-600 px-3 py-1 text-[11px] font-bold uppercase tracking-wider text-white shadow-lg shadow-violet-500/30">
-            <IconStar className="h-3 w-3 fill-current" />
+            <IconStar className="h-3 w-3 fill-amber-300 text-amber-300" />
             Le plus choisi
           </span>
         </div>
@@ -145,7 +153,7 @@ function PricingCard({
           {includedModules.map((m) => (
             <li key={m.id} className="flex items-start gap-2 text-sm text-ink-muted">
               <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-emerald-50 text-emerald-600">
-                <IconCheck className="h-3 w-3" strokeWidth={3} />
+                <IconCheck className="h-3 w-3 text-emerald-600" strokeWidth={3} />
               </span>
               {m.label}
             </li>
@@ -153,13 +161,13 @@ function PricingCard({
           {includedPlatform.map((f) => (
             <li key={f.id} className="flex items-start gap-2 text-sm text-ink-muted">
               <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-sky-50 text-sky-600">
-                <IconCheck className="h-3 w-3" strokeWidth={3} />
+                <IconCheck className="h-3 w-3 text-sky-600" strokeWidth={3} />
               </span>
               {f.label}
             </li>
           ))}
         </ul>
-        <Button type="button" className="mt-6 w-full" variant={featured ? 'primary' : 'secondary'} onClick={onSelect} iconRight={<IconArrowRight className="h-4 w-4" />}>
+        <Button type="button" className="mt-6 w-full" variant={featured ? 'primary' : 'secondary'} onClick={onSelect} iconRight={<IconArrowRight className="h-4 w-4 text-inherit" />}>
           Essayer {plan.name}
         </Button>
       </div>
@@ -196,7 +204,7 @@ export function MarketingPricingSection({
   const displayPlans = plans.length > 0 ? plans : DEFAULT_PLANS
 
   return (
-    <section ref={pricingRef} id="tarifs" className="relative overflow-hidden py-24">
+    <section ref={pricingRef} id="tarifs" className="relative overflow-x-clip py-24">
       <MarketingBlobs preset="pricing" />
       <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_80%_50%_at_50%_-10%,rgba(139,92,246,0.12),transparent)]" />
       <div className="pointer-events-none absolute inset-0 bg-linear-to-b from-violet-50/40 via-transparent to-amber-50/30" />
@@ -213,9 +221,9 @@ export function MarketingPricingSection({
             description={`Essai ${formatTrialPeriod(trialDays)} · Tous les modules listés inclus · Sans engagement`}
           />
         </Reveal>
-        <div className="mt-16 grid gap-6 lg:grid-cols-3 lg:gap-5 lg:pt-4">
+        <div className="mt-16 grid gap-6 overflow-visible pt-5 lg:grid-cols-3 lg:gap-5 lg:pt-6">
           {displayPlans.map((plan, i) => (
-            <Reveal key={plan.id} delay={i * 80}>
+            <Reveal key={plan.id} delay={i * 80} className="overflow-visible">
               <PricingCard
                 plan={plan}
                 featured={plan.id === 'pro'}

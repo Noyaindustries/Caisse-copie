@@ -1,18 +1,10 @@
 import 'dotenv/config'
-import cors from 'cors'
 import express from 'express'
-import morgan from 'morgan'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { app } from './app.js'
 import { prisma } from './lib/prisma.js'
-import { billingRouter, handleStripeWebhook } from './routes/billing.js'
-import { storefrontRouter } from './routes/storefront.js'
 import { startSubscriptionReminderScheduler } from './lib/subscriptionReminders.js'
-import { handleCinetpayNotify, handleWaveWebhook, mobileMoneyRouter } from './routes/mobileMoney.js'
-import { platformAdminRouter } from './routes/platformAdmin.js'
-import { uploadsRouter } from './routes/uploads.js'
-import { syncRouter } from './routes/sync.js'
-import { webhookRouter } from './routes/webhooks.js'
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
@@ -20,41 +12,44 @@ const projectRoot = path.resolve(__dirname, '..')
 const distPath = path.join(projectRoot, 'dist')
 const publicBrandingPath = path.join(projectRoot, 'public', 'branding')
 
-const app = express()
 const port = Number(process.env.PORT ?? 4000)
-
-app.use(cors())
-app.post(
-  '/api/billing/webhook',
-  express.raw({ type: 'application/json' }),
-  handleStripeWebhook,
-)
-app.post(
-  '/api/billing/cinetpay/notify',
-  express.urlencoded({ extended: true }),
-  handleCinetpayNotify,
-)
-app.post('/api/billing/cinetpay/notify', express.json(), handleCinetpayNotify)
-app.post(
-  '/api/billing/wave/webhook',
-  express.raw({ type: 'application/json' }),
-  handleWaveWebhook,
-)
-app.use(express.json({ limit: '2mb' }))
-app.use(morgan('dev'))
 app.use('/branding', express.static(publicBrandingPath))
 
-app.get('/health', (_req, res) => {
-  res.status(200).json({ ok: true })
-})
+// En dev (npm run dev:api / tsx), redirige le HTML vers Vite pour éviter un dist/ obsolète.
+// Désactiver avec PREFER_VITE=0. Production (node server-dist) sert dist/ normalement.
+const preferViteUi =
+  process.env.PREFER_VITE === '1' ||
+  (process.env.PREFER_VITE !== '0' &&
+    (process.env.npm_lifecycle_event === 'dev:api' ||
+      process.env.npm_lifecycle_event === 'dev:full' ||
+      /tsx/.test(process.argv.join(' '))))
+const viteOrigin = process.env.VITE_DEV_ORIGIN ?? 'http://localhost:5173'
 
-app.use('/api', syncRouter)
-app.use('/api', webhookRouter)
-app.use('/api', billingRouter)
-app.use('/api', storefrontRouter)
-app.use('/api', mobileMoneyRouter)
-app.use('/api', platformAdminRouter)
-app.use('/api', uploadsRouter)
+if (preferViteUi) {
+  app.use((req, res, next) => {
+    if (req.method !== 'GET' && req.method !== 'HEAD') return next()
+    if (
+      req.path.startsWith('/api') ||
+      req.path === '/health' ||
+      req.path.startsWith('/branding') ||
+      req.path.startsWith('/uploads') ||
+      req.path.startsWith('/marketing')
+    ) {
+      return next()
+    }
+    const accept = req.get('accept') ?? ''
+    // Navigateur : text/html. curl / liens : souvent */* — on redirige aussi les chemins SPA.
+    const looksLikeSpa =
+      accept.includes('text/html') ||
+      accept.includes('*/*') ||
+      !req.path.includes('.')
+    if (looksLikeSpa) {
+      return res.redirect(302, `${viteOrigin}${req.originalUrl}`)
+    }
+    return next()
+  })
+  console.log(`UI dev → ${viteOrigin} (évite dist/ obsolète sur :${port})`)
+}
 
 app.use(express.static(distPath))
 

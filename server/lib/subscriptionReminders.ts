@@ -144,7 +144,7 @@ export async function runSubscriptionReminders(organizationId?: string): Promise
           phone,
           message,
           status: result.ok ? 'sent' : 'failed',
-          error: result.ok ? null : result.error,
+          error: 'error' in result ? result.error : null,
         },
       })
 

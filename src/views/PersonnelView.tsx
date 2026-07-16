@@ -2,12 +2,19 @@ import { useLiveQuery } from 'dexie-react-hooks'
 import { useEffect, useMemo, useState } from 'react'
 import {
   changeStaffPassword,
+  countActiveStaffProfiles,
   createStaffProfile,
+  deactivateStaffProfile,
+  deleteStaffProfile,
+  isCustomStaffProfile,
   listStaffProfiles,
+  reactivateStaffProfile,
   roleLabel,
   subscribeStaffProfiles,
+  updateStaffProfile,
 } from '../auth/profiles'
-import type { UserRole } from '../auth/types'
+import type { StaffProfile, UserRole } from '../auth/types'
+import { useSubscription } from '../context/SubscriptionContext'
 import { db } from '../db/db'
 import { Badge } from '../ui/Badge'
 import { Button } from '../ui/Button'
@@ -17,7 +24,14 @@ import { Kpi } from '../ui/Kpi'
 import { PageHeader, SectionHeader } from '../ui/PageHeader'
 import { Table, TBody, Td, Th, THead, Tr } from '../ui/Table'
 import { useToast } from '../ui/Toast'
-import { IconCheck, IconClose, IconEye, IconEyeOff, IconShield } from '../ui/icons'
+import {
+  IconCheck,
+  IconClose,
+  IconEye,
+  IconEyeOff,
+  IconShield,
+  IconTrash,
+} from '../ui/icons'
 
 type Props = { currentProfileId: string }
 
@@ -68,6 +82,8 @@ function PermCell({ ok }: { ok: boolean }) {
 
 export function PersonnelView({ currentProfileId }: Props) {
   const toast = useToast()
+  const { subscription } = useSubscription()
+  const maxStaff = subscription?.plan.maxStaff ?? 0
   const [profiles, setProfiles] = useState(() => listStaffProfiles())
   const [displayName, setDisplayName] = useState('')
   const [role, setRole] = useState<UserRole>('caissier')
@@ -82,6 +98,11 @@ export function PersonnelView({ currentProfileId }: Props) {
   const [showConfirmPassword, setShowConfirmPassword] = useState(false)
   const [showCreatePin, setShowCreatePin] = useState(false)
   const [showCreatePassword, setShowCreatePassword] = useState(false)
+  const [editingId, setEditingId] = useState<string | null>(null)
+  const [editName, setEditName] = useState('')
+  const [editRole, setEditRole] = useState<UserRole>('caissier')
+  const [editStoreId, setEditStoreId] = useState('')
+  const [editPin, setEditPin] = useState('')
   const stores = useLiveQuery(() => db.stores.orderBy('sortOrder').toArray(), [], []) ?? []
   const storeNameById = useMemo(
     () => new Map(stores.map((store) => [store.id, store.name])),
@@ -94,15 +115,20 @@ export function PersonnelView({ currentProfileId }: Props) {
     })
   }, [])
 
+  const activeCount = useMemo(() => countActiveStaffProfiles(), [profiles])
   const totalByRole = useMemo(() => {
     const rows = { caissier: 0, gerant: 0, admin: 0 }
-    for (const p of profiles) rows[p.role] += 1
+    for (const p of profiles) {
+      if (p.active === false) continue
+      rows[p.role] += 1
+    }
     return rows
   }, [profiles])
   const currentProfile = useMemo(
     () => profiles.find((p) => p.id === currentProfileId) ?? null,
     [profiles, currentProfileId],
   )
+  const atStaffLimit = maxStaff > 0 && activeCount >= maxStaff
 
   const handleCreate = (e: React.FormEvent) => {
     e.preventDefault()
@@ -113,6 +139,7 @@ export function PersonnelView({ currentProfileId }: Props) {
         storeId: createStoreId || undefined,
         pin,
         password,
+        maxStaff: maxStaff > 0 ? maxStaff : undefined,
       })
       toast.success(
         'Utilisateur créé',
@@ -159,6 +186,102 @@ export function PersonnelView({ currentProfileId }: Props) {
     }
   }
 
+  const startEdit = (p: StaffProfile) => {
+    if (!isCustomStaffProfile(p.id)) {
+      toast.warning(
+        'Profil démo',
+        'Les comptes de démonstration ne sont pas modifiables. Créez un nouvel utilisateur.',
+      )
+      return
+    }
+    setEditingId(p.id)
+    setEditName(p.displayName)
+    setEditRole(p.role)
+    setEditStoreId(p.storeId ?? '')
+    setEditPin('')
+  }
+
+  const saveEdit = () => {
+    if (!editingId) return
+    try {
+      updateStaffProfile(editingId, {
+        displayName: editName,
+        role: editRole,
+        storeId: editStoreId || null,
+        ...(editPin.trim() ? { pin: editPin } : {}),
+      })
+      toast.success('Profil mis à jour')
+      setEditingId(null)
+    } catch (error) {
+      toast.error(
+        'Modification impossible',
+        error instanceof Error ? error.message : String(error),
+      )
+    }
+  }
+
+  const toggleActive = async (p: StaffProfile) => {
+    if (!isCustomStaffProfile(p.id)) {
+      toast.warning('Profil démo', 'Impossible de désactiver un compte de démonstration.')
+      return
+    }
+    if (p.id === currentProfileId) {
+      toast.error('Action refusée', 'Vous ne pouvez pas désactiver votre propre session.')
+      return
+    }
+    const isActive = p.active !== false
+    if (isActive) {
+      const ok = window.confirm(
+        `Désactiver « ${p.displayName} » ? Cette personne ne pourra plus se connecter à la caisse.`,
+      )
+      if (!ok) return
+      try {
+        deactivateStaffProfile(p.id)
+        toast.success('Compte désactivé', p.displayName)
+      } catch (error) {
+        toast.error(
+          'Impossible',
+          error instanceof Error ? error.message : String(error),
+        )
+      }
+      return
+    }
+    try {
+      reactivateStaffProfile(p.id, maxStaff > 0 ? maxStaff : undefined)
+      toast.success('Compte réactivé', p.displayName)
+    } catch (error) {
+      toast.error(
+        'Réactivation impossible',
+        error instanceof Error ? error.message : String(error),
+      )
+    }
+  }
+
+  const removeProfile = async (p: StaffProfile) => {
+    if (!isCustomStaffProfile(p.id)) {
+      toast.warning('Profil démo', 'Impossible de supprimer un compte de démonstration.')
+      return
+    }
+    if (p.id === currentProfileId) {
+      toast.error('Action refusée', 'Vous ne pouvez pas supprimer votre propre session.')
+      return
+    }
+    const ok = window.confirm(
+      `Supprimer définitivement « ${p.displayName} » ? Préférez la désactivation pour conserver l’historique.`,
+    )
+    if (!ok) return
+    try {
+      deleteStaffProfile(p.id)
+      if (editingId === p.id) setEditingId(null)
+      toast.success('Utilisateur supprimé', p.displayName)
+    } catch (error) {
+      toast.error(
+        'Suppression impossible',
+        error instanceof Error ? error.message : String(error),
+      )
+    }
+  }
+
   return (
     <div className="space-y-5 pb-6">
       <PageHeader
@@ -167,10 +290,22 @@ export function PersonnelView({ currentProfileId }: Props) {
         subtitle="Profils, rôles et matrice des droits"
       />
 
-      <div className="grid gap-3 sm:grid-cols-3">
-        <Kpi label="Caissiers" value={String(totalByRole.caissier)} tone="neutral" />
-        <Kpi label="Gérants" value={String(totalByRole.gerant)} tone="violet" />
+      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        <Kpi label="Caissiers actifs" value={String(totalByRole.caissier)} tone="neutral" />
+        <Kpi label="Gérants actifs" value={String(totalByRole.gerant)} tone="violet" />
         <Kpi label="Administrateurs" value={String(totalByRole.admin)} tone="accent" />
+        <Kpi
+          label="Quota plan"
+          value={maxStaff > 0 ? `${activeCount}/${maxStaff}` : String(activeCount)}
+          hint={
+            atStaffLimit
+              ? 'Limite atteinte'
+              : subscription?.plan.name
+                ? `Plan ${subscription.plan.name}`
+                : 'Utilisateurs actifs'
+          }
+          tone={atStaffLimit ? 'rose' : 'amber'}
+        />
       </div>
 
       <Card>
@@ -192,8 +327,6 @@ export function PersonnelView({ currentProfileId }: Props) {
                   type={showCurrentSecret ? 'text' : 'password'}
                   value={currentSecret}
                   onChange={(e) => setCurrentSecret(e.target.value)}
-                  placeholder="Actuel"
-                  autoComplete="current-password"
                   required
                 />
                 <Button
@@ -201,9 +334,7 @@ export function PersonnelView({ currentProfileId }: Props) {
                   size="sm"
                   variant="ghost"
                   aria-label={
-                    showCurrentSecret
-                      ? 'Masquer le secret actuel'
-                      : 'Afficher le secret actuel'
+                    showCurrentSecret ? 'Masquer le secret' : 'Afficher le secret'
                   }
                   onClick={() => setShowCurrentSecret((v) => !v)}
                 >
@@ -217,9 +348,8 @@ export function PersonnelView({ currentProfileId }: Props) {
                   type={showNewPassword ? 'text' : 'password'}
                   value={newPassword}
                   onChange={(e) => setNewPassword(e.target.value)}
-                  placeholder="Nouveau"
-                  autoComplete="new-password"
                   required
+                  minLength={4}
                 />
                 <Button
                   type="button"
@@ -236,15 +366,14 @@ export function PersonnelView({ currentProfileId }: Props) {
                 </Button>
               </div>
             </Field>
-            <Field label="Confirmer le mot de passe" required>
+            <Field label="Confirmer" required>
               <div className="flex items-center gap-2">
                 <Input
                   type={showConfirmPassword ? 'text' : 'password'}
                   value={confirmPassword}
                   onChange={(e) => setConfirmPassword(e.target.value)}
-                  placeholder="Confirmation"
-                  autoComplete="new-password"
                   required
+                  minLength={4}
                 />
                 <Button
                   type="button"
@@ -262,8 +391,8 @@ export function PersonnelView({ currentProfileId }: Props) {
               </div>
             </Field>
             <div className="md:col-span-3">
-              <Button type="submit" variant="primary">
-                Mettre à jour le mot de passe
+              <Button type="submit" variant="secondary">
+                Enregistrer le mot de passe
               </Button>
             </div>
           </form>
@@ -277,7 +406,16 @@ export function PersonnelView({ currentProfileId }: Props) {
           </h2>
           <p className="mt-0.5 text-[12px] text-zinc-500">
             Connexion par PIN ou mot de passe (même champ).
+            {maxStaff > 0
+              ? ` Quota plan : ${activeCount}/${maxStaff} actifs.`
+              : ''}
           </p>
+          {atStaffLimit ? (
+            <p className="mt-2 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-[12px] text-rose-800">
+              Limite d’utilisateurs atteinte. Désactivez un compte ou passez à un
+              plan supérieur (Abonnement).
+            </p>
+          ) : null}
           <form
             onSubmit={handleCreate}
             className="mt-3 grid gap-3 md:grid-cols-2 lg:grid-cols-5"
@@ -288,12 +426,14 @@ export function PersonnelView({ currentProfileId }: Props) {
                 onChange={(e) => setDisplayName(e.target.value)}
                 placeholder="Ex: Mariam Traoré"
                 required
+                disabled={atStaffLimit}
               />
             </Field>
             <Field label="Rôle" required>
               <Select
                 value={role}
                 onChange={(e) => setRole(e.target.value as UserRole)}
+                disabled={atStaffLimit}
               >
                 <option value="caissier">Caissier</option>
                 <option value="gerant">Gérant</option>
@@ -304,6 +444,7 @@ export function PersonnelView({ currentProfileId }: Props) {
               <Select
                 value={createStoreId}
                 onChange={(e) => setCreateStoreId(e.target.value)}
+                disabled={atStaffLimit}
               >
                 <option value="">Tous magasins</option>
                 {stores.map((store) => (
@@ -322,6 +463,7 @@ export function PersonnelView({ currentProfileId }: Props) {
                   inputMode="numeric"
                   placeholder="1234"
                   required
+                  disabled={atStaffLimit}
                   className="font-mono-nums"
                 />
                 <Button
@@ -342,6 +484,7 @@ export function PersonnelView({ currentProfileId }: Props) {
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   placeholder="Mot de passe"
+                  disabled={atStaffLimit}
                 />
                 <Button
                   type="button"
@@ -359,7 +502,7 @@ export function PersonnelView({ currentProfileId }: Props) {
               </div>
             </Field>
             <div className="md:col-span-2 lg:col-span-5">
-              <Button type="submit" variant="accent">
+              <Button type="submit" variant="accent" disabled={atStaffLimit}>
                 Créer l’utilisateur
               </Button>
             </div>
@@ -406,12 +549,28 @@ export function PersonnelView({ currentProfileId }: Props) {
         </TBody>
       </Table>
 
-      <SectionHeader title="Profils enregistrés" />
+      <SectionHeader
+        title="Profils enregistrés"
+        subtitle="Modifiez, désactivez ou supprimez les comptes créés sur cet appareil"
+      />
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
         {profiles.map((p) => {
           const active = p.id === currentProfileId
+          const isActiveAccount = p.active !== false
+          const custom = isCustomStaffProfile(p.id)
+          const isEditing = editingId === p.id
           return (
-            <Card key={p.id} hover className={active ? 'ring-2 ring-emerald-500/20' : ''}>
+            <Card
+              key={p.id}
+              hover
+              className={
+                active
+                  ? 'ring-2 ring-emerald-500/20'
+                  : !isActiveAccount
+                    ? 'opacity-70'
+                    : ''
+              }
+            >
               <CardContent className="space-y-3">
                 <div className="flex items-start justify-between gap-3">
                   <div className="flex items-center gap-3">
@@ -430,26 +589,120 @@ export function PersonnelView({ currentProfileId }: Props) {
                       </p>
                       <p className="text-[11px] text-zinc-500">
                         {roleLabel(p.role)}
+                        {!custom ? ' · démo' : ''}
                       </p>
                       <p className="text-[11px] text-zinc-500">
-                        Magasin : {p.storeId ? (storeNameById.get(p.storeId) ?? p.storeId) : 'Tous'}
+                        Magasin :{' '}
+                        {p.storeId
+                          ? (storeNameById.get(p.storeId) ?? p.storeId)
+                          : 'Tous'}
                       </p>
                     </div>
                   </div>
-                  {active ? (
-                    <Badge tone="success">
-                      <IconShield className="h-3 w-3" />
-                      Session
-                    </Badge>
-                  ) : null}
+                  <div className="flex flex-col items-end gap-1">
+                    {active ? (
+                      <Badge tone="success">
+                        <IconShield className="h-3 w-3" />
+                        Session
+                      </Badge>
+                    ) : null}
+                    {!isActiveAccount ? (
+                      <Badge tone="neutral">Désactivé</Badge>
+                    ) : null}
+                  </div>
                 </div>
-                <p className="text-[12px] leading-relaxed text-zinc-600">
-                  {p.role === 'admin'
-                    ? 'Pilotage complet : personnel, intégrations, création de magasins, tous plafonds.'
-                    : p.role === 'gerant'
-                      ? 'Magasin au quotidien : catalogue, prix, stocks, transferts, clôture, analytique.'
-                      : 'Vente et consultation : caisse, catalogue lecture, rapport du jour ; remises limitées.'}
-                </p>
+
+                {isEditing ? (
+                  <div className="space-y-2 rounded-lg border border-zinc-200 bg-zinc-50 p-3">
+                    <Field label="Nom">
+                      <Input
+                        value={editName}
+                        onChange={(e) => setEditName(e.target.value)}
+                      />
+                    </Field>
+                    <Field label="Rôle">
+                      <Select
+                        value={editRole}
+                        onChange={(e) => setEditRole(e.target.value as UserRole)}
+                      >
+                        <option value="caissier">Caissier</option>
+                        <option value="gerant">Gérant</option>
+                        <option value="admin">Administrateur</option>
+                      </Select>
+                    </Field>
+                    <Field label="Magasin">
+                      <Select
+                        value={editStoreId}
+                        onChange={(e) => setEditStoreId(e.target.value)}
+                      >
+                        <option value="">Tous magasins</option>
+                        {stores.map((store) => (
+                          <option key={store.id} value={store.id}>
+                            {store.name}
+                          </option>
+                        ))}
+                      </Select>
+                    </Field>
+                    <Field label="Nouveau PIN (optionnel)">
+                      <Input
+                        value={editPin}
+                        onChange={(e) => setEditPin(e.target.value)}
+                        inputMode="numeric"
+                        placeholder="Laisser vide pour conserver"
+                        className="font-mono-nums"
+                      />
+                    </Field>
+                    <div className="flex flex-wrap gap-2">
+                      <Button size="sm" variant="accent" onClick={saveEdit}>
+                        Enregistrer
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => setEditingId(null)}
+                      >
+                        Annuler
+                      </Button>
+                    </div>
+                  </div>
+                ) : (
+                  <>
+                    <p className="text-[12px] leading-relaxed text-zinc-600">
+                      {p.role === 'admin'
+                        ? 'Pilotage complet : personnel, intégrations, création de magasins, tous plafonds.'
+                        : p.role === 'gerant'
+                          ? 'Magasin au quotidien : catalogue, prix, stocks, transferts, clôture, analytique.'
+                          : 'Vente et consultation : caisse, catalogue lecture, rapport du jour ; remises limitées.'}
+                    </p>
+                    {custom ? (
+                      <div className="flex flex-wrap gap-2">
+                        <Button
+                          size="sm"
+                          variant="secondary"
+                          onClick={() => startEdit(p)}
+                        >
+                          Modifier
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="secondary"
+                          onClick={() => void toggleActive(p)}
+                        >
+                          {isActiveAccount ? 'Désactiver' : 'Réactiver'}
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          iconLeft={<IconTrash />}
+                          onClick={() => void removeProfile(p)}
+                          disabled={p.id === currentProfileId}
+                        >
+                          Supprimer
+                        </Button>
+                      </div>
+                    ) : null}
+                  </>
+                )}
               </CardContent>
             </Card>
           )

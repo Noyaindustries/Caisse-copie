@@ -24,6 +24,7 @@ type Props = {
   onSyncNow: () => void
   rightSlot?: ReactNode
   onOpenMobileMenu?: () => void
+  className?: string
 }
 
 export function Topbar({
@@ -34,15 +35,21 @@ export function Topbar({
   onSyncNow,
   rightSlot,
   onOpenMobileMenu,
+  className,
 }: Props) {
   const accent = VIEW_ACCENTS[view]
   return (
-    <header className="sticky top-0 z-20 flex min-h-12 flex-wrap items-center gap-2 border-b border-border bg-white/88 px-3 py-2 backdrop-blur-xl sm:min-h-14 sm:gap-3 sm:px-4 lg:px-6 pt-[max(0.5rem,env(safe-area-inset-top,0px))]">
+    <header
+      className={cn(
+        'sticky top-0 z-20 flex min-h-12 shrink-0 flex-wrap items-center gap-2 border-b border-border bg-white/88 px-3 py-2 backdrop-blur-xl sm:min-h-14 sm:gap-3 sm:px-4 lg:px-6 pt-[max(0.5rem,env(safe-area-inset-top,0px))]',
+        className,
+      )}
+    >
       {onOpenMobileMenu ? (
         <button
           type="button"
           onClick={onOpenMobileMenu}
-          className="rounded-md p-1.5 text-ink-subtle transition hover:bg-surface-sunken hover:text-ink lg:hidden"
+          className="rounded-md p-1.5 text-indigo-600 transition hover:bg-indigo-50 hover:text-indigo-700 lg:hidden"
           aria-label="Ouvrir le menu"
         >
           <IconMenu className="h-4 w-4" />
@@ -74,12 +81,12 @@ export function Topbar({
           <Badge tone={online ? 'success' : 'warning'} dot>
             {online ? (
               <>
-                <IconOnline className="h-3 w-3" />
+                <IconOnline className="h-3 w-3 text-emerald-600" />
                 <span className="hidden sm:inline">En ligne</span>
               </>
             ) : (
               <>
-                <IconOffline className="h-3 w-3" />
+                <IconOffline className="h-3 w-3 text-amber-600" />
                 <span className="hidden sm:inline">Hors ligne</span>
               </>
             )}
@@ -91,7 +98,7 @@ export function Topbar({
           onClick={onSyncNow}
           disabled={!online || syncBusy}
           iconLeft={
-            <IconSync className={cn(syncBusy && 'animate-spin')} />
+            <IconSync className={cn('text-sky-600', syncBusy && 'animate-spin')} />
           }
         >
           <span className="hidden sm:inline">

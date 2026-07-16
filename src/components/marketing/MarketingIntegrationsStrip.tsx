@@ -4,12 +4,33 @@ import { MarketingBlobs } from './MarketingBlobs'
 import { MarketingSectionHeader } from './MarketingSectionHeader'
 import { Reveal } from './Reveal'
 import { IconMobile, IconShield, IconCard, IconZap } from '../../ui/icons'
+import { cn } from '../../ui/cn'
 
 const STACK = [
-  { icon: IconMobile, label: 'CinetPay', desc: 'Mobile money CI' },
-  { icon: IconCard, label: 'Stripe', desc: 'Carte bancaire' },
-  { icon: IconShield, label: 'Offline PWA', desc: '7 jours cache' },
-  { icon: IconZap, label: 'Sync cloud', desc: 'API temps réel' },
+  {
+    icon: IconMobile,
+    label: 'CinetPay',
+    desc: 'Mobile money CI',
+    tone: 'text-orange-400 bg-orange-500/20 ring-1 ring-orange-400/30',
+  },
+  {
+    icon: IconCard,
+    label: 'Stripe',
+    desc: 'Carte bancaire',
+    tone: 'text-violet-300 bg-violet-500/20 ring-1 ring-violet-400/30',
+  },
+  {
+    icon: IconShield,
+    label: 'Offline PWA',
+    desc: '7 jours cache',
+    tone: 'text-emerald-300 bg-emerald-500/20 ring-1 ring-emerald-400/30',
+  },
+  {
+    icon: IconZap,
+    label: 'Sync cloud',
+    desc: 'API temps réel',
+    tone: 'text-amber-300 bg-amber-500/20 ring-1 ring-amber-400/30',
+  },
 ] as const
 
 const OPERATORS = ['Orange Money', 'Wave', 'MTN MoMo', 'Moov Money'] as const
@@ -52,7 +73,12 @@ export function MarketingIntegrationsStrip() {
             {STACK.map((item, i) => (
               <Reveal key={item.label} delay={i * 70}>
                 <div className="marketing-glass-dark flex h-full flex-col items-center rounded-2xl px-4 py-5 text-center">
-                  <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-white/15 text-white shadow-inner">
+                  <span
+                    className={cn(
+                      'flex h-11 w-11 items-center justify-center rounded-xl shadow-inner',
+                      item.tone,
+                    )}
+                  >
                     <item.icon className="h-5 w-5" />
                   </span>
                   <p className="mt-3 text-sm font-bold">{item.label}</p>

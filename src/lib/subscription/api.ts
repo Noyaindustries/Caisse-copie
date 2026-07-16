@@ -6,17 +6,11 @@ import type {
   PlanId,
   SubscriptionSnapshot,
 } from './types'
-
-const API_BASE = '/api'
+import { apiUrl } from '../apiUrl'
+import { parseApiResponse } from '../parseApiResponse'
 
 async function parseJson<T>(res: Response): Promise<T> {
-  const data = (await res.json()) as T & { error?: string }
-  if (!res.ok) {
-    throw new Error(
-      typeof data.error === 'string' ? data.error : `Erreur HTTP ${res.status}`,
-    )
-  }
-  return data
+  return parseApiResponse<T>(res)
 }
 
 export async function fetchPlans(): Promise<{
@@ -25,7 +19,7 @@ export async function fetchPlans(): Promise<{
   stripeEnabled: boolean
   mobileMoneyEnabled: boolean
 }> {
-  const res = await fetch(`${API_BASE}/billing/plans`)
+  const res = await fetch(apiUrl('/billing/plans'))
   return parseJson(res)
 }
 
@@ -37,7 +31,7 @@ export async function fetchMobileMoneyChannels(): Promise<{
   waveDirect: boolean
   cinetpayEnabled: boolean
 }> {
-  const res = await fetch(`${API_BASE}/billing/mobile-money/channels`)
+  const res = await fetch(apiUrl('/billing/mobile-money/channels'))
   return parseJson(res)
 }
 
@@ -50,7 +44,7 @@ export async function startMobileMoneyCheckout(
   demo: boolean
   provider?: 'wave' | 'cinetpay'
 }> {
-  const res = await fetch(`${API_BASE}/billing/mobile-money/checkout`, {
+  const res = await fetch(apiUrl('/billing/mobile-money/checkout'), {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -66,7 +60,7 @@ export async function verifyMobileMoneyPayment(
   transactionId: string,
 ): Promise<{ status: 'accepted' | 'refused' | 'pending'; planId?: string }> {
   const res = await fetch(
-    `${API_BASE}/billing/mobile-money/verify/${encodeURIComponent(transactionId)}`,
+    apiUrl(`/billing/mobile-money/verify/${encodeURIComponent(transactionId)}`),
     { headers: { 'x-license-key': licenseKey } },
   )
   return parseJson(res)
@@ -75,7 +69,7 @@ export async function verifyMobileMoneyPayment(
 export async function fetchPaymentHistory(
   licenseKey: string,
 ): Promise<{ payments: MobileMoneyPaymentRecord[] }> {
-  const res = await fetch(`${API_BASE}/billing/payments/history`, {
+  const res = await fetch(apiUrl('/billing/payments/history'), {
     headers: { 'x-license-key': licenseKey },
   })
   return parseJson(res)
@@ -85,7 +79,7 @@ export async function updateBillingSettings(
   licenseKey: string,
   input: { billingPhone?: string; smsRemindersEnabled?: boolean },
 ): Promise<SubscriptionSnapshot> {
-  const res = await fetch(`${API_BASE}/billing/settings`, {
+  const res = await fetch(apiUrl('/billing/settings'), {
     method: 'PATCH',
     headers: {
       'Content-Type': 'application/json',
@@ -103,7 +97,7 @@ export async function registerOrganization(input: {
   password: string
   planId: PlanId
 }): Promise<SubscriptionSnapshot> {
-  const res = await fetch(`${API_BASE}/billing/register`, {
+  const res = await fetch(apiUrl('/billing/register'), {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(input),
@@ -116,7 +110,7 @@ export async function loginOrganization(input: {
   email: string
   password: string
 }): Promise<SubscriptionSnapshot> {
-  const res = await fetch(`${API_BASE}/billing/login`, {
+  const res = await fetch(apiUrl('/billing/login'), {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(input),
@@ -125,11 +119,14 @@ export async function loginOrganization(input: {
   return { ...data, cachedAt: Date.now() }
 }
 
-export async function attachStoreCode(storeCode: string): Promise<SubscriptionSnapshot> {
-  const res = await fetch(`${API_BASE}/billing/attach`, {
+export async function attachStoreCode(
+  storeCode: string,
+  password: string,
+): Promise<SubscriptionSnapshot> {
+  const res = await fetch(apiUrl('/billing/attach'), {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ storeCode }),
+    body: JSON.stringify({ storeCode, password }),
   })
   const data = await parseJson<Omit<SubscriptionSnapshot, 'cachedAt'>>(res)
   return { ...data, cachedAt: Date.now() }
@@ -138,7 +135,7 @@ export async function attachStoreCode(storeCode: string): Promise<SubscriptionSn
 export async function refreshSubscription(
   licenseKey: string,
 ): Promise<SubscriptionSnapshot> {
-  const res = await fetch(`${API_BASE}/billing/status`, {
+  const res = await fetch(apiUrl('/billing/status'), {
     headers: { 'x-license-key': licenseKey },
   })
   const data = await parseJson<Omit<SubscriptionSnapshot, 'cachedAt'>>(res)
@@ -149,7 +146,7 @@ export async function startCheckout(
   licenseKey: string,
   planId: string,
 ): Promise<string> {
-  const res = await fetch(`${API_BASE}/billing/checkout`, {
+  const res = await fetch(apiUrl('/billing/checkout'), {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -163,7 +160,7 @@ export async function startCheckout(
 }
 
 export async function openBillingPortal(licenseKey: string): Promise<string> {
-  const res = await fetch(`${API_BASE}/billing/portal`, {
+  const res = await fetch(apiUrl('/billing/portal'), {
     method: 'POST',
     headers: { 'x-license-key': licenseKey },
   })

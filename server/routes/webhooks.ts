@@ -1,6 +1,8 @@
 import { Router } from 'express'
 import { Prisma } from '@prisma/client'
 import { prisma } from '../lib/prisma.js'
+import { sendSms } from '../lib/sms.js'
+import { requireWebhookToken } from '../lib/webhookAuth.js'
 
 export const webhookRouter = Router()
 
@@ -100,12 +102,6 @@ async function storeWebhookEvent(reqBody: unknown, source: string): Promise<stri
   return event.id
 }
 
-function isAuthorized(reqToken: string | undefined): boolean {
-  const expected = process.env.WEBHOOK_TOKEN
-  if (!expected || expected.trim() === '') return true
-  return reqToken != null && reqToken === expected
-}
-
 type SmsWebhookPayload = {
   to: string
   message: string
@@ -118,7 +114,7 @@ function normalizePhone(raw: string): string {
   return raw.replace(/\D/g, '')
 }
 
-webhookRouter.post('/webhooks/sms', async (req, res) => {
+webhookRouter.post('/webhooks/sms', requireWebhookToken, async (req, res) => {
   try {
     const payload = asObject(req.body) as Partial<SmsWebhookPayload>
     const to = asString(payload.to)
@@ -137,7 +133,6 @@ webhookRouter.post('/webhooks/sms', async (req, res) => {
       })
     }
 
-    const { sendSms } = await import('../lib/sms.js')
     const result = await sendSms({
       to: normalizedTo,
       message,
@@ -147,7 +142,7 @@ webhookRouter.post('/webhooks/sms', async (req, res) => {
         customerName: asString(payload.customerName),
       },
     })
-    if (!result.ok) {
+    if ('error' in result) {
       return res.status(502).json({ ok: false, message: result.error })
     }
     return res.status(202).json({
@@ -167,15 +162,8 @@ webhookRouter.post('/webhooks/sms', async (req, res) => {
   }
 })
 
-webhookRouter.post('/webhooks/orders', async (req, res) => {
+webhookRouter.post('/webhooks/orders', requireWebhookToken, async (req, res) => {
   try {
-    const token = req.header('x-webhook-token') ?? undefined
-    if (!isAuthorized(token)) {
-      return res.status(401).json({
-        ok: false,
-        message: 'Webhook non autorisé',
-      })
-    }
     const source =
       req.header('x-platform') ??
       req.query.source?.toString() ??
@@ -194,7 +182,7 @@ webhookRouter.post('/webhooks/orders', async (req, res) => {
   }
 })
 
-webhookRouter.post('/webhooks/caisseci', async (req, res) => {
+webhookRouter.post('/webhooks/caisseci', requireWebhookToken, async (req, res) => {
   try {
     const eventId = await storeWebhookEvent(req.body, 'caisseci')
     return res.status(201).json({

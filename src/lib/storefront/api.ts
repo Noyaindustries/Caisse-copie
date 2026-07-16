@@ -3,23 +3,17 @@ import type {
   PublishedStorefrontMenu,
   StorefrontInfo,
 } from './types'
-import type { ProductWithStock } from '../../db/types'
-
-const API_BASE = '/api'
+import type { ProductWithStock, Promotion } from '../../db/types'
+import { apiUrl } from '../apiUrl'
+import { parseApiResponse } from '../parseApiResponse'
 
 async function parseJson<T>(res: Response): Promise<T> {
-  const data = (await res.json()) as T & { error?: string }
-  if (!res.ok) {
-    throw new Error(
-      typeof data.error === 'string' ? data.error : `Erreur HTTP ${res.status}`,
-    )
-  }
-  return data
+  return parseApiResponse<T>(res)
 }
 
 export async function fetchStorefrontInfo(storeCode: string): Promise<StorefrontInfo> {
   const res = await fetch(
-    `${API_BASE}/billing/storefront/${encodeURIComponent(storeCode)}`,
+    apiUrl(`/billing/storefront/${encodeURIComponent(storeCode)}`),
   )
   return parseJson(res)
 }
@@ -28,7 +22,7 @@ export async function fetchStorefrontMenu(
   storeCode: string,
 ): Promise<PublishedStorefrontMenu & { name: string; storeCode: string }> {
   const res = await fetch(
-    `${API_BASE}/billing/storefront/${encodeURIComponent(storeCode)}/menu`,
+    apiUrl(`/billing/storefront/${encodeURIComponent(storeCode)}/menu`),
   )
   const data = await parseJson<{
     name: string
@@ -56,7 +50,7 @@ export async function submitPublicStorefrontOrder(
   provider?: 'wave'
 }> {
   const res = await fetch(
-    `${API_BASE}/billing/storefront/${encodeURIComponent(storeCode)}/orders`,
+    apiUrl(`/billing/storefront/${encodeURIComponent(storeCode)}/orders`),
     {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -71,7 +65,9 @@ export async function verifyStorefrontOrderPayment(
   orderId: string,
 ): Promise<{ status: 'paid' | 'pending' | 'failed' | 'unknown'; orderId: string }> {
   const res = await fetch(
-    `${API_BASE}/billing/storefront/${encodeURIComponent(storeCode)}/orders/${encodeURIComponent(orderId)}/payment-status`,
+    apiUrl(
+      `/billing/storefront/${encodeURIComponent(storeCode)}/orders/${encodeURIComponent(orderId)}/payment-status`,
+    ),
   )
   return parseJson(res)
 }
@@ -82,9 +78,10 @@ export async function publishStorefrontMenu(
     storeId: string
     storeName: string
     products: ProductWithStock[]
+    promotions: Promotion[]
   },
 ): Promise<{ storefrontUrl: string; productCount: number; publishedAt: string }> {
-  const res = await fetch(`${API_BASE}/billing/storefront/publish`, {
+  const res = await fetch(apiUrl('/billing/storefront/publish'), {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -105,6 +102,21 @@ export async function publishStorefrontMenu(
         barcode: p.barcode,
         lowStockThreshold: p.lowStockThreshold,
       })),
+      promotions: input.promotions.map((promotion) => ({
+        id: promotion.id,
+        code: promotion.code,
+        label: promotion.label,
+        discountPct: promotion.discountPct,
+        active: promotion.active,
+        startAt: promotion.startAt,
+        endAt: promotion.endAt,
+        minCartTTC: promotion.minCartTTC,
+        maxUsage: promotion.maxUsage,
+        usageCount: promotion.usageCount,
+        storeId: promotion.storeId,
+        createdAt: promotion.createdAt,
+        updatedAt: promotion.updatedAt,
+      })),
     }),
   })
   return parseJson(res)
@@ -115,7 +127,7 @@ export async function fetchStorefrontInbox(
   status = 'pending',
 ): Promise<{ orders: Array<Record<string, unknown> & { id: string; createdAt: number; status: string }> }> {
   const q = new URLSearchParams({ status })
-  const res = await fetch(`${API_BASE}/billing/storefront/orders/inbox?${q}`, {
+  const res = await fetch(apiUrl(`/billing/storefront/orders/inbox?${q}`), {
     headers: { 'x-license-key': licenseKey },
   })
   return parseJson(res)
@@ -127,7 +139,7 @@ export async function patchStorefrontOrderStatus(
   status: string,
 ): Promise<void> {
   const res = await fetch(
-    `${API_BASE}/billing/storefront/orders/${encodeURIComponent(externalId)}`,
+    apiUrl(`/billing/storefront/orders/${encodeURIComponent(externalId)}`),
     {
       method: 'PATCH',
       headers: {

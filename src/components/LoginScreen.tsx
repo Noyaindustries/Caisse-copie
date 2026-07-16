@@ -1,7 +1,7 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { profileSecretMatches } from '../auth/permissions'
 import {
-  listStaffProfiles,
+  listActiveStaffProfiles,
   roleLabel,
   subscribeStaffProfiles,
 } from '../auth/profiles'
@@ -11,26 +11,34 @@ import { useLiveQuery } from 'dexie-react-hooks'
 import { BRAND_NAME } from '../brand'
 import { BrandLogo } from './BrandLogo'
 import { Button } from '../ui/Button'
+import { EmptyState } from '../ui/EmptyState'
 import { Field, Input } from '../ui/Input'
-import { IconArrowLeft, IconArrowRight, IconShield } from '../ui/icons'
+import { IconArrowLeft, IconArrowRight, IconEye, IconEyeOff, IconShield } from '../ui/icons'
 
 type Props = {
   onSuccess: (profile: StaffProfile, authMethod: StaffAuthMethod) => void
 }
 
+const MAX_FAILED_ATTEMPTS = 5
+const LOCKOUT_MS = 30_000
+
 export function LoginScreen({ onSuccess }: Props) {
   const [profiles, setProfiles] = useState<StaffProfile[]>(() =>
-    listStaffProfiles(),
+    listActiveStaffProfiles(),
   )
   const [selected, setSelected] = useState<StaffProfile | null>(null)
   const [secret, setSecret] = useState('')
+  const [showSecret, setShowSecret] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [failedAttempts, setFailedAttempts] = useState(0)
+  const [lockedUntil, setLockedUntil] = useState(0)
+  const [now, setNow] = useState(() => Date.now())
   const stores = useLiveQuery(() => db.stores.orderBy('sortOrder').toArray(), [], []) ?? []
   const storeNameById = new Map(stores.map((store) => [store.id, store.name]))
 
   useEffect(() => {
     return subscribeStaffProfiles(() => {
-      const next = listStaffProfiles()
+      const next = listActiveStaffProfiles()
       setProfiles(next)
       setSelected((prev) =>
         prev ? next.find((p) => p.id === prev.id) ?? null : prev,
@@ -38,26 +46,55 @@ export function LoginScreen({ onSuccess }: Props) {
     })
   }, [])
 
+  useEffect(() => {
+    if (lockedUntil <= Date.now()) return
+    const t = window.setInterval(() => setNow(Date.now()), 500)
+    return () => window.clearInterval(t)
+  }, [lockedUntil])
+
+  const lockRemainingSec = useMemo(() => {
+    if (lockedUntil <= now) return 0
+    return Math.ceil((lockedUntil - now) / 1000)
+  }, [lockedUntil, now])
+
   const handleSelect = (p: StaffProfile) => {
     setSelected(p)
     setSecret('')
     setError(null)
+    setShowSecret(false)
   }
 
   const handleBack = () => {
     setSelected(null)
     setSecret('')
     setError(null)
+    setShowSecret(false)
   }
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
     if (!selected) return
-    const s = secret.trim()
-    if (!profileSecretMatches(selected, s)) {
-      setError('PIN ou mot de passe incorrect')
+    if (lockRemainingSec > 0) {
+      setError(`Trop d’essais. Réessayez dans ${lockRemainingSec}s.`)
       return
     }
+    const s = secret.trim()
+    if (!profileSecretMatches(selected, s)) {
+      const nextFails = failedAttempts + 1
+      setFailedAttempts(nextFails)
+      if (nextFails >= MAX_FAILED_ATTEMPTS) {
+        setLockedUntil(Date.now() + LOCKOUT_MS)
+        setFailedAttempts(0)
+        setError(`Trop d’essais. Compte verrouillé 30 secondes.`)
+      } else {
+        setError(
+          `PIN ou mot de passe incorrect (${MAX_FAILED_ATTEMPTS - nextFails} essai(s) restant(s))`,
+        )
+      }
+      return
+    }
+    setFailedAttempts(0)
+    setLockedUntil(0)
     const authMethod: StaffAuthMethod =
       selected.password !== undefined && s === selected.password
         ? 'password'
@@ -67,7 +104,6 @@ export function LoginScreen({ onSuccess }: Props) {
 
   return (
     <div className="grid min-h-svh grid-cols-1 lg:grid-cols-2">
-      {/* Left visual */}
       <div className="relative hidden overflow-hidden bg-zinc-900 lg:block">
         <div className="absolute inset-0 opacity-[0.06]">
           <div className="absolute -left-1/4 top-1/4 h-[600px] w-[600px] rounded-full bg-emerald-400 blur-3xl" />
@@ -98,8 +134,8 @@ export function LoginScreen({ onSuccess }: Props) {
         </div>
       </div>
 
-      {/* Right form */}
-      <div className="flex min-h-svh items-center justify-center bg-zinc-50 p-6">
+      <div className="min-h-svh overflow-y-auto overscroll-y-contain bg-zinc-50">
+      <div className="flex min-h-svh items-center justify-center p-6">
         <div className="w-full max-w-md">
           <div className="mb-6">
             <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-3 py-1 text-[11px] font-semibold text-emerald-700">
@@ -118,29 +154,37 @@ export function LoginScreen({ onSuccess }: Props) {
 
           {!selected ? (
             <div className="space-y-2">
-              {profiles.map((p) => (
-                <button
-                  key={p.id}
-                  type="button"
-                  onClick={() => handleSelect(p)}
-                  className="ui-card-hover group flex w-full items-center gap-3 rounded-xl border border-zinc-200 bg-white p-3 text-left"
-                >
-                  <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-zinc-100 text-[12px] font-bold text-zinc-700 group-hover:bg-zinc-900 group-hover:text-white">
-                    {p.initials}
-                  </span>
-                  <span className="min-w-0 flex-1">
-                    <span className="block truncate text-[14px] font-semibold text-zinc-900">
-                      {p.displayName}
+              {profiles.length === 0 ? (
+                <EmptyState
+                  title="Aucun profil actif"
+                  description="Demandez à un administrateur de créer un utilisateur dans Personnel."
+                />
+              ) : (
+                profiles.map((p) => (
+                  <button
+                    key={p.id}
+                    type="button"
+                    onClick={() => handleSelect(p)}
+                    className="ui-card-hover group flex w-full items-center gap-3 rounded-xl border border-zinc-200 bg-white p-3 text-left"
+                  >
+                    <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-zinc-100 text-[12px] font-bold text-zinc-700 group-hover:bg-zinc-900 group-hover:text-white">
+                      {p.initials}
                     </span>
-                    <span className="text-[11px] text-zinc-500">
-                      {roleLabel(p.role)}
-                      {p.storeId ? ` · ${storeNameById.get(p.storeId) ?? p.storeId}` : ''}
+                    <span className="min-w-0 flex-1">
+                      <span className="block truncate text-[14px] font-semibold text-zinc-900">
+                        {p.displayName}
+                      </span>
+                      <span className="text-[11px] text-zinc-500">
+                        {roleLabel(p.role)}
+                        {p.storeId
+                          ? ` · ${storeNameById.get(p.storeId) ?? p.storeId}`
+                          : ''}
+                      </span>
                     </span>
-                  </span>
-                  <IconArrowRight className="h-4 w-4 text-zinc-400 transition group-hover:translate-x-0.5 group-hover:text-zinc-900" />
-                </button>
-              ))}
-
+                    <IconArrowRight className="h-4 w-4 text-zinc-400 transition group-hover:translate-x-0.5 group-hover:text-zinc-900" />
+                  </button>
+                ))
+              )}
             </div>
           ) : (
             <form
@@ -176,27 +220,51 @@ export function LoginScreen({ onSuccess }: Props) {
                 error={error ?? undefined}
                 required
               >
-                <Input
-                  type="password"
-                  autoComplete="current-password"
-                  value={secret}
-                  onChange={(e) => {
-                    setSecret(e.target.value)
-                    setError(null)
-                  }}
-                  placeholder="••••"
-                  autoFocus
-                  className="font-mono-nums text-base tracking-wider"
-                  invalid={!!error}
-                />
+                <div className="flex items-center gap-2">
+                  <Input
+                    type={showSecret ? 'text' : 'password'}
+                    autoComplete="current-password"
+                    inputMode="numeric"
+                    value={secret}
+                    onChange={(e) => {
+                      setSecret(e.target.value)
+                      setError(null)
+                    }}
+                    placeholder="••••"
+                    autoFocus
+                    disabled={lockRemainingSec > 0}
+                    className="font-mono-nums text-base tracking-wider"
+                    invalid={!!error}
+                  />
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="ghost"
+                    aria-label={
+                      showSecret ? 'Masquer le secret' : 'Afficher le secret'
+                    }
+                    onClick={() => setShowSecret((v) => !v)}
+                  >
+                    {showSecret ? <IconEyeOff /> : <IconEye />}
+                  </Button>
+                </div>
               </Field>
 
-              <Button type="submit" variant="primary" fullWidth size="lg">
-                Ouvrir l’espace gestion
+              <Button
+                type="submit"
+                variant="primary"
+                fullWidth
+                size="lg"
+                disabled={lockRemainingSec > 0}
+              >
+                {lockRemainingSec > 0
+                  ? `Réessayer dans ${lockRemainingSec}s`
+                  : 'Ouvrir l’espace gestion'}
               </Button>
             </form>
           )}
         </div>
+      </div>
       </div>
     </div>
   )

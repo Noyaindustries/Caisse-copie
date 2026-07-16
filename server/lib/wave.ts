@@ -41,6 +41,7 @@ export function waveApiKeyConfigured(): boolean {
 }
 
 export function waveDemoMode(): boolean {
+  if (process.env.NODE_ENV === 'production') return false
   return process.env.WAVE_DEMO_MODE === 'true' || process.env.WAVE_DEMO_MODE === '1'
 }
 

@@ -9,6 +9,7 @@ import {
 } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { effectivePermissions } from './auth/permissions'
+import { cn } from './ui/cn'
 import { clearStaffSession } from './auth/session'
 import type { StaffProfile } from './auth/types'
 import { AddProductModal } from './components/AddProductModal'
@@ -207,13 +208,7 @@ export function Shell({ staff, online, onLogout }: Props) {
 
   const perms = useMemo(() => effectivePermissions(staff), [staff])
   const navSections = useMemo(() => {
-    const roleSections =
-      staff.role === 'admin'
-        ? navSectionsForRole(staff.role)
-        : navSectionsForRole(staff.role).map((section) => ({
-            ...section,
-            items: section.items.filter((item) => item.id !== 'subscription'),
-          }))
+    const roleSections = navSectionsForRole(staff.role)
     const planFiltered = filterNavSections(roleSections, canAccessView)
     if (perms.canConfigureAppSettings) return planFiltered
     return planFiltered
@@ -281,6 +276,7 @@ export function Shell({ staff, online, onLogout }: Props) {
   const [checkoutBusy, setCheckoutBusy] = useState(false)
   const [activeView, setActiveView] = useState<NavViewId>('caisse')
   const [isFloatingCartOpen, setIsFloatingCartOpen] = useState(false)
+  const [mobileCartPulse, setMobileCartPulse] = useState(false)
   const [receiptOpen, setReceiptOpen] = useState<
     | { type: 'sale'; sale: Sale; autoPrint: boolean }
     | { type: 'onlineOrder'; order: OnlineOrder; autoPrint: boolean }
@@ -505,11 +501,20 @@ export function Shell({ staff, online, onLogout }: Props) {
 
   useEffect(() => {
     const prev = prevCartItemCountRef.current
+    if (cartItemCount > prev) {
+      setMobileCartPulse(true)
+    }
     if (prev > 0 && cartItemCount === 0 && isFloatingCartOpen) {
       setIsFloatingCartOpen(false)
     }
     prevCartItemCountRef.current = cartItemCount
   }, [cartItemCount, isFloatingCartOpen])
+
+  useEffect(() => {
+    if (!mobileCartPulse) return
+    const pulseTimer = window.setTimeout(() => setMobileCartPulse(false), 520)
+    return () => window.clearTimeout(pulseTimer)
+  }, [mobileCartPulse])
 
   const cartTotalTTC = useMemo(
     () => Math.round(totalsFromLinesTTC(cart, discountPct).totalTTC),
@@ -1165,7 +1170,12 @@ export function Shell({ staff, online, onLogout }: Props) {
 
           await db.syncQueue.add({
             kind: 'sale',
-            payload: JSON.stringify({ saleId }),
+            payload: JSON.stringify({
+              type: 'sale_created',
+              schemaVersion: 1,
+              saleId,
+              sale: saleRecord,
+            }),
             createdAt: Date.now(),
           })
         },
@@ -1249,7 +1259,7 @@ export function Shell({ staff, online, onLogout }: Props) {
   const canAddProductFromCaisse =
     staff.role !== 'caissier' && perms.canManageCatalogFull
   const cartHideClass = 'lg:hidden'
-  const cartDesktopClass = 'hidden lg:flex'
+  const cartDesktopClass = 'hidden h-full min-h-0 lg:flex lg:flex-col'
   const densityTabs = useMemo(
     () => [
       { id: 'compact' as const, label: 'Compact' },
@@ -1259,7 +1269,7 @@ export function Shell({ staff, online, onLogout }: Props) {
   )
 
   return (
-    <div className="flex min-h-svh w-full max-w-full flex-col overflow-x-clip bg-zinc-50">
+    <div className="flex h-svh max-h-svh w-full max-w-full flex-col overflow-hidden bg-zinc-50">
       <SubscriptionBanner onOpenSubscription={() => setActiveView('subscription')} />
       <div className="flex min-h-0 flex-1">
       {receiptOpen ? (
@@ -1300,6 +1310,11 @@ export function Shell({ staff, online, onLogout }: Props) {
           role: staff.role,
         }}
         onLogout={handleLogoutClick}
+        onOpenSubscription={
+          staff.role === 'admin' || staff.role === 'gerant'
+            ? () => handleSelectView('subscription')
+            : undefined
+        }
         collapsed={sidebarCollapsed}
         onToggleCollapsed={() => setSidebarCollapsed((v) => !v)}
       />
@@ -1323,9 +1338,17 @@ export function Shell({ staff, online, onLogout }: Props) {
           role: staff.role,
         }}
         onLogout={handleLogoutClick}
+        onOpenSubscription={
+          staff.role === 'admin' || staff.role === 'gerant'
+            ? () => {
+                handleSelectView('subscription')
+                setMobileNavOpen(false)
+              }
+            : undefined
+        }
       />
 
-      <div className="flex min-w-0 flex-1 flex-col">
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col">
         <Topbar
           view={activeView}
           online={online}
@@ -1334,35 +1357,47 @@ export function Shell({ staff, online, onLogout }: Props) {
           onSyncNow={handleSyncNow}
           onOpenMobileMenu={() => setMobileNavOpen(true)}
           rightSlot={
-            isCaisse ? (
-              <>
-                <Tabs
-                  variant="segmented"
-                  items={densityTabs}
-                  active={productGridDensity}
-                  onChange={setProductGridDensity}
+            <>
+              {staff.role === 'admin' || staff.role === 'gerant' ? (
+                <Button
+                  size="sm"
+                  variant="secondary"
                   className="hidden sm:inline-flex"
-                />
-                <Select
-                  value={productGridDensity}
-                  onChange={(e) =>
-                    setProductGridDensity(e.target.value as ProductGridDensity)
-                  }
-                  className="h-9 w-[7.5rem] shrink-0 text-[12px] sm:hidden"
-                  aria-label="Densité grille produits"
+                  onClick={() => handleSelectView('subscription')}
                 >
-                  <option value="compact">Compact</option>
-                  <option value="confort">Confort</option>
-                </Select>
-              </>
-            ) : null
+                  Mon abonnement
+                </Button>
+              ) : null}
+              {isCaisse ? (
+                <>
+                  <Tabs
+                    variant="segmented"
+                    items={densityTabs}
+                    active={productGridDensity}
+                    onChange={setProductGridDensity}
+                    className="hidden sm:inline-flex"
+                  />
+                  <Select
+                    value={productGridDensity}
+                    onChange={(e) =>
+                      setProductGridDensity(e.target.value as ProductGridDensity)
+                    }
+                    className="h-9 w-[7.5rem] shrink-0 text-[12px] sm:hidden"
+                    aria-label="Densité grille produits"
+                  >
+                    <option value="compact">Compact</option>
+                    <option value="confort">Confort</option>
+                  </Select>
+                </>
+              ) : null}
+            </>
           }
         />
         {!online ? <OfflineBanner /> : null}
 
         {isCaisse ? (
-          <div className="flex min-w-0 flex-1 flex-col lg:flex-row">
-            <main className="caisse-main ui-scroll min-w-0 flex-1 overflow-y-auto app-main-pad pb-safe-caisse pt-3 sm:px-4 sm:pt-4 lg:pb-6 xl:px-6 xl:pt-5">
+          <div className="flex min-h-0 min-w-0 flex-1 flex-col lg:flex-row">
+            <main className="caisse-main ui-scroll min-h-0 min-w-0 flex-1 overflow-y-auto overscroll-y-contain app-main-pad pb-safe-caisse pt-3 sm:px-4 sm:pt-4 lg:pb-6 xl:px-6 xl:pt-5">
               <CaisseHeader
                 ref={barcodeFieldRef}
                 sessionId={SESSION_ID}
@@ -1388,7 +1423,7 @@ export function Shell({ staff, online, onLogout }: Props) {
                   role="alert"
                 >
                   <span className="inline-flex items-center gap-2">
-                    <IconShield className="h-4 w-4" />
+                    <IconShield className="h-4 w-4 text-rose-600" />
                     <span>
                       <strong>{ruptureCount}</strong> article
                       {ruptureCount > 1 ? 's' : ''} en{' '}
@@ -1419,7 +1454,7 @@ export function Shell({ staff, online, onLogout }: Props) {
                 density={productGridDensity}
               />
             </main>
-            <div className={cartDesktopClass}>
+            <div className={`${cartDesktopClass} min-h-0 min-w-0`}>
               <CartPanel
                 lines={cart}
                 products={displayProducts}
@@ -1456,12 +1491,13 @@ export function Shell({ staff, online, onLogout }: Props) {
                 onCancelTransaction={handleCancelCartTransaction}
                 onCheckout={handleCheckout}
                 checkoutBusy={checkoutBusy}
+                countBadgeRef={sidebarCartCountRef}
                 dayClosed={!!dayClosureToday?.closedAt}
               />
             </div>
           </div>
         ) : (
-          <div className="ui-scroll app-main-pad flex-1 overflow-y-auto pb-safe pt-3 sm:pt-4">
+          <div className="ui-scroll app-main-pad min-h-0 flex-1 overflow-y-auto overscroll-y-contain pb-safe pt-3 sm:pt-4">
             <div className="mx-auto w-full max-w-[1680px] px-1 sm:px-2 lg:px-4">
             <Suspense
               fallback={
@@ -1635,27 +1671,49 @@ export function Shell({ staff, online, onLogout }: Props) {
               <button
                 type="button"
                 onClick={() => setIsFloatingCartOpen(true)}
-                className={`fixed z-30 flex items-center justify-between gap-3 rounded-2xl px-4 py-3.5 text-left text-ink backdrop-blur-md transition hover:brightness-[1.02] caisse-mobile-cart ${cartHideClass}`}
+                className={cn(
+                  'caisse-mobile-cart fixed z-30 flex items-center gap-3 rounded-2xl px-3 py-3 text-left text-ink backdrop-blur-md transition hover:brightness-[1.02] sm:px-4 sm:py-3.5',
+                  mobileCartPulse && 'caisse-mobile-cart--pulse',
+                  cartHideClass,
+                )}
+                aria-label={`Ouvrir le panier, ${cartItemCount} article${cartItemCount > 1 ? 's' : ''}, ${formatFCFA(payableTotalTTC)}`}
               >
-                <span className="flex items-center gap-3">
-                  <span className="relative flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl border border-[rgba(184,146,46,0.22)] bg-[#f7f0e3] text-[#b8922e]">
-                    <IconReceipt className="h-4 w-4" />
-                    <span className="absolute -right-1 -top-1 flex h-5 min-w-5 items-center justify-center rounded-full border-2 border-[#fffefb] bg-[#b8922e] px-1 text-[10px] font-bold text-white">
-                      {cartItemCount}
-                    </span>
-                  </span>
-                  <span className="flex flex-col">
-                    <span className="text-[11px] uppercase tracking-wider text-ink-subtle">
-                      Panier
-                    </span>
-                    <span className="font-mono-nums text-[15px] font-bold">
-                      {formatFCFA(cartTotalTTC)}
-                    </span>
+                <span className="relative flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border border-[rgba(184,146,46,0.22)] bg-caisse-gold-soft text-caisse-gold">
+                  <IconReceipt className="h-4 w-4 text-amber-600" />
+                  <span
+                    ref={mobileFabBadgeRef}
+                    className={cn(
+                      'absolute -right-1 -top-1 flex h-5 min-w-5 items-center justify-center rounded-full border-2 border-[#fffefb] bg-caisse-gold px-1 text-[10px] font-bold text-white',
+                      mobileCartPulse && 'caisse-mobile-cart-badge--pulse',
+                    )}
+                  >
+                    {cartItemCount}
                   </span>
                 </span>
-                <span className="caisse-mobile-cart-cta inline-flex items-center gap-1.5 rounded-full px-3.5 py-2 text-[12px] font-semibold shadow-sm">
-                  Encaisser
-                  <IconArrowRight className="h-3.5 w-3.5" />
+                <span className="min-w-0 flex-1">
+                  <span className="flex items-center gap-2">
+                    <span className="text-[11px] font-semibold uppercase tracking-wider text-ink-subtle">
+                      Panier
+                    </span>
+                    <span className="rounded-full bg-white/80 px-1.5 py-px font-mono-nums text-[10px] text-caisse-muted">
+                      {cartItemCount} art.
+                    </span>
+                  </span>
+                  <span className="mt-0.5 flex flex-wrap items-baseline gap-x-2 gap-y-0">
+                    <span className="caisse-total-display font-mono-nums text-[16px] leading-none">
+                      {formatFCFA(payableTotalTTC)}
+                    </span>
+                    {payableTotalTTC < cartTotalTTC ? (
+                      <span className="font-mono-nums text-[11px] text-zinc-400 line-through">
+                        {formatFCFA(cartTotalTTC)}
+                      </span>
+                    ) : null}
+                  </span>
+                </span>
+                <span className="caisse-mobile-cart-cta inline-flex shrink-0 items-center gap-1 rounded-full px-3 py-2 text-[11px] font-semibold shadow-sm sm:gap-1.5 sm:px-3.5 sm:text-[12px]">
+                  <span className="sm:hidden">Voir</span>
+                  <span className="hidden sm:inline">Voir le panier</span>
+                  <IconArrowRight className="h-3.5 w-3.5 text-amber-600" />
                 </span>
               </button>
             ) : null}
@@ -1663,12 +1721,13 @@ export function Shell({ staff, online, onLogout }: Props) {
             {/* FAB minimal quand panier vide */}
             {!isFloatingCartOpen && cartItemCount === 0 ? (
               <button
+                ref={mobileFabEmptyRef}
                 type="button"
                 onClick={() => setIsFloatingCartOpen(true)}
-                className={`fixed-safe-bottom fixed right-3 z-30 flex h-12 w-12 items-center justify-center rounded-2xl border border-[rgba(184,146,46,0.28)] bg-[linear-gradient(145deg,#fffefb,#f7f0e3)] text-[#b8922e] shadow-(--shadow-caisse-pop) transition hover:brightness-[1.03] ${cartHideClass}`}
+                className={`fixed-safe-bottom fixed right-3 z-30 flex h-12 w-12 items-center justify-center rounded-2xl border border-[rgba(184,146,46,0.28)] bg-[linear-gradient(145deg,#fffefb,#f7f0e3)] text-caisse-gold shadow-(--shadow-caisse-pop) transition hover:brightness-[1.03] ${cartHideClass}`}
                 aria-label="Ouvrir le panier"
               >
-                <IconReceipt className="h-5 w-5" />
+                <IconReceipt className="h-5 w-5 text-amber-600" />
               </button>
             ) : null}
 
@@ -1687,7 +1746,7 @@ export function Shell({ staff, online, onLogout }: Props) {
                   onClick={() => setIsFloatingCartOpen(false)}
                 />
                 <div className="absolute inset-y-0 right-0 w-full animate-ui-slide-up sm:w-[min(420px,92vw)]">
-                  <div className="flex h-full flex-col border-l border-[rgba(184,146,46,0.2)] bg-[#fffefb] shadow-(--shadow-overlay)">
+                  <div className="flex min-h-0 h-full flex-col border-l border-[rgba(184,146,46,0.2)] bg-[#fffefb] shadow-(--shadow-overlay)">
                     <CartPanel
                       lines={cart}
                       products={displayProducts}
@@ -1725,6 +1784,7 @@ export function Shell({ staff, online, onLogout }: Props) {
                       onCheckout={handleCheckout}
                       checkoutBusy={checkoutBusy}
                       onClose={() => setIsFloatingCartOpen(false)}
+                      countBadgeRef={drawerCartCountRef}
                       dayClosed={!!dayClosureToday?.closedAt}
                     />
                   </div>

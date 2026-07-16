@@ -10,9 +10,7 @@ export const uploadsRouter = Router()
 
 function readLicenseKey(req: Request): string | null {
   const header = req.get('x-license-key')?.trim()
-  if (header) return header
-  const query = typeof req.query.licenseKey === 'string' ? req.query.licenseKey.trim() : ''
-  return query || null
+  return header || null
 }
 
 const productImageSchema = z.object({

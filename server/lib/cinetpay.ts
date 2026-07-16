@@ -27,6 +27,7 @@ export function cinetpayConfigured(): boolean {
 }
 
 export function cinetpayDemoMode(): boolean {
+  if (process.env.NODE_ENV === 'production') return false
   return process.env.CINETPAY_DEMO_MODE === 'true' || process.env.CINETPAY_DEMO_MODE === '1'
 }
 

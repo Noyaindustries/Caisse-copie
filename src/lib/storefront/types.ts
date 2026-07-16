@@ -1,10 +1,11 @@
-import type { ProductWithStock, PaymentMethod } from '../../db/types'
+import type { ProductWithStock, PaymentMethod, Promotion } from '../../db/types'
 
 export type PublishedStorefrontMenu = {
   storeId: string
   storeName: string
   publishedAt: string
   products: ProductWithStock[]
+  promotions: Promotion[]
 }
 
 export type StorefrontInfo = {

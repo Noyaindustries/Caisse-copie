@@ -1,4 +1,6 @@
 import type { ReactNode } from 'react'
+import { useRef } from 'react'
+import { useHorizontalWheelScroll } from '../hooks/useHorizontalWheelScroll'
 import { cn } from './cn'
 
 export type TabItem<T extends string> = {
@@ -14,6 +16,8 @@ type Props<T extends string> = {
   onChange: (id: T) => void
   className?: string
   variant?: 'underline' | 'segmented'
+  /** Segmented : remplir la largeur (panier) ou défilement horizontal (défaut). */
+  segmentedLayout?: 'scroll' | 'fill'
 }
 
 export function Tabs<T extends string>({
@@ -22,13 +26,19 @@ export function Tabs<T extends string>({
   onChange,
   className,
   variant = 'underline',
+  segmentedLayout = 'scroll',
 }: Props<T>) {
+  const scrollRef = useRef<HTMLDivElement>(null)
+  useHorizontalWheelScroll(scrollRef)
+
   if (variant === 'segmented') {
+    const fill = segmentedLayout === 'fill'
     return (
-      <div className={cn('tabs-scroll-x', className)}>
+      <div ref={scrollRef} className={cn(!fill && 'tabs-scroll-x', className)}>
         <div
           className={cn(
-            'inline-flex min-w-max items-center gap-0.5 rounded-lg border border-border bg-surface-sunken/70 p-0.5',
+            'items-center gap-0.5 rounded-lg border border-border bg-surface-sunken/70 p-0.5',
+            fill ? 'flex w-full' : 'inline-flex min-w-max',
           )}
         >
         {items.map((it) => {
@@ -39,7 +49,8 @@ export function Tabs<T extends string>({
               type="button"
               onClick={() => onChange(it.id)}
               className={cn(
-                'inline-flex items-center gap-2 rounded-md px-3 py-1.5 text-[12px] font-semibold transition',
+                'inline-flex items-center justify-center gap-1.5 rounded-md font-semibold transition',
+                fill ? 'min-w-0 flex-1 px-2 py-1.5 text-[11px]' : 'gap-2 px-3 py-1.5 text-[12px]',
                 on
                   ? 'bg-white text-ink shadow-[0_8px_20px_-16px_rgba(23,32,51,0.55)]'
                   : 'text-ink-subtle hover:text-ink',
@@ -69,7 +80,7 @@ export function Tabs<T extends string>({
   }
 
   return (
-    <div className={cn('tabs-scroll-x', className)}>
+    <div ref={scrollRef} className={cn('tabs-scroll-x', className)}>
       <div className="flex min-w-max items-center gap-0.5 border-b border-border">
       {items.map((it) => {
         const on = it.id === active

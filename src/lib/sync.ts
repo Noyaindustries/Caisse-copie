@@ -1,5 +1,6 @@
 import { db } from '../db/db'
 import type { SyncQueueItem } from '../db/types'
+import { getOrganizationCredentials } from './subscription/store'
 import { setLastSyncTimestamp } from './syncMeta'
 
 export type SyncResult = {
@@ -55,7 +56,7 @@ export async function enqueueStockSync(payload: {
 
 /**
  * Synchronise la file vers le cloud si `VITE_CLOUD_SYNC_URL` est défini et que le réseau répond.
- * Sinon : simulation locale (latence courte) pour la démo hors backend.
+ * La file n'est supprimée qu'après accusé de réception du serveur.
  */
 export async function flushSyncQueue(): Promise<SyncResult> {
   const pending = await db.syncQueue.orderBy('createdAt').toArray()
@@ -69,10 +70,11 @@ export async function flushSyncQueue(): Promise<SyncResult> {
     .filter(Boolean) as string[]
 
   const cloudUrl = import.meta.env.VITE_CLOUD_SYNC_URL?.trim()
+  const credentials = getOrganizationCredentials()
 
   const runtimeOnline = typeof navigator === 'undefined' ? true : navigator.onLine
 
-  if (cloudUrl && runtimeOnline) {
+  if (cloudUrl && runtimeOnline && credentials?.licenseKey) {
     try {
       const body = JSON.stringify({
         batchId: crypto.randomUUID(),
@@ -88,6 +90,7 @@ export async function flushSyncQueue(): Promise<SyncResult> {
         headers: {
           'Content-Type': 'application/json',
           Accept: 'application/json',
+          'x-license-key': credentials.licenseKey,
         },
         body,
         signal: ctrl.signal,
@@ -118,19 +121,12 @@ export async function flushSyncQueue(): Promise<SyncResult> {
     }
   }
 
-  /* Mode hors backend (ou hors ligne) : file vidée localement (démo) */
-  let done = 0
-  for (const item of pending) {
-    await new Promise((r) => setTimeout(r, 100))
-    if (item.id != null) await db.syncQueue.delete(item.id)
-    done += 1
-  }
-
-  for (const sid of saleIds) {
-    await db.sales.update(sid, { synced: true })
-  }
-  setLastSyncTimestamp(Date.now())
-  return { processed: done, mode: 'local' }
+  const reason = !cloudUrl
+    ? 'Synchronisation cloud non configurée : données conservées localement.'
+    : !credentials?.licenseKey
+      ? 'Licence absente : données conservées localement.'
+      : 'Connexion indisponible : données conservées pour la prochaine synchronisation.'
+  return { processed: 0, mode: 'failed', error: reason }
 }
 
 export async function pendingSyncCount(): Promise<number> {

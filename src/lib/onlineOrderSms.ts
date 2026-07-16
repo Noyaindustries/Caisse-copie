@@ -1,4 +1,5 @@
 import type { OnlineOrder } from '../db/types'
+import { apiUrl } from './apiUrl'
 
 type SmsSendResult =
   | { ok: true; mode: 'webhook' | 'demo' }
@@ -25,10 +26,7 @@ export async function sendOrderApprovedSms(
   }
   const message = buildApprovalMessage(order)
   const explicitEndpoint = import.meta.env.VITE_SMS_WEBHOOK_URL?.trim()
-  const apiBase = import.meta.env.VITE_API_BASE_URL?.trim()
-  const endpoint =
-    explicitEndpoint ||
-    (apiBase ? `${apiBase.replace(/\/$/, '')}/api/webhooks/sms` : '/api/webhooks/sms')
+  const endpoint = explicitEndpoint || apiUrl('/webhooks/sms')
 
   try {
     const res = await fetch(endpoint, {

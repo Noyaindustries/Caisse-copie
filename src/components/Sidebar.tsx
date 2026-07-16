@@ -86,6 +86,8 @@ type CommonProps = {
     role: UserRole
   }
   onLogout: () => void
+  /** Propriétaire (admin / gérant) : ouvrir la page abonnement. */
+  onOpenSubscription?: () => void
   navSections?: readonly NavSection[]
 }
 
@@ -111,6 +113,7 @@ function SidebarBody({
   canSwitchStore,
   user,
   onLogout,
+  onOpenSubscription,
   navSections,
   collapsed,
   onToggleCollapsed,
@@ -124,6 +127,8 @@ function SidebarBody({
   const activeStore = stores.find((s) => s.id === activeStoreId)
   const [storeMenuOpen, setStoreMenuOpen] = useState(false)
   const isMobile = variant === 'mobile'
+  const canManageSubscription =
+    user.role === 'admin' || user.role === 'gerant'
 
   return (
     <>
@@ -182,7 +187,7 @@ function SidebarBody({
                       collapsed && 'justify-center px-0',
                       isActive
                         ? 'bg-zinc-100 font-semibold text-zinc-900'
-                        : 'text-zinc-600 hover:bg-zinc-50 hover:text-zinc-900',
+                        : 'cursor-pointer text-zinc-600 hover:bg-zinc-50 hover:text-zinc-900',
                     )}
                   >
                     {isActive ? (
@@ -262,12 +267,12 @@ function SidebarBody({
                   : 'cursor-default opacity-90',
               )}
             >
-              <IconStore className="h-3.5 w-3.5 shrink-0 text-zinc-400" />
+              <IconStore className="h-3.5 w-3.5 shrink-0 text-emerald-600" />
               <span className="min-w-0 flex-1 truncate font-medium text-zinc-800">
                 {activeStore?.name ?? '—'}
               </span>
               {canSwitchStore && stores.length > 1 ? (
-                <IconChevronDown className="h-3 w-3 shrink-0 text-zinc-400" />
+                <IconChevronDown className="h-3 w-3 shrink-0 text-emerald-500" />
               ) : null}
             </button>
             {storeMenuOpen && canSwitchStore ? (
@@ -297,37 +302,63 @@ function SidebarBody({
         ) : null}
 
         {/* User block */}
-        <div
-          className={cn(
-            'flex items-center gap-2 rounded-md p-2',
-            collapsed ? 'justify-center' : 'bg-zinc-50',
-          )}
-        >
-          <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-zinc-900 text-[10px] font-bold text-white">
-            {user.initials}
-          </span>
-          {!collapsed ? (
-            <div className="min-w-0 flex-1">
-              <p className="truncate text-[12px] font-semibold text-zinc-900">
-                {user.displayName}
-              </p>
-              <p className="truncate text-[10px] text-zinc-500">
-                {roleLabel(user.role)}
-              </p>
-            </div>
+        <div className="space-y-1.5">
+          {canManageSubscription && onOpenSubscription && !collapsed ? (
+            <button
+              type="button"
+              onClick={onOpenSubscription}
+              className="flex w-full items-center gap-2 rounded-md border border-emerald-200 bg-emerald-50 px-2.5 py-2 text-left transition hover:bg-emerald-100"
+            >
+              <IconCard className="h-3.5 w-3.5 shrink-0 text-emerald-700" />
+              <span className="min-w-0 flex-1 truncate text-[12px] font-semibold text-emerald-900">
+                Mon abonnement
+              </span>
+            </button>
           ) : null}
-          {!collapsed ? (
-            <Tooltip content="Changer de profil" side="top">
+          {canManageSubscription && onOpenSubscription && collapsed ? (
+            <Tooltip content="Mon abonnement" side="right">
               <button
                 type="button"
-                onClick={onLogout}
-                className="rounded p-1 text-zinc-400 transition hover:bg-zinc-100 hover:text-zinc-700"
-                aria-label="Se déconnecter"
+                onClick={onOpenSubscription}
+                className="flex w-full items-center justify-center rounded-md border border-emerald-200 bg-emerald-50 p-2 text-emerald-700 transition hover:bg-emerald-100"
+                aria-label="Mon abonnement"
               >
-                <IconLogout className="h-3.5 w-3.5" />
+                <IconCard className="h-3.5 w-3.5" />
               </button>
             </Tooltip>
           ) : null}
+          <div
+            className={cn(
+              'flex items-center gap-2 rounded-md p-2',
+              collapsed ? 'justify-center' : 'bg-zinc-50',
+            )}
+          >
+            <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-zinc-900 text-[10px] font-bold text-white">
+              {user.initials}
+            </span>
+            {!collapsed ? (
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-[12px] font-semibold text-zinc-900">
+                  {user.displayName}
+                </p>
+                <p className="truncate text-[10px] text-zinc-500">
+                  {roleLabel(user.role)}
+                </p>
+              </div>
+            ) : null}
+            {!collapsed ? (
+              <Tooltip content="Changer de profil" side="top">
+                <button
+                  type="button"
+                  onClick={onLogout}
+                  className="rounded p-1 text-rose-500 transition hover:bg-rose-50 hover:text-rose-700"
+                  aria-label="Se déconnecter"
+                >
+                  <IconLogout className="h-3.5 w-3.5" />
+                </button>
+              </Tooltip>
+            ) : null}
+          </div>
         </div>
 
         {/* Collapse toggle (desktop only) */}
@@ -335,7 +366,7 @@ function SidebarBody({
           <button
             type="button"
             onClick={onToggleCollapsed}
-            className="mt-1 flex w-full items-center justify-center gap-1.5 rounded-md py-1.5 text-[11px] font-medium text-zinc-500 transition hover:bg-zinc-50 hover:text-zinc-800"
+            className="mt-1 flex w-full items-center justify-center gap-1.5 rounded-md py-1.5 text-[11px] font-medium text-indigo-600 transition hover:bg-indigo-50 hover:text-indigo-800"
             aria-label={collapsed ? 'Étendre la barre' : 'Réduire la barre'}
           >
             {collapsed ? (
@@ -411,7 +442,7 @@ export function MobileNavDrawer({
         <button
           type="button"
           onClick={onClose}
-          className="absolute right-2 top-2 z-10 rounded-md p-1.5 text-zinc-400 transition hover:bg-zinc-100 hover:text-zinc-700"
+          className="absolute right-2 top-2 z-10 rounded-md p-1.5 text-rose-500 transition hover:bg-rose-50 hover:text-rose-700"
           aria-label="Fermer"
         >
           <IconClose className="h-4 w-4" />

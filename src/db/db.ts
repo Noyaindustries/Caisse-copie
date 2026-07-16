@@ -32,6 +32,47 @@ import type {
   ProductRecipeIngredient,
   OnlineOrderMessage,
 } from './types'
+
+const ORG_CREDENTIALS_KEY = 'caisseci-org-credentials-v1'
+const ORG_DATABASE_MAP_KEY = 'caisseci-org-database-map-v1'
+
+function databaseNameForCurrentOrganization(): string {
+  if (typeof window === 'undefined') return 'caisseci-unassigned'
+
+  try {
+    const credentialsRaw = localStorage.getItem(ORG_CREDENTIALS_KEY)
+    if (!credentialsRaw) return 'caisseci-unassigned'
+    const credentials = JSON.parse(credentialsRaw) as unknown
+    if (
+      typeof credentials !== 'object' ||
+      credentials === null ||
+      !('organizationId' in credentials) ||
+      typeof credentials.organizationId !== 'string'
+    ) {
+      return 'caisseci-unassigned'
+    }
+
+    const organizationId = credentials.organizationId
+    const mapRaw = localStorage.getItem(ORG_DATABASE_MAP_KEY)
+    const parsedMap = mapRaw ? (JSON.parse(mapRaw) as unknown) : {}
+    const map =
+      typeof parsedMap === 'object' && parsedMap !== null
+        ? (parsedMap as Record<string, string>)
+        : {}
+    const existing = map[organizationId]
+    if (typeof existing === 'string' && existing) return existing
+
+    // La première organisation récupère la base historique existante.
+    // Les suivantes reçoivent chacune une base IndexedDB isolée.
+    const databaseName =
+      Object.keys(map).length === 0 ? 'caisseci' : `caisseci-org-${organizationId}`
+    map[organizationId] = databaseName
+    localStorage.setItem(ORG_DATABASE_MAP_KEY, JSON.stringify(map))
+    return databaseName
+  } catch {
+    return 'caisseci-unassigned'
+  }
+}
 import { DEFAULT_PRODUCT_CATEGORIES } from './types'
 import { SEED_INITIAL_STOCK_MAIN, SEED_PRODUCTS } from './seed'
 import { DEFAULT_STORE_ID, SEED_STORES } from './seedStores'
@@ -67,7 +108,7 @@ export class CaisseDB extends Dexie {
   onlineOrderMessages!: Table<OnlineOrderMessage, string>
 
   constructor() {
-    super('caisseci')
+    super(databaseNameForCurrentOrganization())
     this.version(1).stores({
       products: 'id, barcode, category',
       sales: 'id, createdAt, synced',

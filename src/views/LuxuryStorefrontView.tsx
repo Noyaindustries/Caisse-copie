@@ -6,6 +6,7 @@ import { db } from '../db/db'
 import type {
   CartLine,
   OnlineOrder,
+  Promotion,
   ProductWithStock,
 } from '../db/types'
 import {
@@ -33,6 +34,7 @@ type PublicStorefrontConfig = {
   storeName: string
   storeId: string
   products: ProductWithStock[]
+  promotions?: Promotion[]
   waveEnabled?: boolean
   submitOrder: (
     order: PublicStorefrontOrderInput,
@@ -49,6 +51,8 @@ type Props = {
   online: boolean
   seedReady: boolean
   onOpenStaffLogin: () => void
+  /** Espace propriétaire (abonnement) — uniquement hors boutique publique. */
+  onOpenOwnerSpace?: () => void
   publicStorefront?: PublicStorefrontConfig
 }
 
@@ -148,6 +152,7 @@ export function LuxuryStorefrontView({
   online,
   seedReady,
   onOpenStaffLogin,
+  onOpenOwnerSpace,
   publicStorefront,
 }: Props) {
   const storeCtx = useActiveStoreOptional()
@@ -187,7 +192,12 @@ export function LuxuryStorefrontView({
   const [detailProduct, setDetailProduct] = useState<ProductWithStock | null>(
     null,
   )
-  const promotions = useLiveQuery(() => db.promotions.toArray(), [], []) ?? []
+  const localPromotions = useLiveQuery(
+    () => db.promotions.toArray(),
+    [],
+    [],
+  ) ?? []
+  const promotions = publicStorefront?.promotions ?? localPromotions
   const productsSectionRef = useRef<HTMLElement | null>(null)
   const cartPanelRef = useRef<HTMLElement | null>(null)
   const checkoutFormRef = useRef<HTMLDivElement | null>(null)
@@ -785,12 +795,36 @@ export function LuxuryStorefrontView({
       {!online ? <OfflineBanner /> : null}
       <div className="mx-auto flex w-full max-w-7xl flex-col px-2 pb-16 pt-6 sm:px-5 lg:px-7">
         <header className="premium-dark-card sticky top-3 z-20 rounded-3xl bg-linear-to-r from-slate-900 via-slate-900 to-amber-950/70 p-3 shadow-2xl shadow-amber-900/20 sm:p-4">
-          <div className="mb-3 flex flex-wrap items-center gap-2 rounded-2xl border border-white/10 bg-black/20 px-3 py-2 text-[11px] text-slate-300">
-            <p className="truncate">
-              Boutique {publicStorefront?.storeName ?? BRAND_NAME} · Commande rapide et
-              livraison locale
-            </p>
-          </div>
+          {!isPublicStorefront && onOpenOwnerSpace ? (
+            <div className="mb-3 flex flex-wrap items-center justify-between gap-2 rounded-2xl border border-amber-200/30 bg-amber-500/10 px-3 py-2">
+              <p className="text-[11px] font-medium text-amber-100">
+                Aperçu boutique — vous êtes connecté en tant que propriétaire
+              </p>
+              <div className="flex flex-wrap items-center gap-1.5">
+                <button
+                  type="button"
+                  onClick={onOpenOwnerSpace}
+                  className="rounded-lg bg-amber-200 px-2.5 py-1.5 text-[11px] font-bold text-slate-900 transition hover:bg-amber-100"
+                >
+                  ← Espace abonnement
+                </button>
+                <button
+                  type="button"
+                  onClick={onOpenStaffLogin}
+                  className="rounded-lg border border-white/20 bg-white/10 px-2.5 py-1.5 text-[11px] font-semibold text-white transition hover:bg-white/15"
+                >
+                  Connexion caisse
+                </button>
+              </div>
+            </div>
+          ) : (
+            <div className="mb-3 flex flex-wrap items-center gap-2 rounded-2xl border border-white/10 bg-black/20 px-3 py-2 text-[11px] text-slate-300">
+              <p className="truncate">
+                Boutique {publicStorefront?.storeName ?? BRAND_NAME} · Commande rapide et
+                livraison locale
+              </p>
+            </div>
+          )}
 
           <div className="flex flex-wrap items-center gap-2 px-1 py-1">
             <button
@@ -799,18 +833,27 @@ export function LuxuryStorefrontView({
                 setIsCartOpen(false)
                 window.scrollTo({ top: 0, behavior: 'smooth' })
               }}
-              title="Retour à l'accueil"
+              title="Haut de page"
               className="shrink-0 rounded-full border border-amber-200/35 bg-white/5 p-0.5 ring-1 ring-emerald-200/25"
             >
               <BrandLogo size="md" alt={BRAND_NAME} ring="gold" />
             </button>
             <nav className="ui-scroll flex min-w-0 flex-1 items-center gap-1.5 overflow-x-auto whitespace-nowrap lg:justify-center">
+              {!isPublicStorefront && onOpenOwnerSpace ? (
+                <button
+                  type="button"
+                  onClick={onOpenOwnerSpace}
+                  className="shrink-0 rounded-lg border border-amber-200/45 bg-amber-200/15 px-2.5 py-1 text-[11px] font-semibold text-amber-100 transition hover:bg-amber-200/25"
+                >
+                  Quitter la boutique
+                </button>
+              ) : null}
               <button
                 type="button"
                 onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
                 className="shrink-0 rounded-lg border border-white/15 px-2.5 py-1 text-[11px] font-semibold text-slate-100 transition hover:border-amber-200/45 hover:text-amber-100"
               >
-                Accueil
+                Haut de page
               </button>
               <button
                 type="button"

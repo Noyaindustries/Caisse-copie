@@ -13,7 +13,9 @@ export function useBarcodeScannerWedge(
   onScan: (code: string) => void,
 ): void {
   const onScanRef = useRef(onScan)
-  onScanRef.current = onScan
+  useEffect(() => {
+    onScanRef.current = onScan
+  }, [onScan])
 
   const bufferRef = useRef('')
   const lastKeyAtRef = useRef(0)

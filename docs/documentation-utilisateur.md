@@ -65,7 +65,17 @@ Guide d’utilisation pour les gérants, caissiers et administrateurs.
 
 1. Ouvrir `/staff` ou cliquer sur « Connexion caisse » depuis la boutique.
 2. Choisir votre **profil** (caissier, gérant, admin).
-3. Saisir votre **code PIN** à 4 chiffres.
+3. Saisir votre **code PIN** (4 à 8 chiffres) ou le mot de passe si défini.
+
+### Créer un caissier (admin)
+
+1. Se connecter en **administrateur**.
+2. Menu **Équipe → Personnel**.
+3. Remplir **Créer un utilisateur** : nom, rôle Caissier, PIN unique.
+4. Respecter le **quota** du plan (indicateurs en haut de page).
+5. Pour un départ : **Désactiver** le compte (recommandé) ou **Supprimer**.
+
+Les comptes désactivés n’apparaissent plus à la connexion.
 
 ---
 
@@ -165,17 +175,77 @@ Modes disponibles :
 
 ## 6. Catalogue et stocks
 
-### Catalogue
+### 6.1 Catalogue
 
-- Créer et modifier des articles (nom, prix, TVA, code-barres, image)
-- Organiser par catégories
-- Importer une image produit
+Le module **Catalogue** centralise vos articles :
 
-### Stocks
+**Indicateurs (bandeau du haut)**
 
-- Décrémentation automatique à la vente
-- Seuils d’alerte et inventaire manuel
-- Badges de rupture dans le menu latéral
+- Articles actifs et total
+- Ruptures (stock nul)
+- Alertes (sous le seuil configuré)
+- Valorisation du stock en FCFA
+
+**Onglet Articles**
+
+- Recherche par nom ou code-barres
+- Filtre par catégorie (pilules)
+- Filtre stock : tous, ruptures, alertes, OK
+- Tri par nom, prix ou stock
+- Vue **grille** ou **liste** (écran large)
+- **Exporter** le catalogue en CSV
+- Admin : **Importer** CSV, télécharger le **modèle**, créer ou modifier un article, gérer les archivés
+
+**Onglet Catégories**
+
+- Création et organisation des familles de produits
+
+Les stocks affichés correspondent au **magasin actif** (multi-magasins Business).
+
+### 6.2 Stocks
+
+Le module **Stocks** complète le catalogue :
+
+**Deux périmètres**
+
+| Onglet | Contenu |
+|--------|---------|
+| Stock catalogue | Articles vendus en caisse |
+| Ingrédients cuisine | Matières premières pour le KDS |
+
+**Fonctions principales**
+
+- KPIs rupture / alerte / OK
+- Inventaire rapide (ajustement quantités)
+- Journal des mouvements
+- Export CSV stock et mouvements
+- Badges **rupture** et **alerte** visibles dans le menu latéral
+
+La décrémentation est automatique à chaque vente validée.
+
+---
+
+## 6 bis. Tickets, factures et rapport
+
+### Tickets & factures (plan Starter)
+
+- **Historique** : tous les documents avec filtres type, statut et recherche
+- **Nouveau document** : ticket ou facture avec lignes, client, échéance
+- **Ventes caisse** : ventes récentes du magasin
+- KPIs : brouillons, montants à encaisser, réglé
+- Export CSV
+
+Sur **mobile**, l’historique s’affiche en cartes lisibles.
+
+### Rapport journalier
+
+- **Synthèse** : chiffre du jour, panier moyen, solde espèces théorique
+- **Ventes** : liste du jour avec recherche (tableau ou cartes mobile)
+- **Audit** : traçabilité des opérations sensibles
+- **Clôture** : comptage et verrouillage de la journée (gérant/admin)
+- Export CSV, impression, export historique des clôtures
+
+Une journée **clôturée** empêche de nouveaux encaissements jusqu’à réouverture.
 
 ---
 
@@ -315,8 +385,29 @@ Un bandeau « Hors ligne » s’affiche en haut de l’écran quand le réseau e
 
 ---
 
-## 16. Support
+## 17. Utilisation sur mobile et tablette
+
+CaisseCI est une **PWA** installable et s’adapte aux petits écrans :
+
+| Élément | Comportement |
+|---------|--------------|
+| Menu | Icône ☰ → tiroir latéral |
+| Onglets | Glissement horizontal si nombreux |
+| Caisse | Panier fixé en bas de l’écran |
+| Tableaux | Cartes empilées (ventes, tickets) |
+| Boutons d’action | Retour à la ligne automatique |
+
+**Conseils terrain**
+
+- Installez l’app sur l’écran d’accueil (Chrome / Safari → « Ajouter à l’écran »)
+- En service mobile, privilégiez le **mode paysage** sur tablette caisse
+- Hors ligne : vérifiez le bandeau orange avant d’accepter carte ou mobile money
+
+---
+
+## 18. Support
 
 Pour toute question commerciale ou technique, contactez **Infinitecore Système**.
 
-Documentation technique (développeurs) : [documentation-technique.md](documentation-technique.md)
+Documentation technique (développeurs) : [documentation-technique.md](documentation-technique.md)  
+Référence modules : [documentation-modules.md](documentation-modules.md)

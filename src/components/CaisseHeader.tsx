@@ -54,30 +54,32 @@ export const CaisseHeader = forwardRef<HTMLInputElement, Props>(
     }, [])
 
     return (
-      <header className="caisse-header mb-5 p-4 sm:p-5">
-        <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-          <div className="flex min-w-0 flex-1 flex-col gap-3 sm:flex-row sm:items-center sm:gap-5">
-            <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl border border-[rgba(184,146,46,0.22)] bg-[linear-gradient(145deg,#fffefb,#f7f0e3)] text-[#b8922e] shadow-[var(--shadow-caisse-card)]">
-              <IconSparkles className="h-5 w-5" />
+      <header className="caisse-header mb-3 p-3 sm:mb-5 sm:p-5">
+        <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+          <div className="flex min-w-0 flex-1 items-center gap-3 sm:gap-5">
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-[rgba(184,146,46,0.22)] bg-[linear-gradient(145deg,#fffefb,#f7f0e3)] text-amber-600 shadow-[var(--shadow-caisse-card)] sm:h-12 sm:w-12 sm:rounded-2xl">
+              <IconSparkles className="h-4 w-4 sm:h-5 sm:w-5" />
             </div>
-            <div className="min-w-0">
-              <div className="flex flex-wrap items-center gap-2">
+            <div className="min-w-0 flex-1">
+              <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
                 <span className="caisse-session-chip">
                   Session · {sessionId.slice(0, 8).toUpperCase()}
                 </span>
-                <span className="text-[11px] font-medium tracking-wide text-[#5c6678]">
+                <span className="text-[11px] font-medium tracking-wide text-caisse-muted">
                   {activeStoreLabel}
                 </span>
               </div>
-              <p className="mt-1.5 text-[12px] capitalize text-[#5c6678]">
+              <p className="mt-1 hidden text-[12px] capitalize text-caisse-muted sm:block">
                 {formatDate(now)}
               </p>
             </div>
-            <div className="sm:ml-auto sm:text-right lg:ml-0 lg:mr-4">
-              <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[#b8922e]">
+            <div className="shrink-0 text-right">
+              <p className="hidden text-[10px] font-semibold uppercase tracking-[0.14em] text-caisse-gold sm:block">
                 Heure caisse
               </p>
-              <p className="caisse-clock font-mono-nums">{formatTime(now)}</p>
+              <p className="caisse-clock font-mono-nums text-[15px] sm:text-[inherit]">
+                {formatTime(now)}
+              </p>
             </div>
           </div>
 
@@ -85,7 +87,7 @@ export const CaisseHeader = forwardRef<HTMLInputElement, Props>(
             <Button
               variant="secondary"
               size="sm"
-              iconLeft={<IconPlus />}
+              iconLeft={<IconPlus className="text-emerald-600" />}
               onClick={onAddProduct}
               className="shrink-0 border-[rgba(184,146,46,0.25)] bg-white/90 hover:border-[rgba(184,146,46,0.4)] hover:bg-[#fffefb]"
             >
@@ -94,7 +96,7 @@ export const CaisseHeader = forwardRef<HTMLInputElement, Props>(
           ) : null}
         </div>
 
-        <div className="mt-4 grid grid-cols-1 gap-2.5 md:grid-cols-2">
+        <div className="mt-3 grid grid-cols-1 gap-2 sm:mt-4 md:grid-cols-2">
           <Input
             ref={ref}
             type="text"
@@ -112,7 +114,7 @@ export const CaisseHeader = forwardRef<HTMLInputElement, Props>(
             placeholder="Douchette — scannez ici"
             aria-label="Lecteur code-barres"
             className={cn('font-mono-nums caisse-input-luxe')}
-            iconLeft={<IconScan />}
+            iconLeft={<IconScan className="text-sky-600" />}
             autoComplete="off"
             spellCheck={false}
           />
@@ -124,7 +126,7 @@ export const CaisseHeader = forwardRef<HTMLInputElement, Props>(
             placeholder="Rechercher un article…"
             aria-label="Recherche textuelle"
             className="caisse-input-luxe"
-            iconLeft={<IconSearch />}
+            iconLeft={<IconSearch className="text-violet-600" />}
             autoComplete="off"
           />
         </div>

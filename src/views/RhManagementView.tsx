@@ -1,6 +1,6 @@
 import { useLiveQuery } from 'dexie-react-hooks'
-import { useMemo, useState } from 'react'
-import { listStaffProfiles } from '../auth/profiles'
+import { useEffect, useMemo, useState } from 'react'
+import { listStaffProfiles, subscribeStaffProfiles } from '../auth/profiles'
 import { useActiveStore } from '../context/ActiveStoreContext'
 import { db } from '../db/db'
 import type { HrRequest, HrRequestStatus, HrRequestType, TimePunch } from '../db/types'
@@ -38,7 +38,10 @@ export function RhManagementView({ actor, canReview }: Props) {
   const [pendingRejectId, setPendingRejectId] = useState<string | null>(null)
   const [pendingRejectUntil, setPendingRejectUntil] = useState(0)
 
-  const profiles = useMemo(() => listStaffProfiles(), [])
+  const [profiles, setProfiles] = useState(() => listStaffProfiles())
+  useEffect(() => {
+    return subscribeStaffProfiles(() => setProfiles(listStaffProfiles()))
+  }, [])
   const punches = useLiveQuery(() => db.timePunches.orderBy('createdAt').reverse().limit(2000).toArray(), [], []) ?? []
   const requests = useLiveQuery(() => db.hrRequests.orderBy('createdAt').reverse().limit(300).toArray(), [], []) ?? []
 

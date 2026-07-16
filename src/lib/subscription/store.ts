@@ -62,9 +62,10 @@ export function effectiveUsable(
   online: boolean,
 ): boolean {
   if (!snapshot) return false
-  if (snapshot.usable) return true
-  if (!online && isCacheWithinGrace(snapshot) && snapshot.status !== 'expired') {
-    return true
-  }
-  return false
+  if (online) return snapshot.usable
+  return (
+    snapshot.usable &&
+    snapshot.status !== 'expired' &&
+    isCacheWithinGrace(snapshot)
+  )
 }

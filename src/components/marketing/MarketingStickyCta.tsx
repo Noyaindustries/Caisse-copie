@@ -7,12 +7,16 @@ export function MarketingStickyCta({
   onStart,
   onLogin,
   watchSelector = '#marketing-hero',
+  hideNearSelector = '#marketing-final-cta, footer',
 }: {
   onStart: () => void
   onLogin: () => void
   watchSelector?: string
+  /** Masque la barre près du bas de page pour ne pas bloquer les liens du footer. */
+  hideNearSelector?: string
 }) {
   const [show, setShow] = useState(false)
+  const [nearBottom, setNearBottom] = useState(false)
 
   useEffect(() => {
     const target = document.querySelector(watchSelector)
@@ -33,7 +37,21 @@ export function MarketingStickyCta({
     return () => observer.disconnect()
   }, [watchSelector])
 
-  if (!show) return null
+  useEffect(() => {
+    const nodes = Array.from(document.querySelectorAll(hideNearSelector))
+    if (nodes.length === 0) return
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        setNearBottom(entries.some((entry) => entry.isIntersecting))
+      },
+      { threshold: 0, rootMargin: '0px 0px 80px 0px' },
+    )
+    for (const node of nodes) observer.observe(node)
+    return () => observer.disconnect()
+  }, [hideNearSelector])
+
+  if (!show || nearBottom) return null
 
   return (
     <div
@@ -55,7 +73,7 @@ export function MarketingStickyCta({
           variant="primary"
           size="sm"
           onClick={onStart}
-          iconRight={<IconArrowRight className="h-4 w-4" />}
+          iconRight={<IconArrowRight className="h-4 w-4 text-amber-200" />}
         >
           Essai gratuit
         </Button>

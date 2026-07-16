@@ -106,7 +106,7 @@ function PlanCard({
 
       className={cn(
 
-        'group relative flex h-full flex-col overflow-hidden rounded-2xl border border-border/60 bg-white shadow-[0_8px_40px_-12px_rgba(23,32,51,0.15)] transition duration-300 hover:-translate-y-1 hover:shadow-[0_24px_56px_-16px_rgba(23,32,51,0.22)]',
+        'group relative flex h-full flex-col rounded-2xl border border-border/60 bg-white shadow-[0_8px_40px_-12px_rgba(23,32,51,0.15)] transition duration-300 hover:-translate-y-1 hover:shadow-[0_24px_56px_-16px_rgba(23,32,51,0.22)]',
 
         isCurrent && `ring-2 ring-offset-2 ${accent.ring}`,
 
@@ -116,19 +116,23 @@ function PlanCard({
 
     >
 
-      <div className={cn('pointer-events-none absolute inset-0 bg-linear-to-br opacity-90', accent.gradient)} />
+      <div className="pointer-events-none absolute inset-0 overflow-hidden rounded-2xl">
 
-      <div
+        <div className={cn('absolute inset-0 bg-linear-to-br opacity-90', accent.gradient)} />
 
-        className={cn(
+        <div
 
-          'pointer-events-none absolute -right-16 -top-16 h-48 w-48 rounded-full bg-linear-to-br blur-3xl',
+          className={cn(
 
-          accent.glow,
+            'absolute -right-16 -top-16 h-48 w-48 rounded-full bg-linear-to-br blur-3xl',
 
-        )}
+            accent.glow,
 
-      />
+          )}
+
+        />
+
+      </div>
 
 
 
@@ -138,7 +142,7 @@ function PlanCard({
 
           <span className="inline-flex items-center gap-1.5 rounded-full border border-violet-200 bg-violet-600 px-3 py-1 text-[11px] font-bold uppercase tracking-wider text-white shadow-lg shadow-violet-500/30">
 
-            <IconStar className="h-3 w-3 fill-current" />
+            <IconStar className="h-3 w-3 fill-amber-300 text-amber-300" />
 
             Recommandé
 
@@ -575,7 +579,7 @@ export function SubscriptionPlansSection({
 
 
 
-      <div className="grid gap-6 lg:grid-cols-3 lg:gap-5 lg:pt-4">
+      <div className="grid gap-6 overflow-visible pt-5 lg:grid-cols-3 lg:gap-5 lg:pt-6">
 
         {plans.map((plan) => (
 

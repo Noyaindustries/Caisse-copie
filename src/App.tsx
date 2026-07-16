@@ -22,6 +22,7 @@ import {
   parseStorefrontCode,
   ROUTES,
   signupUrl,
+  SitePathProvider,
   useSitePath,
 } from './lib/siteRoutes'
 import { Button } from './ui/Button'
@@ -32,35 +33,77 @@ import { SubscriptionManagementPage } from './views/SubscriptionManagementPage'
 import { PublicStorefrontPage } from './views/PublicStorefrontPage'
 import { PlatformAdminPage } from './views/PlatformAdminPage'
 
+function AlreadyConnectedGate({
+  orgName,
+  onSubscription,
+  onSwitchAccount,
+  onHome,
+}: {
+  orgName: string
+  onSubscription: () => void
+  onSwitchAccount: () => void
+  onHome: () => void
+}) {
+  return (
+    <div className="flex min-h-svh items-center justify-center bg-surface-muted px-4 py-10">
+      <Card className="w-full max-w-md">
+        <CardContent className="space-y-4 p-8 text-center">
+          <h1 className="text-xl font-bold text-ink">Déjà connecté</h1>
+          <p className="text-sm leading-relaxed text-ink-muted">
+            Le magasin <strong className="text-ink">{orgName}</strong> est déjà actif sur cet
+            appareil. Choisissez une action :
+          </p>
+          <div className="flex flex-col gap-2 pt-2">
+            <Button type="button" onClick={onSubscription}>
+              Mon abonnement
+            </Button>
+            <Button type="button" variant="secondary" onClick={onSwitchAccount}>
+              Changer de compte
+            </Button>
+            <Button type="button" variant="ghost" onClick={onHome}>
+              Retour au site
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+    </div>
+  )
+}
+
 function AppContent() {
   const online = useOnlineStatus()
   const { ready: subscriptionReady, organization, disconnect } = useSubscription()
   const [pathname, navigate] = useSitePath()
   const [staff, setStaff] = useState(() => getStaffSession())
   const [seedReady, setSeedReady] = useState(false)
-  const [showStaffLogin, setShowStaffLogin] = useState(false)
+  const [seedError, setSeedError] = useState<string | null>(null)
+  const [seedAttempt, setSeedAttempt] = useState(0)
+  const [showStaffLogin, setShowStaffLogin] = useState(
+    () => !getStaffSession() && isStaffPath(),
+  )
 
   useEffect(() => {
     let cancelled = false
-    void ensureSeed().then(() => {
-      if (!cancelled) setSeedReady(true)
-    })
+    void ensureSeed()
+      .then(() => {
+        if (!cancelled) {
+          setSeedError(null)
+          setSeedReady(true)
+        }
+      })
+      .catch((error: unknown) => {
+        if (!cancelled) {
+          setSeedError(
+            error instanceof Error
+              ? error.message
+              : 'Impossible d’initialiser les données locales.',
+          )
+        }
+      })
     return () => {
       cancelled = true
     }
-  }, [])
-
-  useEffect(() => {
-    if (staff) return
-    if (!isStaffPath()) return
-    setShowStaffLogin(true)
-  }, [staff])
-
-  useEffect(() => {
-    if (organization && isSignupPath(pathname)) {
-      navigate(ROUTES.home)
-    }
-  }, [organization, pathname, navigate])
+  }, [seedAttempt])
 
   useEffect(() => {
     if (organization || !isSubscriptionPath(pathname)) return
@@ -100,6 +143,15 @@ function AppContent() {
     navigate(ROUTES.home)
   }, [disconnect, navigate])
 
+  const handleSwitchAccount = useCallback(() => {
+    clearStaffSession()
+    setStaff(null)
+    setShowStaffLogin(false)
+    disconnect()
+    // Rester sur /connexion pour se reconnecter
+    navigate(ROUTES.login)
+  }, [disconnect, navigate])
+
   const storefrontCode = parseStorefrontCode(pathname)
 
   if (isPlatformAdminPath(pathname)) {
@@ -118,10 +170,22 @@ function AppContent() {
     return <PublicStorefrontPage storeCode={storefrontCode} online={online} />
   }
 
-  if (!organization) {
-    if (isSignupPath(pathname)) {
-      return <OrganizationSetup />
+  // Pages inscription / connexion : toujours accessibles (plus de redirect silencieux)
+  if (isSignupPath(pathname)) {
+    if (organization) {
+      return (
+        <AlreadyConnectedGate
+          orgName={organization.name}
+          onSubscription={() => navigate(ROUTES.subscription)}
+          onSwitchAccount={handleSwitchAccount}
+          onHome={() => navigate(ROUTES.home)}
+        />
+      )
     }
+    return <OrganizationSetup onNavigate={navigate} />
+  }
+
+  if (!organization) {
     if (isStaffPath()) {
       return (
         <div className="flex min-h-svh items-center justify-center bg-surface-muted px-4 py-10">
@@ -172,9 +236,9 @@ function AppContent() {
         />
       ) : !staff ? (
         showStaffLogin ? (
-          <div className="flex min-h-svh flex-col bg-zinc-50">
+          <div className="flex min-h-svh flex-col overflow-y-auto bg-zinc-50">
             {!online ? <OfflineBanner /> : null}
-            <div className="mx-auto w-full max-w-5xl px-4 pt-6">
+            <div className="mx-auto flex w-full max-w-5xl flex-wrap items-center gap-2 px-4 pt-6">
               <button
                 type="button"
                 onClick={() => setShowStaffLogin(false)}
@@ -182,8 +246,15 @@ function AppContent() {
               >
                 ← Retour boutique en ligne
               </button>
+              <button
+                type="button"
+                onClick={() => navigate(ROUTES.subscription)}
+                className="ui-btn ui-btn-primary"
+              >
+                Mon abonnement
+              </button>
             </div>
-            <div className="flex min-h-0 flex-1 flex-col">
+            <div className="flex flex-1 flex-col">
               <LoginScreen onSuccess={handleLogin} />
             </div>
           </div>
@@ -192,16 +263,37 @@ function AppContent() {
             online={online}
             seedReady={seedReady}
             onOpenStaffLogin={() => setShowStaffLogin(true)}
+            onOpenOwnerSpace={() => navigate(ROUTES.subscription)}
           />
         )
       ) : !seedReady ? (
         <div className="flex min-h-svh flex-col bg-zinc-50">
           {!online ? <OfflineBanner /> : null}
           <div className="flex flex-1 flex-col items-center justify-center gap-4">
-            <div className="h-12 w-12 animate-spin rounded-full border-2 border-zinc-200 border-t-zinc-900" />
-            <p className="text-sm font-semibold text-zinc-700">
-              Chargement de la caisse…
-            </p>
+            {seedError ? (
+              <>
+                <p className="max-w-md text-center text-sm font-semibold text-rose-700">
+                  Initialisation impossible : {seedError}
+                </p>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSeedError(null)
+                    setSeedAttempt((attempt) => attempt + 1)
+                  }}
+                  className="ui-btn ui-btn-primary"
+                >
+                  Réessayer
+                </button>
+              </>
+            ) : (
+              <>
+                <div className="h-12 w-12 animate-spin rounded-full border-2 border-zinc-200 border-t-zinc-900" />
+                <p className="text-sm font-semibold text-zinc-700">
+                  Chargement de la caisse…
+                </p>
+              </>
+            )}
             <button
               type="button"
               onClick={handleLogout}
@@ -226,8 +318,10 @@ export default function App() {
   const online = useOnlineStatus()
 
   return (
-    <SubscriptionProvider online={online}>
-      <AppContent />
-    </SubscriptionProvider>
+    <SitePathProvider>
+      <SubscriptionProvider online={online}>
+        <AppContent />
+      </SubscriptionProvider>
+    </SitePathProvider>
   )
 }

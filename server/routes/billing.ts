@@ -93,7 +93,11 @@ function orgPayload(org: {
 }) {
   const planId = parsePlanId(org.planId)
   const status = parseStatus(org.status)
-  const usable = isSubscriptionUsable(status, org.currentPeriodEnd)
+  const usable = isSubscriptionUsable(
+    status,
+    org.currentPeriodEnd,
+    org.trialEndsAt,
+  )
   return {
     organizationId: org.id,
     name: org.name,
@@ -120,9 +124,7 @@ function channelLabel(channelId: string): string {
 
 function readLicenseKey(req: Request): string | null {
   const header = req.get('x-license-key')?.trim()
-  if (header) return header
-  const query = typeof req.query.licenseKey === 'string' ? req.query.licenseKey.trim() : ''
-  return query || null
+  return header || null
 }
 
 async function findOrgByLicense(licenseKey: string) {
@@ -173,7 +175,7 @@ billingRouter.post('/billing/register', async (req, res) => {
       return
     }
 
-    const existing = await prisma.organization.findFirst({ where: { email } })
+    const existing = await prisma.organization.findUnique({ where: { email } })
     if (existing) {
       res.status(409).json({
         error: 'Un compte existe déjà avec cette adresse Gmail. Connectez-vous.',
@@ -204,6 +206,17 @@ billingRouter.post('/billing/register', async (req, res) => {
     res.status(201).json(orgPayload(org))
   } catch (err) {
     console.error('[billing/register]', err)
+    if (
+      err &&
+      typeof err === 'object' &&
+      'code' in err &&
+      (err as { code: string }).code === 'P2002'
+    ) {
+      res.status(409).json({
+        error: 'Un compte existe déjà avec cette adresse Gmail. Connectez-vous.',
+      })
+      return
+    }
     res.status(500).json({ error: 'Impossible de créer le compte.' })
   }
 })
@@ -224,7 +237,7 @@ billingRouter.post('/billing/login', async (req, res) => {
       return
     }
 
-    const org = await prisma.organization.findFirst({ where: { email } })
+    const org = await prisma.organization.findUnique({ where: { email } })
     if (!org || !org.passwordHash) {
       res.status(401).json({ error: 'E-mail ou mot de passe incorrect.' })
       return
@@ -248,22 +261,33 @@ billingRouter.post('/billing/attach', async (req, res) => {
       typeof req.body?.storeCode === 'string' ? req.body.storeCode.trim() : ''
     const licenseKey =
       typeof req.body?.licenseKey === 'string' ? req.body.licenseKey.trim() : ''
+    const password = typeof req.body?.password === 'string' ? req.body.password : ''
+
+    if (!password) {
+      res.status(400).json({ error: 'Mot de passe gérant requis.' })
+      return
+    }
 
     let org = null
     if (storeCode) {
       org = await findOrgByStoreCode(storeCode)
       if (!org) {
-        res.status(404).json({ error: 'Code magasin introuvable.' })
+        res.status(401).json({ error: 'Code magasin ou mot de passe incorrect.' })
         return
       }
     } else if (licenseKey) {
       org = await findOrgByLicense(licenseKey)
       if (!org) {
-        res.status(404).json({ error: 'Licence introuvable.' })
+        res.status(401).json({ error: 'Licence ou mot de passe incorrect.' })
         return
       }
     } else {
       res.status(400).json({ error: 'Code magasin ou clé de licence requis.' })
+      return
+    }
+
+    if (!org.passwordHash || !verifyOwnerPassword(password, org.passwordHash)) {
+      res.status(401).json({ error: 'Code magasin ou mot de passe incorrect.' })
       return
     }
 

@@ -1,22 +1,18 @@
+import { apiUrl } from '../apiUrl'
+import { parseApiResponse } from '../parseApiResponse'
 import { getOrganizationCredentials } from '../subscription/store'
-
-const API_BASE = '/api'
 
 let blobUploadEnabled: boolean | null = null
 
 async function parseJson<T>(res: Response): Promise<T> {
-  const data = (await res.json()) as T & { error?: string }
-  if (!res.ok) {
-    throw new Error(typeof data.error === 'string' ? data.error : `Erreur HTTP ${res.status}`)
-  }
-  return data
+  return parseApiResponse<T>(res)
 }
 
 /** Indique si le serveur a un token Vercel Blob (`BLOB_READ_WRITE_TOKEN`). */
 export async function isBlobUploadAvailable(): Promise<boolean> {
   if (blobUploadEnabled !== null) return blobUploadEnabled
   try {
-    const res = await fetch(`${API_BASE}/uploads/status`)
+    const res = await fetch(apiUrl('/uploads/status'))
     if (!res.ok) {
       blobUploadEnabled = false
       return false
@@ -38,7 +34,7 @@ export async function uploadProductImageToBlob(
   productId: string,
   dataUrl: string,
 ): Promise<string> {
-  const res = await fetch(`${API_BASE}/uploads/product-image`, {
+  const res = await fetch(apiUrl('/uploads/product-image'), {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',

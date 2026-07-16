@@ -1,5 +1,6 @@
 import type { Organization } from '@prisma/client'
 import { prisma } from './prisma.js'
+import { normalizeOwnerEmail } from './ownerAuth.js'
 import { activateMobileMoneySubscription } from './subscriptionActivation.js'
 import {
   SUBSCRIPTION_PLANS,
@@ -42,7 +43,7 @@ export function serializeOrganizationForAdmin(org: Organization): AdminOrganizat
     planId,
     planName: plan.name,
     status,
-    usable: isSubscriptionUsable(status, org.currentPeriodEnd),
+    usable: isSubscriptionUsable(status, org.currentPeriodEnd, org.trialEndsAt),
     trialEndsAt: org.trialEndsAt?.toISOString() ?? null,
     currentPeriodEnd: org.currentPeriodEnd?.toISOString() ?? null,
     billingProvider: org.billingProvider,
@@ -99,8 +100,8 @@ export async function findOrganizationByRef(ref: OrgRef): Promise<Organization |
   })
   if (byLicense) return byLicense
 
-  const byEmail = await prisma.organization.findFirst({
-    where: { email: trimmed.toLowerCase() },
+  const byEmail = await prisma.organization.findUnique({
+    where: { email: normalizeOwnerEmail(trimmed) },
   })
   if (byEmail) return byEmail
 
@@ -146,7 +147,11 @@ export async function listOrganizations(filter: ListSubscriptionsFilter = {}) {
 export function formatOrganizationRow(org: Organization): string {
   const planId = safePlanId(org.planId)
   const status = org.status as SubscriptionStatus
-  const usable = isSubscriptionUsable(status, org.currentPeriodEnd)
+  const usable = isSubscriptionUsable(
+    status,
+    org.currentPeriodEnd,
+    org.trialEndsAt,
+  )
   const plan = SUBSCRIPTION_PLANS[planId]
   const trial = org.trialEndsAt?.toISOString().slice(0, 10) ?? '—'
   const period = org.currentPeriodEnd?.toISOString().slice(0, 10) ?? '—'
@@ -189,7 +194,11 @@ export async function showOrganization(ref: OrgRef): Promise<Organization> {
   const planId = safePlanId(org.planId)
   const plan = SUBSCRIPTION_PLANS[planId]
   const status = org.status as SubscriptionStatus
-  const usable = isSubscriptionUsable(status, org.currentPeriodEnd)
+  const usable = isSubscriptionUsable(
+    status,
+    org.currentPeriodEnd,
+    org.trialEndsAt,
+  )
 
   console.log('Organisation')
   console.log('  ID           ', org.id)

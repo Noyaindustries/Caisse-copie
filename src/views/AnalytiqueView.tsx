@@ -73,6 +73,7 @@ export function AnalytiqueView() {
   const onlineOrders =
     useLiveQuery(() => db.onlineOrders.toArray(), [], []) ?? []
   const [period, setPeriod] = useState<Period>(7)
+  const [now] = useState(Date.now)
 
   const rangeSales = useMemo(() => {
     const buckets = bucketSalesByLocalDay(sales, period)
@@ -87,12 +88,11 @@ export function AnalytiqueView() {
     })
   }, [sales, period])
   const previousRangeSales = useMemo(() => {
-    const now = Date.now()
     const shiftMs = period * 24 * 60 * 60 * 1000
     const startPrev = now - shiftMs * 2
     const endPrev = now - shiftMs
     return sales.filter((s) => s.createdAt >= startPrev && s.createdAt < endPrev)
-  }, [sales, period])
+  }, [sales, period, now])
 
   const buckets = useMemo(
     () => bucketSalesByLocalDay(sales, period),

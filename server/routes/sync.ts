@@ -8,6 +8,24 @@ export const syncRouter = Router()
 
 syncRouter.post('/caisseci/sync', async (req, res) => {
   try {
+    const licenseKey = req.header('x-license-key')?.trim()
+    if (!licenseKey) {
+      return res.status(401).json({
+        ok: false,
+        message: 'Licence requise',
+      })
+    }
+    const organization = await prisma.organization.findUnique({
+      where: { licenseKey },
+      select: { id: true },
+    })
+    if (!organization) {
+      return res.status(401).json({
+        ok: false,
+        message: 'Licence invalide',
+      })
+    }
+
     const data = syncBatchSchema.parse(req.body)
     const source = req.header('x-source') ?? null
     const raw = data as unknown as Prisma.InputJsonValue
@@ -23,6 +41,7 @@ syncRouter.post('/caisseci/sync', async (req, res) => {
       },
       create: {
         batchId: data.batchId,
+        organizationId: organization.id,
         sentAt: new Date(data.sentAt),
         source,
         raw,

@@ -1,4 +1,5 @@
 import { useLiveQuery } from 'dexie-react-hooks'
+/* eslint-disable react-refresh/only-export-components -- Provider et hooks sont volontairement co-localisés. */
 import {
   createContext,
   useCallback,
@@ -59,10 +60,14 @@ export function ActiveStoreProvider({
   const products =
     useLiveQuery(() => db.products.toArray(), [], []) ?? []
 
-  const [activeStoreId, setActiveStoreIdState] = useState(() => {
+  const [requestedStoreId, setActiveStoreIdState] = useState(() => {
     const s = readStoredStoreId()
     return s ?? DEFAULT_STORE_ID
   })
+  const activeStoreId =
+    stores.length > 0 && !stores.some((store) => store.id === requestedStoreId)
+      ? (stores[0]?.id ?? DEFAULT_STORE_ID)
+      : requestedStoreId
 
   const stockRows =
     useLiveQuery(
@@ -91,13 +96,10 @@ export function ActiveStoreProvider({
   }, [])
 
   useEffect(() => {
-    if (stores.length === 0) return
-    if (!stores.some((s) => s.id === activeStoreId)) {
-      const fallback = stores[0]?.id ?? DEFAULT_STORE_ID
-      setActiveStoreIdState(fallback)
-      writeStoredStoreId(fallback)
+    if (activeStoreId !== requestedStoreId) {
+      writeStoredStoreId(activeStoreId)
     }
-  }, [stores, activeStoreId])
+  }, [activeStoreId, requestedStoreId])
 
   const activeStore = stores.find((s) => s.id === activeStoreId)
 

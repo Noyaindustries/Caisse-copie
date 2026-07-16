@@ -21,7 +21,7 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(function Input(
     return (
       <div className="relative">
         {iconLeft ? (
-          <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-ink-subtle [&_svg]:h-4 [&_svg]:w-4">
+          <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 [&_svg]:h-4 [&_svg]:w-4 [&_svg:not([class*='text-'])]:text-ink-subtle">
             {iconLeft}
           </span>
         ) : null}
@@ -29,16 +29,15 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(function Input(
           ref={ref}
           className={cn(
             'ui-input',
-            // Espace suffisant pour éviter que le placeholder touche l'icône.
-            iconLeft ? 'pl-11' : null,
-            iconRight ? 'pr-11' : null,
+            iconLeft ? 'ui-input--icon-left' : null,
+            iconRight ? 'ui-input--icon-right' : null,
             invalid ? 'border-rose-400 focus:border-rose-500' : null,
             className,
           )}
           {...rest}
         />
         {iconRight ? (
-          <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-ink-subtle [&_svg]:h-4 [&_svg]:w-4">
+          <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 [&_svg]:h-4 [&_svg]:w-4 [&_svg:not([class*='text-'])]:text-ink-subtle">
             {iconRight}
           </span>
         ) : null}

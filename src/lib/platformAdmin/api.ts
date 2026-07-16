@@ -1,4 +1,6 @@
 import type { PlanId, SubscriptionStatus } from '../subscription/types'
+import { apiUrl } from '../apiUrl'
+import { parseApiResponse } from '../parseApiResponse'
 import {
   clearPlatformAdminSecret,
   getPlatformAdminSecret,
@@ -40,12 +42,6 @@ export type PlatformStats = {
   >
 }
 
-function apiBase(): string {
-  const env = import.meta.env.VITE_API_BASE_URL?.trim()
-  if (env) return env.replace(/\/$/, '')
-  return ''
-}
-
 function adminHeaders(): HeadersInit {
   const secret = getPlatformAdminSecret()
   if (!secret) return { 'Content-Type': 'application/json' }
@@ -56,24 +52,16 @@ function adminHeaders(): HeadersInit {
 }
 
 async function parseJson<T>(res: Response): Promise<T> {
-  const data = (await res.json()) as T & { error?: string }
-  if (!res.ok) {
-    throw new Error(
-      typeof data === 'object' && data && 'error' in data && data.error
-        ? String(data.error)
-        : `Erreur HTTP ${res.status}`,
-    )
-  }
-  return data
+  return parseApiResponse<T>(res)
 }
 
 export async function fetchPlatformAdminStatus(): Promise<{ configured: boolean }> {
-  const res = await fetch(`${apiBase()}/api/platform-admin/status`)
+  const res = await fetch(apiUrl('/platform-admin/status'))
   return parseJson(res)
 }
 
 export async function loginPlatformAdmin(secret: string): Promise<void> {
-  const res = await fetch(`${apiBase()}/api/platform-admin/auth`, {
+  const res = await fetch(apiUrl('/platform-admin/auth'), {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ secret }),
@@ -88,7 +76,7 @@ export function logoutPlatformAdmin(): void {
 }
 
 export async function fetchPlatformStats(): Promise<PlatformStats> {
-  const res = await fetch(`${apiBase()}/api/platform-admin/stats`, {
+  const res = await fetch(apiUrl('/platform-admin/stats'), {
     headers: adminHeaders(),
   })
   return parseJson(res)
@@ -107,7 +95,7 @@ export async function fetchOrganizations(params?: {
   if (params?.limit) search.set('limit', String(params.limit))
   const qs = search.toString()
   const res = await fetch(
-    `${apiBase()}/api/platform-admin/organizations${qs ? `?${qs}` : ''}`,
+    apiUrl(`/platform-admin/organizations${qs ? `?${qs}` : ''}`),
     { headers: adminHeaders() },
   )
   return parseJson(res)
@@ -115,7 +103,7 @@ export async function fetchOrganizations(params?: {
 
 export async function fetchOrganization(ref: string): Promise<AdminOrganization> {
   const res = await fetch(
-    `${apiBase()}/api/platform-admin/organizations/${encodeURIComponent(ref)}`,
+    apiUrl(`/platform-admin/organizations/${encodeURIComponent(ref)}`),
     { headers: adminHeaders() },
   )
   const data = await parseJson<{ organization: AdminOrganization }>(res)
@@ -134,7 +122,7 @@ export async function patchOrganization(
   },
 ): Promise<AdminOrganization> {
   const res = await fetch(
-    `${apiBase()}/api/platform-admin/organizations/${encodeURIComponent(ref)}`,
+    apiUrl(`/platform-admin/organizations/${encodeURIComponent(ref)}`),
     {
       method: 'PATCH',
       headers: adminHeaders(),
@@ -149,7 +137,7 @@ export async function runPlatformReminders(organizationId?: string): Promise<{
   sent: number
   checked: number
 }> {
-  const res = await fetch(`${apiBase()}/api/platform-admin/reminders`, {
+  const res = await fetch(apiUrl('/platform-admin/reminders'), {
     method: 'POST',
     headers: adminHeaders(),
     body: JSON.stringify(organizationId ? { organizationId } : {}),

@@ -6,7 +6,7 @@ import {
   submitPublicStorefrontOrder,
   verifyStorefrontOrderPayment,
 } from '../lib/storefront/api'
-import type { ProductWithStock } from '../db/types'
+import type { ProductWithStock, Promotion } from '../db/types'
 import type { PublicStorefrontOrderInput } from '../lib/storefront/types'
 import { Button } from '../ui/Button'
 import { Card, CardContent } from '../ui/Card'
@@ -43,6 +43,7 @@ export function PublicStorefrontPage({ storeCode, online }: Props) {
   const [error, setError] = useState<string | null>(null)
   const [storeName, setStoreName] = useState('')
   const [products, setProducts] = useState<ProductWithStock[]>([])
+  const [promotions, setPromotions] = useState<Promotion[]>([])
   const [storeId, setStoreId] = useState('store-main')
   const [usable, setUsable] = useState(true)
   const [waveEnabled, setWaveEnabled] = useState(false)
@@ -74,6 +75,7 @@ export function PublicStorefrontPage({ storeCode, online }: Props) {
         setStoreName(menu.storeName || menu.name)
         setStoreId(menu.storeId)
         setProducts(menu.products)
+        setPromotions(menu.promotions ?? [])
         setUsable(true)
       } catch (err) {
         if (!cancelled) {
@@ -149,13 +151,14 @@ export function PublicStorefrontPage({ storeCode, online }: Props) {
       storeName,
       storeId,
       products,
+      promotions,
       waveEnabled,
       submitOrder: async (order: PublicStorefrontOrderInput) => {
         const result = await submitPublicStorefrontOrder(storeCode, order)
         return result
       },
     }),
-    [storeCode, storeId, storeName, products, waveEnabled],
+    [storeCode, storeId, storeName, products, promotions, waveEnabled],
   )
 
   if (loading) {

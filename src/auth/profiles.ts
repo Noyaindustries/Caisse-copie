@@ -33,7 +33,41 @@ const BUILTIN_STAFF_PROFILES: readonly StaffProfile[] = [
 
 const STORAGE_KEY = 'caisseci-custom-staff-profiles-v1'
 const PASSWORD_OVERRIDES_KEY = 'caisseci-staff-password-overrides-v1'
+const ORG_CREDENTIALS_KEY = 'caisseci-org-credentials-v1'
+const LEGACY_PROFILE_OWNER_KEY = 'caisseci-legacy-profile-owner-v1'
 const CHANGE_EVENT = 'caisseci-staff-profiles-changed'
+
+function currentOrganizationId(): string | null {
+  if (typeof window === 'undefined') return null
+  try {
+    const raw = localStorage.getItem(ORG_CREDENTIALS_KEY)
+    if (!raw) return null
+    const parsed = JSON.parse(raw) as unknown
+    if (
+      typeof parsed === 'object' &&
+      parsed !== null &&
+      'organizationId' in parsed &&
+      typeof parsed.organizationId === 'string'
+    ) {
+      return parsed.organizationId
+    }
+  } catch {
+    return null
+  }
+  return null
+}
+
+function organizationStorageKey(baseKey: string): string {
+  const organizationId = currentOrganizationId()
+  if (!organizationId) return `${baseKey}:unassigned`
+
+  const legacyOwner = localStorage.getItem(LEGACY_PROFILE_OWNER_KEY)
+  if (!legacyOwner) {
+    localStorage.setItem(LEGACY_PROFILE_OWNER_KEY, organizationId)
+    return baseKey
+  }
+  return legacyOwner === organizationId ? baseKey : `${baseKey}:${organizationId}`
+}
 
 function isStaffProfile(value: unknown): value is StaffProfile {
   if (typeof value !== 'object' || value === null) return false
@@ -45,14 +79,19 @@ function isStaffProfile(value: unknown): value is StaffProfile {
     (v.storeId === undefined || typeof v.storeId === 'string') &&
     (v.role === 'admin' || v.role === 'gerant' || v.role === 'caissier') &&
     typeof v.pin === 'string' &&
-    (v.password === undefined || typeof v.password === 'string')
+    (v.password === undefined || typeof v.password === 'string') &&
+    (v.active === undefined || typeof v.active === 'boolean')
   )
+}
+
+function isBuiltinProfileId(id: string): boolean {
+  return BUILTIN_STAFF_PROFILES.some((p) => p.id === id)
 }
 
 function readCustomProfiles(): StaffProfile[] {
   if (typeof window === 'undefined') return []
   try {
-    const raw = localStorage.getItem(STORAGE_KEY)
+    const raw = localStorage.getItem(organizationStorageKey(STORAGE_KEY))
     if (!raw) return []
     const parsed = JSON.parse(raw) as unknown
     if (!Array.isArray(parsed)) return []
@@ -65,7 +104,7 @@ function readCustomProfiles(): StaffProfile[] {
 function readPasswordOverrides(): Record<string, string> {
   if (typeof window === 'undefined') return {}
   try {
-    const raw = localStorage.getItem(PASSWORD_OVERRIDES_KEY)
+    const raw = localStorage.getItem(organizationStorageKey(PASSWORD_OVERRIDES_KEY))
     if (!raw) return {}
     const parsed = JSON.parse(raw) as unknown
     if (typeof parsed !== 'object' || parsed === null) return {}
@@ -83,13 +122,16 @@ function readPasswordOverrides(): Record<string, string> {
 
 function writeCustomProfiles(profiles: StaffProfile[]): void {
   if (typeof window === 'undefined') return
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(profiles))
+  localStorage.setItem(organizationStorageKey(STORAGE_KEY), JSON.stringify(profiles))
   window.dispatchEvent(new Event(CHANGE_EVENT))
 }
 
 function writePasswordOverrides(overrides: Record<string, string>): void {
   if (typeof window === 'undefined') return
-  localStorage.setItem(PASSWORD_OVERRIDES_KEY, JSON.stringify(overrides))
+  localStorage.setItem(
+    organizationStorageKey(PASSWORD_OVERRIDES_KEY),
+    JSON.stringify(overrides),
+  )
   window.dispatchEvent(new Event(CHANGE_EVENT))
 }
 
@@ -97,8 +139,22 @@ export function listStaffProfiles(): StaffProfile[] {
   const overrides = readPasswordOverrides()
   return [...BUILTIN_STAFF_PROFILES, ...readCustomProfiles()].map((p) => ({
     ...p,
+    active: p.active !== false,
     password: overrides[p.id] ?? p.password,
   }))
+}
+
+/** Profils autorisés à se connecter (actifs uniquement). */
+export function listActiveStaffProfiles(): StaffProfile[] {
+  return listStaffProfiles().filter((p) => p.active !== false)
+}
+
+export function countActiveStaffProfiles(): number {
+  return listActiveStaffProfiles().length
+}
+
+export function isCustomStaffProfile(id: string): boolean {
+  return !isBuiltinProfileId(id)
 }
 
 export function subscribeStaffProfiles(onChange: () => void): () => void {
@@ -128,6 +184,8 @@ export function createStaffProfile(input: {
   storeId?: string
   pin: string
   password?: string
+  /** Plafond utilisateurs du plan (actifs). Si omis, pas de contrôle. */
+  maxStaff?: number
 }): StaffProfile {
   const displayName = input.displayName.trim()
   const storeId = input.storeId?.trim() || undefined
@@ -139,6 +197,15 @@ export function createStaffProfile(input: {
   if (!/^\d{4,8}$/.test(pin)) {
     throw new Error('Le PIN doit contenir entre 4 et 8 chiffres.')
   }
+  if (
+    typeof input.maxStaff === 'number' &&
+    input.maxStaff > 0 &&
+    countActiveStaffProfiles() >= input.maxStaff
+  ) {
+    throw new Error(
+      `Limite d’utilisateurs atteinte (${input.maxStaff}). Passez à un plan supérieur ou désactivez un compte.`,
+    )
+  }
   const all = listStaffProfiles()
   if (all.some((p) => p.pin === pin)) {
     throw new Error('Ce PIN est déjà utilisé par un autre profil.')
@@ -148,6 +215,7 @@ export function createStaffProfile(input: {
     displayName,
     initials: computeInitials(displayName),
     role: input.role,
+    active: true,
     ...(storeId ? { storeId } : {}),
     pin,
     ...(password ? { password } : {}),
@@ -156,6 +224,98 @@ export function createStaffProfile(input: {
   custom.push(created)
   writeCustomProfiles(custom)
   return created
+}
+
+export function updateStaffProfile(
+  profileId: string,
+  patch: {
+    displayName?: string
+    role?: StaffProfile['role']
+    storeId?: string | null
+    pin?: string
+    password?: string | null
+    active?: boolean
+  },
+): StaffProfile {
+  if (isBuiltinProfileId(profileId)) {
+    throw new Error(
+      'Les profils de démonstration ne peuvent pas être modifiés. Créez un nouvel utilisateur.',
+    )
+  }
+  const custom = readCustomProfiles()
+  const idx = custom.findIndex((p) => p.id === profileId)
+  if (idx < 0) throw new Error('Profil introuvable.')
+
+  const current = custom[idx]!
+  const next: StaffProfile = { ...current }
+
+  if (patch.displayName !== undefined) {
+    const displayName = patch.displayName.trim()
+    if (displayName.length < 3) {
+      throw new Error('Le nom complet doit contenir au moins 3 caractères.')
+    }
+    next.displayName = displayName
+    next.initials = computeInitials(displayName)
+  }
+  if (patch.role !== undefined) next.role = patch.role
+  if (patch.storeId !== undefined) {
+    const storeId = patch.storeId?.trim() || undefined
+    if (storeId) next.storeId = storeId
+    else delete next.storeId
+  }
+  if (patch.pin !== undefined) {
+    const pin = patch.pin.trim()
+    if (!/^\d{4,8}$/.test(pin)) {
+      throw new Error('Le PIN doit contenir entre 4 et 8 chiffres.')
+    }
+    const conflict = listStaffProfiles().some(
+      (p) => p.id !== profileId && p.pin === pin,
+    )
+    if (conflict) throw new Error('Ce PIN est déjà utilisé par un autre profil.')
+    next.pin = pin
+  }
+  if (patch.password !== undefined) {
+    const password = patch.password?.trim() || undefined
+    if (password) next.password = password
+    else delete next.password
+  }
+  if (patch.active !== undefined) next.active = patch.active
+
+  custom[idx] = next
+  writeCustomProfiles(custom)
+  return profileById(profileId) ?? next
+}
+
+/** Soft-delete : désactive un profil personnalisé (conservé pour l’historique). */
+export function deactivateStaffProfile(profileId: string): void {
+  updateStaffProfile(profileId, { active: false })
+}
+
+export function reactivateStaffProfile(profileId: string, maxStaff?: number): void {
+  if (
+    typeof maxStaff === 'number' &&
+    maxStaff > 0 &&
+    countActiveStaffProfiles() >= maxStaff
+  ) {
+    throw new Error(
+      `Limite d’utilisateurs atteinte (${maxStaff}). Désactivez un autre compte ou changez de plan.`,
+    )
+  }
+  updateStaffProfile(profileId, { active: true })
+}
+
+/** Suppression définitive (profils personnalisés uniquement). */
+export function deleteStaffProfile(profileId: string): void {
+  if (isBuiltinProfileId(profileId)) {
+    throw new Error('Les profils de démonstration ne peuvent pas être supprimés.')
+  }
+  const custom = readCustomProfiles().filter((p) => p.id !== profileId)
+  writeCustomProfiles(custom)
+  const overrides = readPasswordOverrides()
+  if (overrides[profileId]) {
+    delete overrides[profileId]
+    writePasswordOverrides(overrides)
+  }
 }
 
 export function changeStaffPassword(input: {

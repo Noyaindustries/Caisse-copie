@@ -16,6 +16,10 @@ services:
         sync: false
       - key: APP_URL
         sync: false
+      - key: PLATFORM_ADMIN_SECRET
+        sync: false
+      - key: WEBHOOK_TOKEN
+        sync: false
       - key: STRIPE_SECRET_KEY
         sync: false
       - key: STRIPE_WEBHOOK_SECRET
@@ -28,9 +32,19 @@ services:
         sync: false
       - key: CINETPAY_DEMO_MODE
         value: "false"
+      - key: WAVE_API_KEY
+        sync: false
+      - key: WAVE_WEBHOOK_SECRET
+        sync: false
+      - key: WAVE_SIGNING_SECRET
+        sync: false
+      - key: WAVE_DEMO_MODE
+        value: "false"
       - key: SMS_PROVIDER_URL
         sync: false
       - key: SMS_PROVIDER_TOKEN
+        sync: false
+      - key: BLOB_READ_WRITE_TOKEN
         sync: false
       - key: SUBSCRIPTION_REMINDER_INTERVAL_HOURS
         value: "6"

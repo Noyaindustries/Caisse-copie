@@ -76,11 +76,18 @@ export function planAtLeast(current: PlanId, required: PlanId): boolean {
 export function isSubscriptionUsable(
   status: SubscriptionStatus,
   periodEnd: Date | null,
+  trialEndsAt: Date | null = null,
+  now = new Date(),
 ): boolean {
-  if (status === 'active' || status === 'trialing') return true
-  if (status === 'past_due') return true
-  if (status === 'canceled' && periodEnd && periodEnd.getTime() > Date.now()) {
-    return true
+  const nowMs = now.getTime()
+  if (status === 'trialing') {
+    return Boolean(trialEndsAt && trialEndsAt.getTime() > nowMs)
+  }
+  if (status === 'active') {
+    return periodEnd == null || periodEnd.getTime() > nowMs
+  }
+  if (status === 'past_due' || status === 'canceled') {
+    return Boolean(periodEnd && periodEnd.getTime() > nowMs)
   }
   return false
 }

@@ -24,7 +24,7 @@ import {
   type MobileMoneyChannelId,
 } from '../lib/mobileMoneyChannels.js'
 import { prisma } from '../lib/prisma.js'
-import { activateMobileMoneySubscription } from '../lib/subscriptionActivation.js'
+import { calculateRenewalPeriodEnd } from '../lib/subscriptionActivation.js'
 import {
   findStorefrontOrderByExternalId,
   markStorefrontOrderPaid,
@@ -53,34 +53,48 @@ async function markPaymentAccepted(paymentId: string, extra?: {
   paymentMethod?: string | null
   notifyPayload?: unknown
 }) {
-  const payment = await prisma.mobileMoneyPayment.update({
-    where: { id: paymentId },
-    data: {
-      status: 'accepted',
-      paidAt: new Date(),
-      operatorId: extra?.operatorId ?? undefined,
-      paymentMethod: extra?.paymentMethod ?? undefined,
-      notifyPayload: extra?.notifyPayload as object | undefined,
-    },
-  })
   const billingProvider =
     extra?.paymentMethod?.startsWith('wave') ? 'wave' : 'mobile_money'
-  await activateMobileMoneySubscription(
-    payment.organizationId,
-    parsePlanId(payment.planId),
-    billingProvider,
-  )
-  const org = await prisma.organization.findUnique({
-    where: { id: payment.organizationId },
-    select: { billingPhone: true },
-  })
-  if (org && !org.billingPhone) {
-    await prisma.organization.update({
-      where: { id: payment.organizationId },
-      data: { billingPhone: payment.customerPhone },
+  return prisma.$transaction(async (tx) => {
+    const currentPayment = await tx.mobileMoneyPayment.findUnique({
+      where: { id: paymentId },
     })
-  }
-  return payment
+    if (!currentPayment) throw new Error('Paiement introuvable.')
+    if (currentPayment.status === 'accepted') return currentPayment
+
+    const organization = await tx.organization.findUnique({
+      where: { id: currentPayment.organizationId },
+      select: { currentPeriodEnd: true, billingPhone: true },
+    })
+    if (!organization) throw new Error('Organisation introuvable.')
+
+    const paidAt = new Date()
+    await tx.organization.update({
+      where: { id: currentPayment.organizationId },
+      data: {
+        planId: parsePlanId(currentPayment.planId),
+        status: 'active',
+        currentPeriodEnd: calculateRenewalPeriodEnd(
+          organization.currentPeriodEnd,
+          paidAt,
+        ),
+        billingProvider,
+        trialEndsAt: null,
+        billingPhone: organization.billingPhone ?? currentPayment.customerPhone,
+      },
+    })
+
+    return tx.mobileMoneyPayment.update({
+      where: { id: paymentId },
+      data: {
+        status: 'accepted',
+        paidAt,
+        operatorId: extra?.operatorId ?? undefined,
+        paymentMethod: extra?.paymentMethod ?? undefined,
+        notifyPayload: extra?.notifyPayload as object | undefined,
+      },
+    })
+  })
 }
 
 function isWaveDirectChannel(channelId: string): boolean {
@@ -440,11 +454,19 @@ export async function handleWaveWebhook(req: Request, res: Response) {
           : ''
 
     const signature = req.get('Wave-Signature') ?? req.get('wave-signature') ?? undefined
-    if (process.env.WAVE_WEBHOOK_SECRET?.trim()) {
-      if (!verifyWaveWebhookSignature(rawBody, signature)) {
-        res.status(401).send('Invalid signature')
-        return
-      }
+    const webhookSecretConfigured = Boolean(
+      process.env.WAVE_WEBHOOK_SECRET?.trim(),
+    )
+    if (!webhookSecretConfigured && !waveDemoMode()) {
+      res.status(503).send('Wave webhook not configured')
+      return
+    }
+    if (
+      webhookSecretConfigured &&
+      !verifyWaveWebhookSignature(rawBody, signature)
+    ) {
+      res.status(401).send('Invalid signature')
+      return
     }
 
     const event = parseWaveWebhookEvent(rawBody)

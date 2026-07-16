@@ -66,7 +66,11 @@ export function Button({
           {iconLeft}
         </span>
       ) : null}
-      {children ? <span className="truncate">{children}</span> : null}
+      {children ? (
+        <span className={cn(fullWidth ? 'min-w-0 text-center leading-snug' : 'truncate')}>
+          {children}
+        </span>
+      ) : null}
       {iconRight && !loading ? (
         <span className="flex shrink-0 items-center [&_svg]:h-3.5 [&_svg]:w-3.5">
           {iconRight}

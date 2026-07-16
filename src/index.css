@@ -51,6 +51,17 @@ body {
   overflow-x: clip;
 }
 
+@layer base {
+  button:not(:disabled),
+  [role='button']:not([aria-disabled='true']),
+  a[href],
+  label[for],
+  select:not(:disabled),
+  summary {
+    cursor: pointer;
+  }
+}
+
 body {
   margin: 0;
   font-family: var(--font-sans);
@@ -66,10 +77,11 @@ body {
 }
 
 #root {
+  /* Hauteur libre pour l’accueil / connexion / marketing.
+     La caisse (Shell) verrouille son viewport localement. */
   min-height: 100svh;
   width: 100%;
   max-width: 100vw;
-  overflow-x: clip;
 }
 
 @layer utilities {
@@ -189,13 +201,20 @@ body {
     background: var(--color-surface);
     border: 1px solid var(--color-border);
     border-radius: 10px;
-    padding: 0.5rem 0.75rem;
+    padding-block: 0.5rem;
+    padding-inline: 0.75rem;
     font-size: 0.875rem;
     line-height: 1.45;
     color: var(--color-ink);
     transition:
       border-color 140ms var(--ease-out-quart),
       box-shadow 140ms var(--ease-out-quart);
+  }
+  .ui-input.ui-input--icon-left {
+    padding-left: 2.75rem;
+  }
+  .ui-input.ui-input--icon-right {
+    padding-right: 2.75rem;
   }
   .ui-input::placeholder {
     color: var(--color-ink-subtle);
@@ -260,7 +279,6 @@ body {
     scrollbar-width: thin;
     scrollbar-color: var(--color-border-strong) transparent;
     -webkit-overflow-scrolling: touch;
-    overscroll-behavior: contain;
   }
   .ui-scroll::-webkit-scrollbar {
     width: 8px;
@@ -340,8 +358,8 @@ body {
 
   .pb-safe-caisse {
     padding-bottom: max(
-      5.75rem,
-      calc(4.5rem + env(safe-area-inset-bottom, 0px))
+      6.25rem,
+      calc(5rem + env(safe-area-inset-bottom, 0px))
     );
   }
 
@@ -359,6 +377,8 @@ body {
     overflow-x: auto;
     -webkit-overflow-scrolling: touch;
     overscroll-behavior-x: contain;
+    overscroll-behavior-y: auto;
+    touch-action: pan-x pinch-zoom;
     scrollbar-width: none;
   }
 
@@ -1027,6 +1047,9 @@ body {
 /* ——— Caisse POS · thème luxe clair ——— */
 @layer utilities {
   .caisse-main {
+    min-height: 0;
+    touch-action: pan-y;
+    overscroll-behavior-y: auto;
     background:
       radial-gradient(ellipse 80% 50% at 10% -5%, rgba(212, 181, 106, 0.14), transparent 55%),
       radial-gradient(ellipse 60% 40% at 95% 0%, rgba(255, 250, 240, 0.9), transparent 50%),
@@ -1097,6 +1120,8 @@ body {
   }
 
   .caisse-cat-pill {
+    display: inline-flex;
+    align-items: center;
     border-radius: 9999px;
     border: 1px solid rgba(184, 146, 46, 0.18);
     background: rgba(255, 255, 255, 0.85);
@@ -1105,6 +1130,7 @@ body {
     font-weight: 600;
     letter-spacing: 0.02em;
     color: var(--color-caisse-muted);
+    cursor: pointer;
     transition:
       background 180ms var(--ease-out-quart),
       border-color 180ms var(--ease-out-quart),
@@ -1128,15 +1154,32 @@ body {
   .caisse-product-card {
     position: relative;
     overflow: hidden;
-    border-radius: 18px;
+    border-radius: 14px;
     border: 1px solid rgba(184, 146, 46, 0.16);
     background:
       linear-gradient(165deg, rgba(255, 253, 249, 0.98) 0%, rgba(250, 246, 240, 0.94) 100%);
     box-shadow: var(--shadow-caisse-card);
+    cursor: pointer;
     transition:
       border-color 200ms var(--ease-out-quart),
       box-shadow 200ms var(--ease-out-quart),
       transform 200ms var(--ease-out-quart);
+  }
+
+  .caisse-product-card--compact {
+    border-radius: 10px;
+  }
+
+  .caisse-product-card--compact:hover:not(:disabled) {
+    transform: translateY(-1px);
+  }
+
+  .caisse-product-card:active:not(:disabled) {
+    transform: scale(0.97);
+  }
+
+  .caisse-product-card--compact:active:not(:disabled) {
+    transform: scale(0.96);
   }
 
   .caisse-product-card::after {
@@ -1182,25 +1225,75 @@ body {
   }
 
   .caisse-cart-line {
-    border-radius: 14px;
+    border-radius: 10px;
     border: 1px solid rgba(184, 146, 46, 0.14);
-    background: rgba(255, 255, 255, 0.72);
+    background: rgba(255, 255, 255, 0.82);
     backdrop-filter: blur(6px);
+    transition:
+      border-color 180ms var(--ease-out-quart),
+      box-shadow 180ms var(--ease-out-quart);
   }
 
-  .caisse-cart-footer {
-    border-top: 1px solid rgba(184, 146, 46, 0.16);
-    background: linear-gradient(0deg, rgba(247, 240, 227, 0.55) 0%, rgba(255, 254, 251, 0.92) 100%);
+  .caisse-cart-line:hover {
+    border-color: rgba(184, 146, 46, 0.24);
+    box-shadow: 0 6px 18px -14px rgba(26, 35, 50, 0.28);
+  }
+
+  .caisse-cart-summary,
+  .caisse-cart-payment {
+    backdrop-filter: blur(4px);
+  }
+
+  .caisse-cart-change {
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.65);
+  }
+
+  .caisse-qty-btn {
+    touch-action: manipulation;
+  }
+
+  .caisse-cart-body {
+    min-height: 0;
+    touch-action: pan-y;
+  }
+
+  /* Scroll tactile sans barre visible dans le panier */
+  .caisse-cart-scroll {
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+  }
+
+  .caisse-cart-scroll::-webkit-scrollbar {
+    display: none;
+  }
+
+  .caisse-cart-recap {
+    padding-bottom: 0.25rem;
+  }
+
+  .caisse-cart-checkout {
+    border-top: 1px solid rgba(184, 146, 46, 0.14);
+    background: linear-gradient(180deg, rgba(255, 254, 251, 0.98) 0%, rgba(247, 240, 227, 0.88) 100%);
+    box-shadow: 0 -10px 28px -18px rgba(26, 35, 50, 0.18);
   }
 
   .caisse-total-display {
-    font-size: 1.375rem;
+    font-size: 1.25rem;
     font-weight: 700;
     letter-spacing: -0.02em;
+    color: var(--color-caisse-gold);
     background: linear-gradient(135deg, var(--color-caisse-gold) 0%, #8f6f1f 100%);
     -webkit-background-clip: text;
     background-clip: text;
-    color: transparent;
+    -webkit-text-fill-color: transparent;
+  }
+
+  @supports not ((-webkit-background-clip: text) or (background-clip: text)) {
+    .caisse-total-display {
+      -webkit-text-fill-color: currentColor;
+      color: var(--color-caisse-gold);
+    }
   }
 
   .caisse-checkout-btn {
@@ -1237,6 +1330,34 @@ body {
       rgba(247, 240, 227, 0.95) 100%
     ) !important;
     box-shadow: var(--shadow-caisse-pop) !important;
+  }
+
+  @keyframes caisse-mobile-cart-pulse {
+    0%,
+    100% {
+      transform: translateY(0) scale(1);
+    }
+    35% {
+      transform: translateY(-2px) scale(1.02);
+    }
+  }
+
+  @keyframes caisse-mobile-cart-badge-pop {
+    0%,
+    100% {
+      transform: scale(1);
+    }
+    40% {
+      transform: scale(1.18);
+    }
+  }
+
+  .caisse-mobile-cart--pulse {
+    animation: caisse-mobile-cart-pulse 0.52s var(--ease-out-quart);
+  }
+
+  .caisse-mobile-cart-badge--pulse {
+    animation: caisse-mobile-cart-badge-pop 0.52s var(--ease-out-quart);
   }
 
   .caisse-mobile-cart-cta {

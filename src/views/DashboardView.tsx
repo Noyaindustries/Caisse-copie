@@ -1,5 +1,5 @@
 import { useLiveQuery } from 'dexie-react-hooks'
-import { useMemo } from 'react'
+import { useMemo, useState } from 'react'
 import {
   Area,
   AreaChart,
@@ -128,13 +128,13 @@ export function DashboardView({
   const pendingSync = useLiveQuery(() => db.syncQueue.count(), [], 0) ?? 0
   const onlineOrdersRaw =
     useLiveQuery(() => db.onlineOrders.toArray(), [], []) ?? []
+  const [now] = useState(Date.now)
 
   const sales = useMemo(
     () => filterSalesForStore(salesRaw, activeStoreId),
     [salesRaw, activeStoreId],
   )
 
-  const now = Date.now()
   const sales7d = useMemo(() => filterSalesSince(sales, now - 7 * 86400000), [sales, now])
   const sales30d = useMemo(() => filterSalesSince(sales, now - 30 * 86400000), [sales, now])
 

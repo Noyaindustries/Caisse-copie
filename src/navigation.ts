@@ -163,10 +163,10 @@ export const VIEW_ACCENTS: Record<NavViewId, ViewAccent> = {
     chip: 'bg-blue-100 text-blue-800',
   },
   journal: {
-    icon: 'text-zinc-600 bg-zinc-100',
-    iconActive: 'text-zinc-800 bg-zinc-200',
-    labelActive: 'text-zinc-900',
-    chip: 'bg-zinc-200 text-zinc-800',
+    icon: 'text-teal-600 bg-teal-50',
+    iconActive: 'text-teal-700 bg-teal-100',
+    labelActive: 'text-teal-900',
+    chip: 'bg-teal-100 text-teal-800',
   },
   personnel: {
     icon: 'text-pink-600 bg-pink-50',
@@ -187,16 +187,16 @@ export const VIEW_ACCENTS: Record<NavViewId, ViewAccent> = {
     chip: 'bg-purple-100 text-purple-800',
   },
   integrations: {
+    icon: 'text-cyan-600 bg-cyan-50',
+    iconActive: 'text-cyan-700 bg-cyan-100',
+    labelActive: 'text-cyan-900',
+    chip: 'bg-cyan-100 text-cyan-800',
+  },
+  parametres: {
     icon: 'text-slate-600 bg-slate-100',
     iconActive: 'text-slate-800 bg-slate-200',
     labelActive: 'text-slate-900',
     chip: 'bg-slate-200 text-slate-800',
-  },
-  parametres: {
-    icon: 'text-zinc-600 bg-zinc-100',
-    iconActive: 'text-zinc-800 bg-zinc-200',
-    labelActive: 'text-zinc-900',
-    chip: 'bg-zinc-200 text-zinc-800',
   },
   network: {
     icon: 'text-green-600 bg-green-50',
@@ -298,7 +298,10 @@ const NAV_SECTIONS_GERANT: readonly NavSection[] = [
   },
   {
     title: 'Configuration',
-    items: [{ id: 'parametres', label: 'Paramètres' }],
+    items: [
+      { id: 'parametres', label: 'Paramètres' },
+      { id: 'subscription', label: 'Abonnement' },
+    ],
   },
 ] as const
 

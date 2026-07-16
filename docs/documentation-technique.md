@@ -70,13 +70,14 @@ CaisseCI/
 │       └── prisma.ts
 ├── src/
 │   ├── App.tsx               # Routage SPA (marketing, caisse, abonnement)
-│   ├── Shell.tsx             # Orchestrateur modules caisse
+│   ├── Shell.tsx             # Orchestrateur modules caisse + layout responsive
 │   ├── navigation.ts         # Modules, rôles, menus
-│   ├── views/                # Écrans métiers
-│   ├── components/           # UI réutilisable
+│   ├── views/                # Écrans métiers (voir §4 bis)
+│   ├── components/           # UI réutilisable (Sidebar, Topbar, ProductGrid…)
+│   ├── ui/                   # Design system (PageHeader, Tabs, Table, Button…)
 │   ├── context/              # Subscription, ActiveStore
 │   ├── db/                   # Dexie schema & types
-│   ├── lib/                  # API client, subscription, routes
+│   ├── lib/                  # API client, subscription, routes, csvProducts
 │   └── auth/                 # Session staff, permissions
 ├── public/                   # Assets statiques, branding, marketing
 └── docs/                     # Documentation
@@ -98,9 +99,59 @@ Défini dans `src/lib/siteRoutes.ts` et `src/App.tsx`.
 
 La navigation interne caisse utilise un état `NavViewId` dans `Shell.tsx` (pas de React Router).
 
+### 4 bis. Vues métier (`src/views/`)
+
+| Fichier | Module | Plan min. |
+|---------|--------|-----------|
+| `CatalogueView.tsx` | Catalogue | starter |
+| `StocksView.tsx` | Stocks | starter |
+| `TicketsFacturesView.tsx` | Tickets & factures | starter |
+| `JournalReportView.tsx` | Rapport journalier | starter |
+| `DashboardView.tsx` | Tableau de bord | starter |
+| `KitchenView.tsx` | Cuisine KDS | pro |
+| `TablesManagementView.tsx` | Tables | pro |
+| `OnlineOrdersValidationView.tsx` | Commandes en ligne | pro |
+| `PromotionsView.tsx` | Promotions | pro |
+| `LoyaltyProgramView.tsx` | Fidélité | pro |
+| `ComptabiliteView.tsx` | Comptabilité | pro |
+| `AnalytiqueView.tsx` | Analytique | pro |
+| `MultiStoreView.tsx` | Multi-magasins | business |
+| `CrmView.tsx` | CRM | business |
+| `RhManagementView.tsx` | RH | business |
+| `IntegrationsView.tsx` | Intégrations | business |
+| `PersonnelView.tsx` | Personnel | starter |
+| `PointageView.tsx` | Pointage | starter |
+| `ParametresView.tsx` | Paramètres | starter |
+| `SubscriptionView.tsx` | Abonnement (dans Shell) | — |
+| `MarketingSiteView.tsx` | Site `/` | public |
+| `PublicStorefrontPage.tsx` | Boutique `/boutique/:code` | public |
+
+Chargement lazy des vues lourdes depuis `Shell.tsx` pour réduire le bundle initial.
+
 ---
 
-## 5. Authentification
+## 5. Interface responsive
+
+Stack : **Tailwind CSS 4** + utilitaires dans `src/index.css`.
+
+| Fichier | Rôle |
+|---------|------|
+| `index.html` | `viewport-fit=cover` (safe-area iOS) |
+| `index.css` | `app-main-pad`, `pb-safe`, `tabs-scroll-x`, `fixed-safe-bottom` |
+| `Shell.tsx` | `max-w-[1680px]`, panier mobile, padding safe-area caisse |
+| `Topbar.tsx` | `safe-area-inset-top`, sous-titre `hidden sm:block` |
+| `Sidebar.tsx` | Drawer mobile avec safe-area |
+| `PageHeader.tsx` | Titres `text-xl sm:text-2xl`, actions `flex-wrap` |
+| `Tabs.tsx` | `tabs-scroll-x` sur onglets segmentés |
+| `Table.tsx` | Colonnes `hideBelow: 'sm' \| 'md' \| 'lg'` |
+| `JournalReportView.tsx` | Tableau desktop + cartes `<md` pour ventes |
+| `TicketsFacturesView.tsx` | Cartes mobile pour historique |
+
+Breakpoints Tailwind habituels : `sm` 640px, `md` 768px, `lg` 1024px, `xl` 1280px.
+
+---
+
+## 6. Authentification
 
 ### Gérant (organisation)
 
@@ -119,7 +170,7 @@ Fichiers : `server/lib/ownerAuth.ts`, `src/lib/subscription/ownerAuth.ts`.
 
 ---
 
-## 6. Abonnement
+## 7. Abonnement
 
 ### Plans (`server/lib/subscriptionPlans.ts`)
 
@@ -144,12 +195,13 @@ Fichiers : `server/lib/ownerAuth.ts`, `src/lib/subscription/ownerAuth.ts`.
 |-------|----------|---------|
 | Stripe (carte) | `server/lib/stripe.ts` | `POST /api/billing/webhook` |
 | CinetPay (MM) | `server/lib/cinetpay.ts` | `POST /api/billing/cinetpay/notify` |
+| Wave (MM CI) | `server/lib/wave.ts` | `POST /api/billing/wave/webhook` |
 
 Opérateurs CI : Orange Money, Wave, MTN MoMo, Moov.
 
 ---
 
-## 7. API REST
+## 8. API REST
 
 Base : `/api` (proxy Vite → `:4000` en dev).
 
@@ -204,7 +256,7 @@ Base : `/api` (proxy Vite → `:4000` en dev).
 
 ---
 
-## 8. Base de données (Prisma / MongoDB)
+## 9. Base de données (Prisma / MongoDB)
 
 Schéma : `prisma/schema.prisma`.
 
@@ -229,7 +281,7 @@ npm run db:up             # MongoDB local (Docker Compose)
 
 ---
 
-## 9. Données locales (Dexie)
+## 10. Données locales (Dexie)
 
 Fichier principal : `src/db/db.ts`.
 
@@ -247,7 +299,7 @@ Le seed initial est chargé par `ensureSeed()` au démarrage.
 
 ---
 
-## 10. Synchronisation cloud
+## 11. Synchronisation cloud
 
 Variable : `VITE_CLOUD_SYNC_URL` → `POST /api/caisseci/sync`.
 
@@ -267,7 +319,7 @@ Sans URL configurée, la file est vidée en mode démo (latence simulée).
 
 ---
 
-## 11. PWA et mode offline
+## 12. PWA et mode offline
 
 - Manifest : `vite.config.ts` → `VitePWA`
 - Service worker : cache assets, fallback `index.html`
@@ -276,7 +328,7 @@ Sans URL configurée, la file est vidée en mode démo (latence simulée).
 
 ---
 
-## 12. Intégrations matérielles (démo)
+## 13. Intégrations matérielles (démo)
 
 Configuration : `src/lib/integrationsConfig.ts` (localStorage).
 
@@ -292,7 +344,7 @@ Logique checkout : `src/lib/checkoutPayment.ts`, `src/components/CartPanel.tsx`.
 
 ---
 
-## 13. Variables d’environnement
+## 14. Variables d’environnement
 
 | Variable | Obligatoire | Description |
 |----------|-------------|-------------|
@@ -305,6 +357,11 @@ Logique checkout : `src/lib/checkoutPayment.ts`, `src/components/CartPanel.tsx`.
 | `CINETPAY_API_KEY` | Optionnel | API CinetPay |
 | `CINETPAY_SITE_ID` | Optionnel | Site CinetPay |
 | `CINETPAY_DEMO_MODE` | Non | `true` = simulation locale |
+| `WAVE_API_KEY` | Optionnel | API Business Wave CI |
+| `WAVE_WEBHOOK_SECRET` | Optionnel | Secret webhook Wave |
+| `WAVE_DEMO_MODE` | Non | Simulation sans clé Wave |
+| `BLOB_READ_WRITE_TOKEN` | Optionnel | Vercel Blob — photos catalogue |
+| `PLATFORM_ADMIN_SECRET` | Optionnel | Console `/admin` |
 | `SMS_PROVIDER_URL` | Optionnel | Endpoint envoi SMS |
 | `SMS_PROVIDER_TOKEN` | Optionnel | Token SMS |
 | `SUBSCRIPTION_REMINDER_INTERVAL_HOURS` | Non | Planificateur rappels (défaut 6) |
@@ -312,7 +369,7 @@ Logique checkout : `src/lib/checkoutPayment.ts`, `src/components/CartPanel.tsx`.
 
 ---
 
-## 14. Développement
+## 15. Développement
 
 ```bash
 # Installation
@@ -330,6 +387,14 @@ npm run dev:full
 # → App http://localhost:5173 (proxy /api)
 ```
 
+### Dépannage dev
+
+| Erreur | Cause | Action |
+|--------|-------|--------|
+| `EADDRINUSE :::4000` | API déjà lancée | `netstat -ano \| findstr :4000` puis `taskkill /PID <pid> /F` |
+| Vite sur 5174/5175 | Ports 5173 occupés | Utiliser l’URL affichée dans le terminal |
+| Module Prisma manquant | Client non généré | `npm run prisma:generate` |
+
 ### Scripts utiles
 
 | Script | Usage |
@@ -341,7 +406,7 @@ npm run dev:full
 
 ---
 
-## 15. Déploiement
+## 16. Déploiement
 
 ### Build
 
@@ -364,7 +429,7 @@ Compatible Render, Railway, VPS, etc. Un seul service web suffit (API + fichiers
 
 ---
 
-## 16. Sécurité
+## 17. Sécurité
 
 - Ne jamais exposer `STRIPE_SECRET_KEY`, `CINETPAY_API_KEY` côté client.
 - Mots de passe gérant : hash scrypt, validation Gmail côté serveur.
@@ -374,7 +439,7 @@ Compatible Render, Railway, VPS, etc. Un seul service web suffit (API + fichiers
 
 ---
 
-## 17. Extensions recommandées
+## 18. Extensions recommandées
 
 - Drivers matériels réels (TPE, imprimantes ESC/POS réseau)
 - Tests E2E (Playwright) sur parcours caisse et abonnement
@@ -384,7 +449,7 @@ Compatible Render, Railway, VPS, etc. Un seul service web suffit (API + fichiers
 
 ---
 
-## 18. Références code
+## 19. Références code
 
 | Sujet | Fichiers clés |
 |-------|---------------|
@@ -394,4 +459,6 @@ Compatible Render, Railway, VPS, etc. Un seul service web suffit (API + fichiers
 | Onboarding | `OrganizationSetup.tsx` |
 | Boutique luxe | `LuxuryStorefrontView.tsx`, `PublicStorefrontPage.tsx` |
 | Marketing | `MarketingSiteView.tsx`, `src/components/marketing/` |
-| Modules catalogue | `src/lib/subscription/moduleCatalog.ts` |
+| Modules catalogue | `CatalogueView.tsx`, `csvProducts.ts` |
+| Stocks | `StocksView.tsx` |
+| Tickets / rapport | `TicketsFacturesView.tsx`, `JournalReportView.tsx` |

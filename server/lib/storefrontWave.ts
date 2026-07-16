@@ -1,4 +1,9 @@
+import type { Prisma } from '@prisma/client'
 import { prisma } from './prisma.js'
+
+function toInputJson(value: unknown): Prisma.InputJsonValue {
+  return JSON.parse(JSON.stringify(value)) as Prisma.InputJsonValue
+}
 
 export async function findStorefrontOrderByExternalId(externalId: string) {
   return prisma.storefrontOrder.findUnique({ where: { externalId } })
@@ -31,7 +36,7 @@ export async function markStorefrontOrderPaid(
     where: { id: row.id },
     data: {
       status: 'pending',
-      payload: {
+      payload: toInputJson({
         ...basePayload,
         status: 'pending',
         paymentStatus: 'paid',
@@ -40,7 +45,7 @@ export async function markStorefrontOrderPaid(
         waveTransactionId: extra?.waveTransactionId ?? null,
         paidAt: new Date().toISOString(),
         paymentNotifyPayload: extra?.notifyPayload ?? null,
-      },
+      }),
     },
   })
   return true
@@ -62,12 +67,12 @@ export async function markStorefrontOrderPaymentRefused(
     where: { id: row.id },
     data: {
       status: 'payment_failed',
-      payload: {
+      payload: toInputJson({
         ...basePayload,
         status: 'payment_failed',
         paymentStatus: 'failed',
         paymentNotifyPayload: notifyPayload ?? null,
-      },
+      }),
     },
   })
   return true

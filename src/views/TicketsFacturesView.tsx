@@ -113,6 +113,7 @@ export function TicketsFacturesView({
   const [editingStatus, setEditingStatus] = useState<TicketInvoiceStatus | null>(null)
   const [pendingDeleteDraftId, setPendingDeleteDraftId] = useState<string | null>(null)
   const [pendingDeleteUntil, setPendingDeleteUntil] = useState<number>(0)
+  const [now] = useState(Date.now)
   const [lines, setLines] = useState<DraftLine[]>([
     { name: '', qty: '1', unitPriceTTC: '', vatRatePct: String(DEFAULT_VAT_RATE_PCT) },
   ])
@@ -146,7 +147,7 @@ export function TicketsFacturesView({
     return () => {
       cancelled = true
     }
-  }, [sales, activeStoreLabel])
+  }, [sales, activeStoreLabel, toast])
 
   const normalizedLines = useMemo(() => {
     return lines
@@ -213,7 +214,6 @@ export function TicketsFacturesView({
     const issued = scopedRows.filter((r) => r.status === 'issued')
     const paid = scopedRows.filter((r) => r.status === 'paid')
     const drafts = scopedRows.filter((r) => r.status === 'draft')
-    const now = Date.now()
     const overdue = issued.filter((r) => r.dueAt != null && r.dueAt < now)
     return {
       issuedCount: issued.length,
@@ -223,7 +223,7 @@ export function TicketsFacturesView({
       overdueCount: overdue.length,
       totalDocs: scopedRows.length,
     }
-  }, [scopedRows])
+  }, [scopedRows, now])
 
   const saveDraft = async () => {
     try {

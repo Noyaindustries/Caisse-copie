@@ -68,8 +68,8 @@ export function MarketingFaqAccordion() {
                       <span className="font-bold text-ink">{item.q}</span>
                       <IconChevronDown
                         className={cn(
-                          'h-5 w-5 shrink-0 text-ink-subtle transition duration-200',
-                          isOpen && 'rotate-180 text-accent',
+                          'h-5 w-5 shrink-0 text-violet-500 transition duration-200',
+                          isOpen && 'rotate-180 text-violet-700',
                         )}
                       />
                     </button>

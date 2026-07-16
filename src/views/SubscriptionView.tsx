@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useLiveQuery } from 'dexie-react-hooks'
 
 import { MobileMoneyCheckoutModal } from '../components/MobileMoneyCheckoutModal'
 
@@ -9,6 +10,7 @@ import { SubscriptionHero } from '../components/subscription/SubscriptionHero'
 import { SubscriptionPlansSection } from '../components/subscription/SubscriptionPlansSection'
 
 import { useActiveStore } from '../context/ActiveStoreContext'
+import { db } from '../db/db'
 
 import { useSubscription } from '../context/SubscriptionContext'
 
@@ -59,6 +61,7 @@ import {
 } from '../ui/icons'
 
 import { daysUntil } from '../components/subscription/subscriptionUi'
+import { useHorizontalWheelScroll } from '../hooks/useHorizontalWheelScroll'
 
 
 
@@ -89,6 +92,18 @@ export function SubscriptionView() {
   const { subscription, refresh, usable, online } = useSubscription()
 
   const { displayProducts, activeStoreId, activeStore } = useActiveStore()
+  const promotions =
+    useLiveQuery(
+      () =>
+        db.promotions
+          .filter(
+            (promotion) =>
+              promotion.storeId == null || promotion.storeId === activeStoreId,
+          )
+          .toArray(),
+      [activeStoreId],
+      [],
+    ) ?? []
 
   const [plans, setPlans] = useState<PlanDefinition[]>([])
 
@@ -117,6 +132,9 @@ export function SubscriptionView() {
   const [publishBusy, setPublishBusy] = useState(false)
 
   const [activeSection, setActiveSection] = useState<string>(SECTION_NAV[0].id)
+
+  const sectionNavScrollRef = useRef<HTMLDivElement>(null)
+  useHorizontalWheelScroll(sectionNavScrollRef)
 
 
 
@@ -164,6 +182,8 @@ export function SubscriptionView() {
 
         products: displayProducts,
 
+        promotions,
+
       })
 
       toast.success(`Boutique publiée · ${result.productCount} article(s)`)
@@ -189,6 +209,8 @@ export function SubscriptionView() {
     activeStore?.name,
 
     displayProducts,
+
+    promotions,
 
     toast,
 
@@ -472,17 +494,17 @@ export function SubscriptionView() {
 
   return (
 
-    <div className="relative mx-auto max-w-7xl px-4 pb-20 pt-4 sm:px-6">
+    <div className="relative mx-auto max-w-7xl px-4 pb-20 pt-6 sm:px-6">
 
       <nav
 
-        className="sticky top-0 z-30 -mx-4 mb-6 border-b border-border/50 bg-zinc-50/90 px-4 py-3 backdrop-blur-xl sm:-mx-6 sm:px-6"
+        className="sticky top-0 z-30 -mx-4 mb-6 border-b border-[rgba(184,146,46,0.2)] bg-[#f7f3eb]/90 px-4 py-3 backdrop-blur-xl sm:-mx-6 sm:px-6"
 
         aria-label="Sections abonnement"
 
       >
 
-        <div className="flex gap-1 overflow-x-auto">
+        <div ref={sectionNavScrollRef} className="tabs-scroll-x flex gap-1 overflow-x-auto">
 
           {SECTION_NAV.map((item) => (
 
@@ -500,9 +522,9 @@ export function SubscriptionView() {
 
                 activeSection === item.id
 
-                  ? 'bg-ink text-white shadow-sm'
+                  ? 'bg-[#1c1812] text-[#f7f0e3] shadow-sm'
 
-                  : 'text-ink-muted hover:bg-white hover:text-ink',
+                  : 'text-ink-muted hover:bg-white/80 hover:text-ink',
 
               )}
 
