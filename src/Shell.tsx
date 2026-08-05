@@ -1280,9 +1280,9 @@ export function Shell({ staff, online, onLogout }: Props) {
   )
 
   return (
-    <div className="flex h-svh max-h-svh w-full max-w-full flex-col overflow-hidden bg-zinc-50">
+    <div className="caisse-shell flex h-svh max-h-svh w-full max-w-full flex-col overflow-hidden bg-zinc-50">
       <SubscriptionBanner onOpenSubscription={() => setActiveView('subscription')} />
-      <div className="flex min-h-0 flex-1">
+      <div className="flex min-h-0 min-w-0 flex-1">
       {receiptOpen ? (
         <ReceiptModal
           source={
@@ -1739,7 +1739,8 @@ export function Shell({ staff, online, onLogout }: Props) {
                 ref={mobileFabEmptyRef}
                 type="button"
                 onClick={() => setIsFloatingCartOpen(true)}
-                className={`fixed-safe-bottom fixed right-3 z-30 flex h-12 w-12 items-center justify-center rounded-2xl border border-[rgba(184,146,46,0.28)] bg-[linear-gradient(145deg,#fffefb,#f7f0e3)] text-caisse-gold shadow-(--shadow-caisse-pop) transition hover:brightness-[1.03] ${cartHideClass}`}
+                className={`fixed-safe-bottom fixed z-30 flex h-12 w-12 items-center justify-center rounded-2xl border border-[rgba(184,146,46,0.28)] bg-[linear-gradient(145deg,#fffefb,#f7f0e3)] text-caisse-gold shadow-(--shadow-caisse-pop) transition hover:brightness-[1.03] ${cartHideClass}`}
+                style={{ right: 'max(0.75rem, env(safe-area-inset-right, 0px))' }}
                 aria-label="Ouvrir le panier"
               >
                 <IconReceipt className="h-5 w-5 text-amber-600" />
@@ -1760,8 +1761,8 @@ export function Shell({ staff, online, onLogout }: Props) {
                   className="absolute inset-0 animate-ui-fade-in bg-[#1a2332]/35 backdrop-blur-[3px]"
                   onClick={() => setIsFloatingCartOpen(false)}
                 />
-                <div className="absolute inset-y-0 right-0 w-full animate-ui-slide-up sm:w-[min(420px,92vw)]">
-                  <div className="flex min-h-0 h-full flex-col border-l border-[rgba(184,146,46,0.2)] bg-[#fffefb] shadow-(--shadow-overlay)">
+                <div className="absolute inset-y-0 right-0 flex w-full max-h-svh animate-ui-slide-up flex-col pt-[env(safe-area-inset-top,0px)] sm:w-[min(420px,92vw)]">
+                  <div className="caisse-drawer-panel flex min-h-0 h-full min-w-0 flex-col border-l border-[rgba(184,146,46,0.2)] bg-[#fffefb] shadow-(--shadow-overlay)">
                     <CartPanel
                       lines={cart}
                       products={displayProducts}

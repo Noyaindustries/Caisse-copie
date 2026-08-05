@@ -27,7 +27,9 @@ export async function fetchPlans(): Promise<{
   stripeEnabled: boolean
   mobileMoneyEnabled: boolean
 }> {
-  const res = await fetch(apiUrl('/billing/plans'))
+  const res = await fetch(apiUrl('/billing/plans'), {
+    signal: AbortSignal.timeout(8_000),
+  })
   return parseJson(res)
 }
 
@@ -75,7 +77,9 @@ export async function fetchPaymentHistory(
   _licenseKey: string,
 ): Promise<{ payments: MobileMoneyPaymentRecord[] }> {
   const res = await fetch(apiUrl('/billing/payments/history'), {
-    headers: buildOrgAuthHeaders(),
+    // `_licenseKey` est conservé dans la signature pour compat. avec l’appelant,
+    // mais l’auth dépend principalement des crédentials stockées localement.
+    headers: buildOrgAuthHeaders({ 'x-license-key': _licenseKey }),
   })
   return parseJson(res)
 }
@@ -138,7 +142,7 @@ export async function refreshSubscription(
   _licenseKey: string,
 ): Promise<SubscriptionSnapshot> {
   const res = await fetch(apiUrl('/billing/status'), {
-    headers: buildOrgAuthHeaders(),
+    headers: buildOrgAuthHeaders({ 'x-license-key': _licenseKey }),
   })
   const data = await parseJson<Omit<SubscriptionSnapshot, 'cachedAt'>>(res)
   return { ...data, cachedAt: Date.now() }
@@ -168,7 +172,7 @@ export async function startCheckout(
 export async function openBillingPortal(_licenseKey: string): Promise<string> {
   const res = await fetch(apiUrl('/billing/portal'), {
     method: 'POST',
-    headers: buildOrgAuthHeaders(),
+    headers: buildOrgAuthHeaders({ 'x-license-key': _licenseKey }),
   })
   const data = await parseJson<{ url: string }>(res)
   return data.url
@@ -210,7 +214,7 @@ export async function fetchOrgPaymentProviders(
   _licenseKey: string,
 ): Promise<OrgPaymentProvidersStatus> {
   const res = await fetch(apiUrl('/billing/payment-providers'), {
-    headers: buildOrgAuthHeaders(),
+    headers: buildOrgAuthHeaders({ 'x-license-key': _licenseKey }),
   })
   return parseJson(res)
 }

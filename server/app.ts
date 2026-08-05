@@ -36,10 +36,10 @@ const vercelOrigins = [
 const allowedOrigins = new Set(
   [
     process.env.APP_URL,
-    process.env.VITE_DEV_ORIGIN,
+    process.env.NEXT_DEV_ORIGIN,
     ...vercelOrigins.map((host) => `https://${host}`),
-    'http://localhost:5173',
-    'http://127.0.0.1:5173',
+    'http://localhost:3000',
+    'http://127.0.0.1:3000',
   ].filter((value): value is string => Boolean(value)),
 )
 

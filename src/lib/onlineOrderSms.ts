@@ -1,5 +1,6 @@
 import type { OnlineOrder } from '../db/types'
 import { apiUrl } from './apiUrl'
+import { clientEnv } from './clientEnv'
 
 type SmsSendResult =
   | { ok: true; mode: 'webhook' | 'demo' }
@@ -25,7 +26,7 @@ export async function sendOrderApprovedSms(
     return { ok: false, error: 'Numero client absent.' }
   }
   const message = buildApprovalMessage(order)
-  const explicitEndpoint = import.meta.env.VITE_SMS_WEBHOOK_URL?.trim()
+  const explicitEndpoint = clientEnv.smsWebhookUrl()
   const endpoint = explicitEndpoint || apiUrl('/webhooks/sms')
 
   try {

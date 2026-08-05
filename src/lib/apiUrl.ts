@@ -1,5 +1,7 @@
+import { clientEnv } from './clientEnv'
+
 function configuredApiOrigin(): string {
-  const configured = import.meta.env.VITE_API_BASE_URL?.trim()
+  const configured = clientEnv.apiBaseUrl()
   if (!configured) return ''
 
   return configured.replace(/\/+$/, '').replace(/\/api$/i, '')
@@ -7,21 +9,21 @@ function configuredApiOrigin(): string {
 
 /**
  * Indique si le client peut joindre l’API cloud (push/pull sync, staff distant).
- * - `VITE_API_BASE_URL` : frontend et API sur des domaines distincts ;
- * - proxy Vite `/api` ou monolithe Render : chemins relatifs `/api/...`.
+ * - `NEXT_PUBLIC_API_BASE_URL` : frontend et API sur des domaines distincts ;
+ * - rewrites Next `/api` ou monolithe API : chemins relatifs `/api/...`.
  */
 export function isCloudApiConfigured(): boolean {
-  if (import.meta.env.VITE_API_BASE_URL?.trim()) return true
-  if (import.meta.env.VITE_CLOUD_SYNC_URL?.trim()) return true
+  if (clientEnv.apiBaseUrl()) return true
+  if (clientEnv.cloudSyncUrl()) return true
   return typeof window !== 'undefined'
 }
 
 /**
  * URL d’envoi de la file sync locale → cloud.
- * Préfère `apiUrl('/caisseci/sync')` ; `VITE_CLOUD_SYNC_URL` reste un repli legacy.
+ * Préfère `apiUrl('/caisseci/sync')` ; `NEXT_PUBLIC_CLOUD_SYNC_URL` reste un repli legacy.
  */
 export function cloudSyncPushUrl(): string {
-  const legacy = import.meta.env.VITE_CLOUD_SYNC_URL?.trim()
+  const legacy = clientEnv.cloudSyncUrl()
   if (legacy) return legacy
   return apiUrl('/caisseci/sync')
 }
@@ -29,7 +31,7 @@ export function cloudSyncPushUrl(): string {
 /**
  * Construit une URL API compatible avec :
  * - un déploiement fullstack sur le même domaine ;
- * - un frontend statique et une API hébergée séparément.
+ * - un frontend Next et une API hébergée séparément.
  */
 export function apiUrl(path: string): string {
   const normalizedPath = path.startsWith('/') ? path : `/${path}`

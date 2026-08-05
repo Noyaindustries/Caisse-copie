@@ -44,6 +44,19 @@ export async function uploadProductImageToBlob(
   return data.url
 }
 
+export async function uploadOrgAssetToBlob(
+  kind: 'logo' | 'banner',
+  dataUrl: string,
+): Promise<string> {
+  const res = await fetch(apiUrl('/uploads/org-asset'), {
+    method: 'POST',
+    headers: buildOrgAuthHeaders({ 'Content-Type': 'application/json' }),
+    body: JSON.stringify({ kind, dataUrl }),
+  })
+  const data = await parseJson<{ url: string }>(res)
+  return data.url
+}
+
 export type ProductImageFields = {
   imageDataUrl?: string
   imageUrl?: string

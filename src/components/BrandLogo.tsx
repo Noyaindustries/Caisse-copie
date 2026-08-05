@@ -29,7 +29,7 @@ export function BrandLogo({
       src={BRAND_LOGO_SRC}
       alt={alt}
       className={cn(
-        'shrink-0 rounded-full object-cover',
+        'shrink-0 rounded-full object-contain bg-white',
         SIZES[size],
         ring === 'light' && 'border border-white/25 bg-white shadow-sm',
         ring === 'dark' && 'border border-white/15 bg-white/95',

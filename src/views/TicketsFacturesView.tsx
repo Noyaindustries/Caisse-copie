@@ -519,13 +519,70 @@ export function TicketsFacturesView({
             <Input value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Conditions, détails…" />
           </Field>
           {lines.map((line, idx) => (
-            <div key={idx} className="grid gap-2 md:col-span-3 md:grid-cols-12">
-              <Input className="md:col-span-5" value={line.name} onChange={(e) => setLines((prev) => prev.map((r, i) => (i === idx ? { ...r, name: e.target.value } : r)))} placeholder="Article/service" />
-              <Input className="md:col-span-2" inputMode="numeric" value={line.qty} onChange={(e) => setLines((prev) => prev.map((r, i) => (i === idx ? { ...r, qty: e.target.value } : r)))} placeholder="Qte" />
-              <Input className="md:col-span-3" inputMode="numeric" value={line.unitPriceTTC} onChange={(e) => setLines((prev) => prev.map((r, i) => (i === idx ? { ...r, unitPriceTTC: e.target.value } : r)))} placeholder="Prix TTC" />
-              <div className="flex items-stretch gap-2 md:col-span-2">
-                <Input className="min-w-0 flex-1" inputMode="numeric" value={line.vatRatePct} onChange={(e) => setLines((prev) => prev.map((r, i) => (i === idx ? { ...r, vatRatePct: e.target.value } : r)))} placeholder="TVA %" />
-                <Button variant="ghost" onClick={() => setLines((prev) => prev.filter((_, i) => i !== idx))} disabled={lines.length <= 1}>
+            <div
+              key={idx}
+              className="grid grid-cols-1 gap-2 sm:grid-cols-2 md:col-span-3 md:grid-cols-12"
+            >
+              <Input
+                className="sm:col-span-2 md:col-span-5"
+                value={line.name}
+                onChange={(e) =>
+                  setLines((prev) =>
+                    prev.map((r, i) =>
+                      i === idx ? { ...r, name: e.target.value } : r,
+                    ),
+                  )
+                }
+                placeholder="Article/service"
+              />
+              <Input
+                className="md:col-span-2"
+                inputMode="numeric"
+                value={line.qty}
+                onChange={(e) =>
+                  setLines((prev) =>
+                    prev.map((r, i) =>
+                      i === idx ? { ...r, qty: e.target.value } : r,
+                    ),
+                  )
+                }
+                placeholder="Qte"
+              />
+              <Input
+                className="md:col-span-3"
+                inputMode="numeric"
+                value={line.unitPriceTTC}
+                onChange={(e) =>
+                  setLines((prev) =>
+                    prev.map((r, i) =>
+                      i === idx ? { ...r, unitPriceTTC: e.target.value } : r,
+                    ),
+                  )
+                }
+                placeholder="Prix TTC"
+              />
+              <div className="flex items-stretch gap-2 sm:col-span-2 md:col-span-2">
+                <Input
+                  className="min-w-0 flex-1"
+                  inputMode="numeric"
+                  value={line.vatRatePct}
+                  onChange={(e) =>
+                    setLines((prev) =>
+                      prev.map((r, i) =>
+                        i === idx ? { ...r, vatRatePct: e.target.value } : r,
+                      ),
+                    )
+                  }
+                  placeholder="TVA %"
+                />
+                <Button
+                  variant="ghost"
+                  className="min-h-11 min-w-11 shrink-0"
+                  onClick={() =>
+                    setLines((prev) => prev.filter((_, i) => i !== idx))
+                  }
+                  disabled={lines.length <= 1}
+                >
                   -
                 </Button>
               </div>

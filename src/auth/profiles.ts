@@ -1,10 +1,11 @@
 import type { StaffProfile } from './types'
 import { isCloudApiConfigured } from '../lib/apiUrl'
+import { clientEnv } from '../lib/clientEnv'
 
 /**
  * Profils démo — disponibles uniquement en développement local.
  */
-const BUILTIN_STAFF_PROFILES: readonly StaffProfile[] = import.meta.env.DEV
+const BUILTIN_STAFF_PROFILES: readonly StaffProfile[] = clientEnv.isDev()
   ? ([
       {
         id: 'profile-caissier',

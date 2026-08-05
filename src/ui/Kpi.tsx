@@ -1,4 +1,6 @@
-import type { ReactNode } from 'react'
+'use client'
+
+import { useEffect, useState, type ReactNode } from 'react'
 import {
   Area,
   AreaChart,
@@ -42,6 +44,13 @@ export function Kpi({
   const sparkData = spark?.map((v, i) => ({ i, v })) ?? []
   const sparkColor = SPARK_COLOR[tone]
   const gradId = `kpi-spark-${tone}`
+  // Recharts mesure le parent au 1er paint ; sans layout → width/height -1 en console.
+  const [chartReady, setChartReady] = useState(false)
+  useEffect(() => {
+    if (sparkData.length < 2) return
+    const id = requestAnimationFrame(() => setChartReady(true))
+    return () => cancelAnimationFrame(id)
+  }, [sparkData.length])
 
   return (
     <div
@@ -85,28 +94,30 @@ export function Kpi({
       </div>
 
       {sparkData.length > 1 ? (
-        <div className="mt-3 h-9 w-full">
-          <ResponsiveContainer width="100%" height="100%">
-            <AreaChart
-              data={sparkData}
-              margin={{ top: 2, right: 0, left: 0, bottom: 0 }}
-            >
-              <defs>
-                <linearGradient id={gradId} x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0%" stopColor={sparkColor} stopOpacity={0.3} />
-                  <stop offset="100%" stopColor={sparkColor} stopOpacity={0} />
-                </linearGradient>
-              </defs>
-              <Area
-                type="monotone"
-                dataKey="v"
-                stroke={sparkColor}
-                strokeWidth={1.5}
-                fill={`url(#${gradId})`}
-                isAnimationActive={false}
-              />
-            </AreaChart>
-          </ResponsiveContainer>
+        <div className="mt-3 h-9 w-full min-w-0">
+          {chartReady ? (
+            <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={36}>
+              <AreaChart
+                data={sparkData}
+                margin={{ top: 2, right: 0, left: 0, bottom: 0 }}
+              >
+                <defs>
+                  <linearGradient id={gradId} x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stopColor={sparkColor} stopOpacity={0.3} />
+                    <stop offset="100%" stopColor={sparkColor} stopOpacity={0} />
+                  </linearGradient>
+                </defs>
+                <Area
+                  type="monotone"
+                  dataKey="v"
+                  stroke={sparkColor}
+                  strokeWidth={1.5}
+                  fill={`url(#${gradId})`}
+                  isAnimationActive={false}
+                />
+              </AreaChart>
+            </ResponsiveContainer>
+          ) : null}
         </div>
       ) : null}
     </div>

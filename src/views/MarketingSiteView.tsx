@@ -75,18 +75,19 @@ export function MarketingSiteView({
   }
 
   return (
-    <div className="min-h-svh bg-[#f8f9fc] pb-[calc(5rem+env(safe-area-inset-bottom))] text-ink">
+    <div className="marketing-page min-h-svh bg-[#f8f9fc] pb-[calc(5rem+env(safe-area-inset-bottom,0px))] text-ink">
       <MarketingScrollProgress />
 
       <header
         className={cn(
           'fixed inset-x-0 top-0 z-50 transition duration-500',
-          navScrolled && !mobileNavOpen ? 'px-3 pt-3' : '',
+          'pt-[env(safe-area-inset-top,0px)]',
+          navScrolled && !mobileNavOpen ? 'px-3 pt-[max(0.75rem,env(safe-area-inset-top,0px))]' : '',
         )}
       >
         <div
           className={cn(
-            'mx-auto flex max-w-7xl items-center justify-between gap-4 px-4 transition duration-500 sm:px-6',
+            'mx-auto flex min-w-0 max-w-7xl items-center justify-between gap-3 px-4 transition duration-500 sm:gap-4 sm:px-6',
             mobileNavOpen
               ? 'h-16 border-b border-border/50 bg-white/98 shadow-sm backdrop-blur-xl'
               : navScrolled
@@ -94,19 +95,19 @@ export function MarketingSiteView({
                 : 'h-16 bg-transparent',
           )}
         >
-          <button type="button" onClick={() => onNavigate(ROUTES.home)} className="flex items-center gap-2.5">
+          <button type="button" onClick={() => onNavigate(ROUTES.home)} className="flex min-w-0 items-center gap-2.5">
             <BrandLogo size="md" alt={BRAND_NAME} ring={navScrolled || mobileNavOpen ? 'subtle' : 'light'} />
-            <span className={cn('hidden font-bold tracking-tight sm:inline', !navScrolled && !mobileNavOpen && 'text-white')}>
+            <span className={cn('hidden truncate font-bold tracking-tight sm:inline', !navScrolled && !mobileNavOpen && 'text-white')}>
               CaisseCI
             </span>
           </button>
-          <nav className={cn('hidden items-center gap-1 text-sm font-medium md:flex', navScrolled || mobileNavOpen ? 'text-ink-muted' : 'text-slate-300')}>
+          <nav className={cn('hidden min-w-0 items-center gap-1 text-sm font-medium md:flex', navScrolled || mobileNavOpen ? 'text-ink-muted' : 'text-slate-300')}>
             {NAV_LINKS.map((link) => (
               <button
                 key={link.label}
                 type="button"
                 className={cn(
-                  'rounded-lg px-3.5 py-2 transition',
+                  'marketing-nav-hit rounded-lg px-3.5 py-2 transition',
                   navScrolled || mobileNavOpen ? 'hover:bg-surface-muted hover:text-ink' : 'hover:bg-white/10 hover:text-white',
                 )}
                 onClick={() => scrollTo(link.id)}
@@ -115,7 +116,7 @@ export function MarketingSiteView({
               </button>
             ))}
           </nav>
-          <div className="flex items-center gap-2">
+          <div className="flex shrink-0 items-center gap-2">
             <div className="hidden items-center gap-2 sm:flex">
               <Button type="button" variant="ghost" size="sm" className={cn(!navScrolled && !mobileNavOpen && 'text-slate-200 hover:bg-white/10 hover:text-white')} onClick={() => onNavigate(ROUTES.login)}>
                 Connexion
@@ -127,7 +128,7 @@ export function MarketingSiteView({
             <button
               type="button"
               className={cn(
-                'flex h-10 w-10 items-center justify-center rounded-xl border transition md:hidden',
+                'marketing-nav-hit flex h-11 w-11 items-center justify-center rounded-xl border transition md:hidden',
                 navScrolled || mobileNavOpen
                   ? 'border-border/60 bg-white text-ink hover:bg-surface-muted'
                   : 'border-white/15 bg-white/10 text-white hover:bg-white/15',
@@ -151,20 +152,20 @@ export function MarketingSiteView({
         </div>
 
         {mobileNavOpen ? (
-          <div className="mx-auto max-w-7xl border-t border-border/40 bg-white/98 px-4 py-5 shadow-lg backdrop-blur-xl md:hidden">
+          <div className="mx-auto max-w-7xl border-t border-border/40 bg-white/98 px-4 py-5 pb-[max(1.25rem,env(safe-area-inset-bottom,0px))] shadow-lg backdrop-blur-xl md:hidden">
             <nav className="flex flex-col gap-1">
               {NAV_LINKS.map((link) => (
                 <button
                   key={link.label}
                   type="button"
-                  className="rounded-xl px-4 py-3 text-left text-sm font-semibold text-ink hover:bg-surface-muted"
+                  className="marketing-nav-hit rounded-xl px-4 py-3 text-left text-sm font-semibold text-ink hover:bg-surface-muted"
                   onClick={() => scrollTo(link.id)}
                 >
                   {link.label}
                 </button>
               ))}
             </nav>
-            <div className="mt-4 grid grid-cols-2 gap-2">
+            <div className="mt-4 grid min-w-0 grid-cols-2 gap-2">
               <Button type="button" variant="secondary" className="w-full" onClick={() => { setMobileNavOpen(false); onNavigate(ROUTES.login) }}>
                 Connexion
               </Button>

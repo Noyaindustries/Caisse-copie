@@ -24,6 +24,7 @@ function writeSessionToken(token: string | undefined): void {
 }
 
 export function getOrganizationCredentials(): OrganizationCredentials | null {
+  if (typeof window === 'undefined') return null
   try {
     const raw = localStorage.getItem(ORG_KEY)
     if (!raw) return null
@@ -59,6 +60,7 @@ export function clearOrganizationCredentials(): void {
 }
 
 export function getCachedSubscription(): SubscriptionSnapshot | null {
+  if (typeof window === 'undefined') return null
   try {
     const raw = localStorage.getItem(SNAPSHOT_KEY)
     if (!raw) return null

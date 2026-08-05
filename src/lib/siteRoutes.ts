@@ -1,13 +1,13 @@
-import {
-  createContext,
-  createElement,
-  useCallback,
-  useContext,
-  useEffect,
-  useMemo,
-  useState,
-  type ReactNode,
-} from 'react'
+/**
+ * Helpers de routes + hook useSitePath (contexte).
+ * Le Provider Next (usePathname/useRouter) vit dans apps/web/app/SitePathProvider.tsx
+ */
+
+export {
+  SitePathContext,
+  useSitePath,
+  type SitePathContextValue,
+} from './sitePathContext'
 
 export const ROUTES = {
   home: '/',
@@ -20,65 +20,9 @@ export const ROUTES = {
   storefrontBase: '/boutique',
 } as const
 
-const PATH_CHANGE_EVENT = 'caisseci:pathchange'
-
-function readPathname(): string {
-  return typeof window === 'undefined' ? '/' : window.location.pathname
-}
-
-function notifyPathChange(): void {
-  if (typeof window === 'undefined') return
-  window.dispatchEvent(new Event(PATH_CHANGE_EVENT))
-}
-
 export function signupUrl(plan?: string): string {
   if (!plan) return ROUTES.signup
   return `${ROUTES.signup}?plan=${encodeURIComponent(plan)}`
-}
-
-type SitePathContextValue = {
-  pathname: string
-  navigate: (to: string) => void
-}
-
-const SitePathContext = createContext<SitePathContextValue | null>(null)
-
-export function SitePathProvider({ children }: { children: ReactNode }) {
-  const [pathname, setPathname] = useState(readPathname)
-
-  useEffect(() => {
-    const sync = () => setPathname(readPathname())
-    window.addEventListener('popstate', sync)
-    window.addEventListener(PATH_CHANGE_EVENT, sync)
-    return () => {
-      window.removeEventListener('popstate', sync)
-      window.removeEventListener(PATH_CHANGE_EVENT, sync)
-    }
-  }, [])
-
-  const navigate = useCallback((to: string) => {
-    const target = to.startsWith('/') ? to : `/${to}`
-    const current = `${window.location.pathname}${window.location.search}${window.location.hash}`
-    if (current !== target) {
-      window.history.pushState({}, '', target)
-    }
-    notifyPathChange()
-    setPathname(window.location.pathname)
-    window.scrollTo({ top: 0, behavior: 'auto' })
-  }, [])
-
-  const value = useMemo(() => ({ pathname, navigate }), [pathname, navigate])
-
-  return createElement(SitePathContext.Provider, { value }, children)
-}
-
-/** Doit être utilisé sous SitePathProvider. */
-export function useSitePath(): [string, (to: string) => void] {
-  const ctx = useContext(SitePathContext)
-  if (!ctx) {
-    throw new Error('useSitePath doit être utilisé dans SitePathProvider')
-  }
-  return [ctx.pathname, ctx.navigate]
 }
 
 export function isSignupPath(pathname: string): boolean {
@@ -119,16 +63,17 @@ export function storefrontUrl(storeCode: string, origin?: string): string {
   return `${base.replace(/\/$/, '')}${storefrontPath(storeCode)}`
 }
 
-export function isStaffPath(): boolean {
-  if (typeof window === 'undefined') return false
-  const { pathname, search, hash } = window.location
-  const p = pathname.toLowerCase()
-  const q = search.toLowerCase()
-  const h = hash.toLowerCase()
+export function isStaffPath(pathname?: string): boolean {
+  if (typeof window === 'undefined' && !pathname) return false
+  const path = (pathname ?? window.location.pathname).toLowerCase()
+  const search =
+    typeof window !== 'undefined' ? window.location.search.toLowerCase() : ''
+  const hash =
+    typeof window !== 'undefined' ? window.location.hash.toLowerCase() : ''
   return (
-    p.endsWith('/staff') ||
-    p.includes('/staff/') ||
-    q.includes('staff') ||
-    h.includes('staff')
+    path.endsWith('/staff') ||
+    path.includes('/staff/') ||
+    search.includes('staff') ||
+    hash.includes('staff')
   )
 }

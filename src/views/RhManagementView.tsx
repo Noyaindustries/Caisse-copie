@@ -12,6 +12,7 @@ import { Field, Input, Select } from '../ui/Input'
 import { Kpi } from '../ui/Kpi'
 import { PageHeader } from '../ui/PageHeader'
 import { Table, TBody, Td, Th, THead, Tr } from '../ui/Table'
+import { MobileDataCard, ResponsiveData } from '../ui/ResponsiveData'
 import { useToast } from '../ui/Toast'
 
 type Props = {
@@ -163,7 +164,7 @@ export function RhManagementView({ actor, canReview }: Props) {
             <Input value={reason} onChange={(e) => setReason(e.target.value)} placeholder="Motif de la demande..." />
           </Field>
           <div className="md:col-span-3">
-            <Button variant="accent" onClick={() => void createRequest()}>
+            <Button variant="accent" fullWidth className="sm:w-auto" onClick={() => void createRequest()}>
               Soumettre la demande
             </Button>
           </div>
@@ -175,45 +176,118 @@ export function RhManagementView({ actor, canReview }: Props) {
           {requests.length === 0 ? (
             <EmptyState title="Aucune demande RH" variant="flat" />
           ) : (
-            <Table minWidth={1040}>
-              <THead>
-                <Tr hover={false}>
-                  <Th>Date</Th>
-                  <Th>Collaborateur</Th>
-                  <Th>Type</Th>
-                  <Th>Période</Th>
-                  <Th align="right">Montant</Th>
-                  <Th>Statut</Th>
-                  <Th>Commentaire manager</Th>
-                  <Th align="right">Action</Th>
-                </Tr>
-              </THead>
-              <TBody>
-                {requests.map((r) => (
-                  <Tr key={r.id}>
-                    <Td mono>{new Date(r.createdAt).toLocaleDateString('fr-FR')}</Td>
-                    <Td>{r.staffDisplayName}</Td>
-                    <Td>{r.type}</Td>
-                    <Td>{r.startDate ?? '—'} {r.endDate ? `-> ${r.endDate}` : ''}</Td>
-                    <Td align="right" mono>{r.amountFCFA ?? 0}</Td>
-                    <Td>{statusLabel(r.status)}</Td>
-                    <Td className="max-w-[220px] truncate" title={r.reviewNote}>
-                      {r.reviewNote ?? '—'}
-                    </Td>
-                    <Td align="right">
-                      {canReview && r.status === 'pending' ? (
-                        <div className="flex justify-end gap-1">
-                          <Button size="sm" variant="secondary" onClick={() => void reviewRequest(r.id, 'approved')}>Approuver</Button>
-                          <Button size="sm" variant="ghost" onClick={() => void reviewRequest(r.id, 'rejected')}>Rejeter</Button>
+            <ResponsiveData
+              table={
+                <Table minWidth={1040}>
+                  <THead>
+                    <Tr hover={false}>
+                      <Th sticky>Date</Th>
+                      <Th>Collaborateur</Th>
+                      <Th hideBelow="lg">Type</Th>
+                      <Th hideBelow="xl">Période</Th>
+                      <Th align="right" hideBelow="lg">
+                        Montant
+                      </Th>
+                      <Th>Statut</Th>
+                      <Th hideBelow="xl">Commentaire manager</Th>
+                      <Th align="right">Action</Th>
+                    </Tr>
+                  </THead>
+                  <TBody>
+                    {requests.map((r) => (
+                      <Tr key={r.id}>
+                        <Td sticky mono>
+                          {new Date(r.createdAt).toLocaleDateString('fr-FR')}
+                        </Td>
+                        <Td>{r.staffDisplayName}</Td>
+                        <Td hideBelow="lg">{r.type}</Td>
+                        <Td hideBelow="xl">
+                          {r.startDate ?? '—'} {r.endDate ? `-> ${r.endDate}` : ''}
+                        </Td>
+                        <Td align="right" mono hideBelow="lg">
+                          {r.amountFCFA ?? 0}
+                        </Td>
+                        <Td>{statusLabel(r.status)}</Td>
+                        <Td
+                          className="max-w-[220px] truncate"
+                          title={r.reviewNote}
+                          hideBelow="xl"
+                        >
+                          {r.reviewNote ?? '—'}
+                        </Td>
+                        <Td align="right">
+                          {canReview && r.status === 'pending' ? (
+                            <div className="flex justify-end gap-1">
+                              <Button
+                                size="sm"
+                                variant="secondary"
+                                onClick={() => void reviewRequest(r.id, 'approved')}
+                              >
+                                Approuver
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                onClick={() => void reviewRequest(r.id, 'rejected')}
+                              >
+                                Rejeter
+                              </Button>
+                            </div>
+                          ) : (
+                            '—'
+                          )}
+                        </Td>
+                      </Tr>
+                    ))}
+                  </TBody>
+                </Table>
+              }
+              cards={
+                <ul className="grid gap-2">
+                  {requests.map((r) => (
+                    <MobileDataCard
+                      key={r.id}
+                      title={r.staffDisplayName}
+                      meta={`${new Date(r.createdAt).toLocaleDateString('fr-FR')} · ${r.type} · ${statusLabel(r.status)}`}
+                      body={
+                        <div className="space-y-1">
+                          <p>
+                            Période : {r.startDate ?? '—'}
+                            {r.endDate ? ` → ${r.endDate}` : ''}
+                          </p>
+                          {r.amountFCFA ? (
+                            <p className="font-mono-nums">Montant : {r.amountFCFA} FCFA</p>
+                          ) : null}
+                          {r.reviewNote ? <p>Note : {r.reviewNote}</p> : null}
                         </div>
-                      ) : (
-                        '—'
-                      )}
-                    </Td>
-                  </Tr>
-                ))}
-              </TBody>
-            </Table>
+                      }
+                      actions={
+                        canReview && r.status === 'pending' ? (
+                          <>
+                            <Button
+                              size="sm"
+                              variant="secondary"
+                              fullWidth
+                              onClick={() => void reviewRequest(r.id, 'approved')}
+                            >
+                              Approuver
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              fullWidth
+                              onClick={() => void reviewRequest(r.id, 'rejected')}
+                            >
+                              Rejeter
+                            </Button>
+                          </>
+                        ) : undefined
+                      }
+                    />
+                  ))}
+                </ul>
+              }
+            />
           )}
         </CardContent>
       </Card>

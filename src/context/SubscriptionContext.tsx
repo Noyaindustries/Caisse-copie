@@ -45,12 +45,14 @@ export function SubscriptionProvider({
   online: boolean
   children: ReactNode
 }) {
+  // Ne pas lire localStorage dans useState : SSR et 1er paint client doivent
+  // matcher (sinon hydration mismatch sur /staff, /connexion, etc.).
   const [ready, setReady] = useState(false)
   const [organization, setOrganization] = useState<OrganizationCredentials | null>(
-    () => getOrganizationCredentials(),
+    null,
   )
   const [subscription, setSubscription] = useState<SubscriptionSnapshot | null>(
-    () => getCachedSubscription(),
+    null,
   )
 
   const applySnapshot = useCallback((snap: SubscriptionSnapshot) => {
@@ -81,20 +83,29 @@ export function SubscriptionProvider({
 
   useEffect(() => {
     let cancelled = false
-    void (async () => {
+
+    const boot = async () => {
       const creds = getOrganizationCredentials()
-      if (creds && online) {
-        try {
-          const snap = await refreshSubscription(creds.licenseKey)
-          if (!cancelled) applySnapshot(snap)
-          if (!cancelled) void pullCloudData().catch(() => undefined)
-        } catch {
-          const cached = getCachedSubscription()
-          if (!cancelled && cached) setSubscription(cached)
-        }
+      const cached = getCachedSubscription()
+      if (!cancelled) {
+        setOrganization(creds)
+        setSubscription(cached)
+        setReady(true)
       }
-      if (!cancelled) setReady(true)
-    })()
+
+      if (!creds || !online) return
+
+      try {
+        const snap = await refreshSubscription(creds.licenseKey)
+        if (!cancelled) applySnapshot(snap)
+        if (!cancelled) void pullCloudData().catch(() => undefined)
+      } catch {
+        const cachedSnap = getCachedSubscription()
+        if (!cancelled && cachedSnap) setSubscription(cachedSnap)
+      }
+    }
+
+    void boot()
     return () => {
       cancelled = true
     }

@@ -93,7 +93,7 @@ export function IconButton({
     <button
       type="button"
       className={cn(
-        'ui-btn shrink-0 px-0',
+        'ui-btn ui-icon-btn shrink-0 px-0',
         VARIANT[variant],
         dim,
         '[&_svg]:h-4 [&_svg]:w-4',

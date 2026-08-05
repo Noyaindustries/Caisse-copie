@@ -2,11 +2,7 @@
   "rewrites": [
     {
       "source": "/api/:path*",
-      "destination": "/api"
-    },
-    {
-      "source": "/:path*",
-      "destination": "/index.html"
+      "destination": "https://caisseci-api.onrender.com/api/:path*"
     }
   ]
 }

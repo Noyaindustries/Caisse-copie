@@ -8,6 +8,11 @@ import { cn } from './cn'
 
 type Density = 'comfortable' | 'compact'
 
+/**
+ * Table avec scroll X local.
+ * Pour le mobile, préférer `ResponsiveData` (table desktop + cards).
+ * Utiliser `hideBelow` / `sticky` sur `Th`/`Td` pour les matrices larges.
+ */
 export function Table({
   className,
   children,
@@ -24,12 +29,12 @@ export function Table({
   return (
     <div
       className={cn(
-        'overflow-hidden rounded-xl border border-border bg-white/96 shadow-[0_10px_28px_-22px_rgba(23,32,51,0.35)]',
+        'min-w-0 overflow-hidden rounded-xl border border-border bg-white/96 shadow-[0_10px_28px_-22px_rgba(23,32,51,0.35)]',
         className,
       )}
       data-density={density}
     >
-      <div className="ui-scroll relative overflow-x-auto">
+      <div className="ui-scroll relative -mx-px overflow-x-auto overscroll-x-contain">
         <table
           className="w-full text-left text-sm"
           style={minWidth ? { minWidth } : undefined}

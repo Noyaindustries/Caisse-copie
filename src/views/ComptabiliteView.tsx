@@ -19,6 +19,7 @@ import { Field, Input, Select } from '../ui/Input'
 import { Kpi } from '../ui/Kpi'
 import { PageHeader, SectionHeader } from '../ui/PageHeader'
 import { Table, TBody, Td, Th, THead, Tr } from '../ui/Table'
+import { MobileDataCard, ResponsiveData } from '../ui/ResponsiveData'
 import { useToast } from '../ui/Toast'
 import { IconDownload, IconSpreadsheet } from '../ui/icons'
 
@@ -276,7 +277,12 @@ export function ComptabiliteView({ canManageCompta }: Props) {
                   </Select>
                 </Field>
                 <div className="flex items-end md:col-span-3">
-                  <Button variant="secondary" onClick={() => void saveFiscalSettings()}>
+                  <Button
+                    variant="secondary"
+                    fullWidth
+                    className="sm:w-auto"
+                    onClick={() => void saveFiscalSettings()}
+                  >
                     Enregistrer paramètres fiscaux
                   </Button>
                 </div>
@@ -296,26 +302,48 @@ export function ComptabiliteView({ canManageCompta }: Props) {
       <Card className="rounded-2xl bg-[linear-gradient(165deg,rgba(255,255,255,0.98),rgba(246,250,255,0.94))]">
         <CardContent>
           <SectionHeader title="Écritures comptables (synthèse)" />
-          <Table minWidth={620}>
-            <THead>
-              <Tr hover={false}>
-                <Th>Compte</Th>
-                <Th>Libellé</Th>
-                <Th align="right">Montant</Th>
-              </Tr>
-            </THead>
-            <TBody>
-              {accountingEntries.map((entry) => (
-                <Tr key={entry.account}>
-                  <Td mono>{entry.account}</Td>
-                  <Td>{entry.label}</Td>
-                  <Td align="right" mono className="font-semibold">
-                    {formatFCFA(entry.amount)}
-                  </Td>
-                </Tr>
-              ))}
-            </TBody>
-          </Table>
+          <ResponsiveData
+            table={
+              <Table minWidth={620}>
+                <THead>
+                  <Tr hover={false}>
+                    <Th>Compte</Th>
+                    <Th>Libellé</Th>
+                    <Th align="right">Montant</Th>
+                  </Tr>
+                </THead>
+                <TBody>
+                  {accountingEntries.map((entry) => (
+                    <Tr key={entry.account}>
+                      <Td mono>{entry.account}</Td>
+                      <Td>{entry.label}</Td>
+                      <Td align="right" mono className="font-semibold">
+                        {formatFCFA(entry.amount)}
+                      </Td>
+                    </Tr>
+                  ))}
+                </TBody>
+              </Table>
+            }
+            cards={
+              <ul className="grid gap-2">
+                {accountingEntries.map((entry) => (
+                  <MobileDataCard
+                    key={entry.account}
+                    title={
+                      <span className="font-mono-nums">{entry.account}</span>
+                    }
+                    meta={entry.label}
+                    body={
+                      <p className="font-mono-nums text-[14px] font-semibold text-ink">
+                        {formatFCFA(entry.amount)}
+                      </p>
+                    }
+                  />
+                ))}
+              </ul>
+            }
+          />
           {!canManageCompta ? (
             <p className="mt-2 text-[11px] text-zinc-500">
               Profil lecture seule: export disponible, paramétrage comptable réservé au gérant/admin.
@@ -334,30 +362,66 @@ export function ComptabiliteView({ canManageCompta }: Props) {
           {dailyRows.length === 0 ? (
             <EmptyState title="Aucune donnée sur la période" variant="flat" />
           ) : (
-            <Table minWidth={700}>
-              <THead>
-                <Tr hover={false}>
-                  <Th>Date</Th>
-                  <Th align="right">Tickets</Th>
-                  <Th align="right">HT</Th>
-                  <Th align="right">TVA</Th>
-                  <Th align="right">TTC net</Th>
-                </Tr>
-              </THead>
-              <TBody>
-                {dailyRows.map((r) => (
-                  <Tr key={r.ymd}>
-                    <Td mono>{r.ymd}</Td>
-                    <Td align="right" mono>{r.tickets}</Td>
-                    <Td align="right" mono>{formatFCFA(r.ht)}</Td>
-                    <Td align="right" mono>{formatFCFA(r.tva)}</Td>
-                    <Td align="right" mono className="font-semibold">
-                      {formatFCFA(r.ttc)}
-                    </Td>
-                  </Tr>
-                ))}
-              </TBody>
-            </Table>
+            <ResponsiveData
+              table={
+                <Table minWidth={700}>
+                  <THead>
+                    <Tr hover={false}>
+                      <Th sticky>Date</Th>
+                      <Th align="right">Tickets</Th>
+                      <Th align="right" hideBelow="lg">
+                        HT
+                      </Th>
+                      <Th align="right" hideBelow="lg">
+                        TVA
+                      </Th>
+                      <Th align="right">TTC net</Th>
+                    </Tr>
+                  </THead>
+                  <TBody>
+                    {dailyRows.map((r) => (
+                      <Tr key={r.ymd}>
+                        <Td sticky mono>
+                          {r.ymd}
+                        </Td>
+                        <Td align="right" mono>
+                          {r.tickets}
+                        </Td>
+                        <Td align="right" mono hideBelow="lg">
+                          {formatFCFA(r.ht)}
+                        </Td>
+                        <Td align="right" mono hideBelow="lg">
+                          {formatFCFA(r.tva)}
+                        </Td>
+                        <Td align="right" mono className="font-semibold">
+                          {formatFCFA(r.ttc)}
+                        </Td>
+                      </Tr>
+                    ))}
+                  </TBody>
+                </Table>
+              }
+              cards={
+                <ul className="grid gap-2">
+                  {dailyRows.map((r) => (
+                    <MobileDataCard
+                      key={r.ymd}
+                      title={<span className="font-mono-nums">{r.ymd}</span>}
+                      meta={`${r.tickets} ticket(s)`}
+                      body={
+                        <div className="grid grid-cols-2 gap-1.5">
+                          <span>HT : {formatFCFA(r.ht)}</span>
+                          <span>TVA : {formatFCFA(r.tva)}</span>
+                          <span className="col-span-2 font-semibold text-ink">
+                            TTC net : {formatFCFA(r.ttc)}
+                          </span>
+                        </div>
+                      }
+                    />
+                  ))}
+                </ul>
+              }
+            />
           )}
         </CardContent>
       </Card>

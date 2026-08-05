@@ -135,7 +135,7 @@ function ToastViewport({
 }) {
   if (items.length === 0) return null
   return (
-    <div className="pointer-events-none fixed bottom-4 right-4 z-[200] flex w-[340px] max-w-[calc(100vw-2rem)] flex-col gap-2">
+    <div className="toast-viewport pointer-events-none fixed z-[200] ml-auto flex w-full max-w-[340px] flex-col gap-2 sm:left-auto">
       {items.map((t) => {
         const s = TONE_STYLES[t.tone]
         return (
@@ -164,7 +164,7 @@ function ToastViewport({
               type="button"
               aria-label="Fermer"
               onClick={() => onClose(t.id)}
-              className="shrink-0 rounded-md p-1 text-zinc-400 transition hover:bg-zinc-100 hover:text-zinc-700 [&_svg]:h-3.5 [&_svg]:w-3.5"
+              className="ui-icon-btn flex shrink-0 items-center justify-center rounded-md p-2 text-zinc-400 transition hover:bg-zinc-100 hover:text-zinc-700 [&_svg]:h-3.5 [&_svg]:w-3.5"
             >
               <IconClose />
             </button>

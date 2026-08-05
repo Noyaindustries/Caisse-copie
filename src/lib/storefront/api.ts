@@ -1,6 +1,7 @@
 import type {
   PublicStorefrontOrderInput,
   PublishedStorefrontMenu,
+  StorefrontBranding,
   StorefrontInfo,
 } from './types'
 import type { ProductWithStock, Promotion } from '../../db/types'
@@ -37,6 +38,37 @@ export async function fetchStorefrontMenu(
     ...data.menu,
     publishedAt: data.menu.publishedAt ?? data.publishedAt ?? new Date().toISOString(),
   }
+}
+
+export async function fetchStorefrontBranding(): Promise<{
+  branding: StorefrontBranding
+  storeName: string
+  menuPublished: boolean
+  publishedAt: string | null
+  storefrontUrl: string
+  storeCode: string
+}> {
+  const res = await fetch(apiUrl('/billing/storefront/branding'), {
+    headers: buildOrgAuthHeaders(),
+  })
+  return parseJson(res)
+}
+
+export async function patchStorefrontBranding(
+  branding: StorefrontBranding,
+): Promise<{ branding: StorefrontBranding; storefrontUrl: string }> {
+  const res = await fetch(apiUrl('/billing/storefront/branding'), {
+    method: 'PATCH',
+    headers: buildOrgAuthHeaders({ 'Content-Type': 'application/json' }),
+    body: JSON.stringify({
+      shopName: branding.shopName ?? '',
+      logoUrl: branding.logoUrl ?? '',
+      primaryColor: branding.primaryColor ?? '',
+      bannerUrl: branding.bannerUrl ?? '',
+      welcomeMessage: branding.welcomeMessage ?? '',
+    }),
+  })
+  return parseJson(res)
 }
 
 export async function submitPublicStorefrontOrder(
@@ -123,7 +155,9 @@ export async function publishStorefrontMenu(
 export async function fetchStorefrontInbox(
   _licenseKey: string,
   status = 'pending',
-): Promise<{ orders: Array<Record<string, unknown> & { id: string; createdAt: number; status: string }> }> {
+): Promise<{
+  orders: Array<Record<string, unknown> & { id: string; createdAt: number; status: string }>
+}> {
   const q = new URLSearchParams({ status })
   const res = await fetch(apiUrl(`/billing/storefront/orders/inbox?${q}`), {
     headers: buildOrgAuthHeaders(),

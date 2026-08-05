@@ -145,9 +145,9 @@ syncRouter.get('/caisseci/sync/pull', async (req, res) => {
       },
     })
   } catch (error) {
-    logEvent('error', 'sync.pull.failed', {
-      error: error instanceof Error ? error.message : 'unknown',
-    })
+    const message = error instanceof Error ? error.message : 'unknown'
+    logEvent('error', 'sync.pull.failed', { error: message })
+    console.error('[sync/pull]', error)
     return res.status(500).json({
       ok: false,
       message: 'Erreur serveur lors du téléchargement cloud',

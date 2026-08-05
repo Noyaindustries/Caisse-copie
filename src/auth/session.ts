@@ -4,6 +4,7 @@ import type { StaffAuthMethod, StaffProfile, StaffSession } from './types'
 const KEY = 'caisseci-staff-session'
 
 function readRaw(): StaffSession | null {
+  if (typeof window === 'undefined') return null
   try {
     const s = sessionStorage.getItem(KEY)
     if (!s) return null

@@ -14,6 +14,16 @@ dist-ssr
 *.local
 .env
 backend/
+test-results/
+playwright-report/
+
+# Next.js
+**/.next/
+apps/web/public/sw.js
+apps/web/public/workbox-*.js
+apps/web/public/fallback-*.js
+# Junction/symlink vers ../../src (créé par scripts/ensure-web-src-link.mjs)
+apps/web/src
 
 # Editor directories and files
 .vscode/*
@@ -28,3 +38,4 @@ backend/
 
 .vercel
 .env*
+!.env.example

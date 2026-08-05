@@ -182,8 +182,10 @@ function SidebarBody({
                     type="button"
                     onClick={() => onSelectView(item.id)}
                     className={cn(
-                      'group relative flex w-full items-center gap-2.5 rounded-md text-[13px] transition',
-                      isMobile ? 'px-2.5 py-2.5' : 'px-2 py-1.5',
+                      'sidebar-nav-item group relative flex w-full items-center gap-2.5 rounded-md text-[13px] transition',
+                      isMobile
+                        ? 'min-h-11 px-2.5 py-2.5'
+                        : 'px-2 py-1.5',
                       collapsed && 'justify-center px-0',
                       isActive
                         ? 'bg-zinc-100 font-semibold text-zinc-900'
@@ -351,7 +353,7 @@ function SidebarBody({
                 <button
                   type="button"
                   onClick={onLogout}
-                  className="rounded p-1 text-rose-500 transition hover:bg-rose-50 hover:text-rose-700"
+                  className="ui-icon-btn inline-flex h-9 w-9 items-center justify-center rounded p-1 text-rose-500 transition hover:bg-rose-50 hover:text-rose-700"
                   aria-label="Se déconnecter"
                 >
                   <IconLogout className="h-3.5 w-3.5" />
@@ -438,14 +440,14 @@ export function MobileNavDrawer({
         onClick={onClose}
         className="absolute inset-0 animate-ui-fade-in bg-zinc-950/40 backdrop-blur-[2px]"
       />
-      <aside className="relative z-10 flex h-svh w-[min(280px,85vw)] max-w-[85vw] animate-ui-slide-up flex-col border-r border-border bg-white/95 pt-[env(safe-area-inset-top,0px)] pb-[env(safe-area-inset-bottom,0px)] shadow-(--shadow-overlay) backdrop-blur-md">
+      <aside className="relative z-10 flex h-svh w-[min(280px,85vw)] max-w-[85vw] animate-ui-slide-up flex-col border-r border-border bg-white/95 pt-[env(safe-area-inset-top,0px)] pr-0 pb-[env(safe-area-inset-bottom,0px)] pl-[env(safe-area-inset-left,0px)] shadow-(--shadow-overlay) backdrop-blur-md">
         <button
           type="button"
           onClick={onClose}
-          className="absolute right-2 top-2 z-10 rounded-md p-1.5 text-rose-500 transition hover:bg-rose-50 hover:text-rose-700"
+          className="ui-icon-btn absolute right-2 top-2 z-10 inline-flex h-11 w-11 items-center justify-center rounded-md text-rose-500 transition hover:bg-rose-50 hover:text-rose-700"
           aria-label="Fermer"
         >
-          <IconClose className="h-4 w-4" />
+          <IconClose className="h-5 w-5" />
         </button>
         <SidebarBody
           {...rest}

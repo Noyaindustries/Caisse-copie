@@ -36,6 +36,7 @@ import { Kpi } from '../ui/Kpi'
 import { PageHeader } from '../ui/PageHeader'
 import { Tabs } from '../ui/Tabs'
 import { Table, TBody, Td, Th, THead, Tr } from '../ui/Table'
+import { MobileDataCard, ResponsiveData } from '../ui/ResponsiveData'
 import {
   IconDownload,
   IconFile,
@@ -525,79 +526,152 @@ export function AnalytiqueView() {
             title="Comparaison période précédente"
             subtitle={`${periodLabel} en cours vs ${periodLabel} précédent`}
           />
-          <CardContent>
-            <Table minWidth={520}>
-              <THead>
-                <Tr hover={false}>
-                  <Th>Indicateur</Th>
-                  <Th align="right">Période en cours</Th>
-                  <Th align="right">Période précédente</Th>
-                  <Th align="right">Évolution</Th>
-                </Tr>
-              </THead>
-              <TBody>
-                <Tr>
-                  <Td>CA net TTC</Td>
-                  <Td align="right" mono>{formatFCFA(caPeriod)}</Td>
-                  <Td align="right" mono>{formatFCFA(caPreviousPeriod)}</Td>
-                  <Td
-                    align="right"
-                    mono
-                    className={
-                      deltas.caPct == null
-                        ? 'text-zinc-500'
-                        : deltas.caPct >= 0
-                          ? 'text-emerald-700'
-                          : 'text-rose-700'
-                    }
-                  >
-                    {deltas.caPct == null ? '—' : `${deltas.caPct >= 0 ? '+' : ''}${deltas.caPct} %`}
-                  </Td>
-                </Tr>
-                <Tr>
-                  <Td>Tickets</Td>
-                  <Td align="right" mono>{tickets}</Td>
-                  <Td align="right" mono>{previousTickets}</Td>
-                  <Td
-                    align="right"
-                    mono
-                    className={
-                      deltas.ticketsPct == null
-                        ? 'text-zinc-500'
-                        : deltas.ticketsPct >= 0
-                          ? 'text-emerald-700'
-                          : 'text-rose-700'
-                    }
-                  >
-                    {deltas.ticketsPct == null
-                      ? '—'
-                      : `${deltas.ticketsPct >= 0 ? '+' : ''}${deltas.ticketsPct} %`}
-                  </Td>
-                </Tr>
-                <Tr>
-                  <Td>Marge TTC connue</Td>
-                  <Td align="right" mono>{formatFCFA(marginTotals.marginOnKnownTTC)}</Td>
-                  <Td align="right" mono>
-                    {formatFCFA(previousMarginTotals.marginOnKnownTTC)}
-                  </Td>
-                  <Td
-                    align="right"
-                    mono
-                    className={
-                      deltas.marginPct == null
-                        ? 'text-zinc-500'
-                        : deltas.marginPct >= 0
-                          ? 'text-emerald-700'
-                          : 'text-rose-700'
-                    }
-                  >
-                    {deltas.marginPct == null
-                      ? '—'
-                      : `${deltas.marginPct >= 0 ? '+' : ''}${deltas.marginPct} %`}
-                  </Td>
-                </Tr>
-              </TBody>
-            </Table>
+          <CardContent className="min-w-0">
+            <ResponsiveData
+              table={
+                <Table minWidth={520}>
+                  <THead>
+                    <Tr hover={false}>
+                      <Th sticky>Indicateur</Th>
+                      <Th align="right">Période en cours</Th>
+                      <Th align="right" hideBelow="lg">
+                        Période précédente
+                      </Th>
+                      <Th align="right">Évolution</Th>
+                    </Tr>
+                  </THead>
+                  <TBody>
+                    <Tr>
+                      <Td sticky>CA net TTC</Td>
+                      <Td align="right" mono>
+                        {formatFCFA(caPeriod)}
+                      </Td>
+                      <Td align="right" mono hideBelow="lg">
+                        {formatFCFA(caPreviousPeriod)}
+                      </Td>
+                      <Td
+                        align="right"
+                        mono
+                        className={
+                          deltas.caPct == null
+                            ? 'text-zinc-500'
+                            : deltas.caPct >= 0
+                              ? 'text-emerald-700'
+                              : 'text-rose-700'
+                        }
+                      >
+                        {deltas.caPct == null
+                          ? '—'
+                          : `${deltas.caPct >= 0 ? '+' : ''}${deltas.caPct} %`}
+                      </Td>
+                    </Tr>
+                    <Tr>
+                      <Td sticky>Tickets</Td>
+                      <Td align="right" mono>
+                        {tickets}
+                      </Td>
+                      <Td align="right" mono hideBelow="lg">
+                        {previousTickets}
+                      </Td>
+                      <Td
+                        align="right"
+                        mono
+                        className={
+                          deltas.ticketsPct == null
+                            ? 'text-zinc-500'
+                            : deltas.ticketsPct >= 0
+                              ? 'text-emerald-700'
+                              : 'text-rose-700'
+                        }
+                      >
+                        {deltas.ticketsPct == null
+                          ? '—'
+                          : `${deltas.ticketsPct >= 0 ? '+' : ''}${deltas.ticketsPct} %`}
+                      </Td>
+                    </Tr>
+                    <Tr>
+                      <Td sticky>Marge TTC connue</Td>
+                      <Td align="right" mono>
+                        {formatFCFA(marginTotals.marginOnKnownTTC)}
+                      </Td>
+                      <Td align="right" mono hideBelow="lg">
+                        {formatFCFA(previousMarginTotals.marginOnKnownTTC)}
+                      </Td>
+                      <Td
+                        align="right"
+                        mono
+                        className={
+                          deltas.marginPct == null
+                            ? 'text-zinc-500'
+                            : deltas.marginPct >= 0
+                              ? 'text-emerald-700'
+                              : 'text-rose-700'
+                        }
+                      >
+                        {deltas.marginPct == null
+                          ? '—'
+                          : `${deltas.marginPct >= 0 ? '+' : ''}${deltas.marginPct} %`}
+                      </Td>
+                    </Tr>
+                  </TBody>
+                </Table>
+              }
+              cards={
+                <ul className="grid gap-2">
+                  {(
+                    [
+                      {
+                        label: 'CA net TTC',
+                        current: formatFCFA(caPeriod),
+                        previous: formatFCFA(caPreviousPeriod),
+                        delta: deltas.caPct,
+                      },
+                      {
+                        label: 'Tickets',
+                        current: String(tickets),
+                        previous: String(previousTickets),
+                        delta: deltas.ticketsPct,
+                      },
+                      {
+                        label: 'Marge TTC connue',
+                        current: formatFCFA(marginTotals.marginOnKnownTTC),
+                        previous: formatFCFA(
+                          previousMarginTotals.marginOnKnownTTC,
+                        ),
+                        delta: deltas.marginPct,
+                      },
+                    ] as const
+                  ).map((row) => (
+                    <MobileDataCard
+                      key={row.label}
+                      title={row.label}
+                      body={
+                        <div className="space-y-1">
+                          <p className="font-mono-nums font-semibold text-ink">
+                            En cours : {row.current}
+                          </p>
+                          <p className="font-mono-nums">Précédent : {row.previous}</p>
+                          <p
+                            className={
+                              row.delta == null
+                                ? 'text-zinc-500'
+                                : row.delta >= 0
+                                  ? 'text-emerald-700'
+                                  : 'text-rose-700'
+                            }
+                          >
+                            Évolution :{' '}
+                            {row.delta == null
+                              ? '—'
+                              : `${row.delta >= 0 ? '+' : ''}${row.delta} %`}
+                          </p>
+                        </div>
+                      }
+                    />
+                  ))}
+                </ul>
+              }
+            />
           </CardContent>
         </Card>
 
@@ -659,7 +733,7 @@ export function AnalytiqueView() {
                   <p className="mb-2 text-[12px] font-medium text-zinc-700">
                     Répartition journalière (nombre de commandes)
                   </p>
-                  <div className="h-[240px] w-full">
+                  <div className="h-[240px] w-full min-w-0">
                     <ResponsiveContainer width="100%" height="100%">
                       <BarChart
                         data={webDaily}
@@ -759,7 +833,7 @@ export function AnalytiqueView() {
               subtitle="Agrégation journalière (calendrier local)"
             />
             <CardContent>
-              <div className="h-[260px] w-full">
+              <div className="h-[260px] w-full min-w-0">
                 <ResponsiveContainer width="100%" height="100%">
                   <BarChart data={dailyData} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
                     <CartesianGrid strokeDasharray="2 6" stroke={COLORS.border} vertical={false} />
@@ -848,7 +922,7 @@ export function AnalytiqueView() {
             subtitle="CA net agrégé par tranche horaire (début de créneau)"
           />
           <CardContent>
-            <div className="h-[220px] w-full">
+            <div className="h-[220px] w-full min-w-0">
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart data={peakChartData} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
                   <CartesianGrid strokeDasharray="2 6" stroke={COLORS.border} vertical={false} />
@@ -923,53 +997,91 @@ export function AnalytiqueView() {
             title="Top articles & marges"
             subtitle="Quantités et CA nets après remboursements"
           />
-          <CardContent>
-            <Table minWidth={620}>
-              <THead>
-                <Tr hover={false}>
-                  <Th hideBelow="sm">#</Th>
-                  <Th>Article</Th>
-                  <Th align="right">Qté</Th>
-                  <Th align="right">CA TTC</Th>
-                  <Th align="right" hideBelow="md">Coût</Th>
-                  <Th align="right">Marge</Th>
-                  <Th align="right" hideBelow="md">Marge %</Th>
-                </Tr>
-              </THead>
-              <TBody>
-                {top.length === 0 ? (
-                  <Tr hover={false}>
-                    <Td colSpan={7} align="center" className="py-10 text-zinc-500">
-                      Pas encore de données sur cette période
-                    </Td>
-                  </Tr>
-                ) : (
-                  top.map((row, i) => (
-                    <Tr key={row.name}>
-                      <Td hideBelow="sm" mono className="text-zinc-400">
-                        {i + 1}
-                      </Td>
-                      <Td className="font-medium text-zinc-900">{row.name}</Td>
-                      <Td align="right" mono>
-                        {row.qty}
-                      </Td>
-                      <Td align="right" mono className="font-semibold">
-                        {formatFCFA(row.revenueTTC)}
-                      </Td>
-                      <Td align="right" hideBelow="md" mono>
-                        {row.costTTC != null ? formatFCFA(row.costTTC) : '—'}
-                      </Td>
-                      <Td align="right" mono>
-                        {row.marginTTC != null ? formatFCFA(row.marginTTC) : '—'}
-                      </Td>
-                      <Td align="right" hideBelow="md" mono>
-                        {row.marginPct != null ? `${row.marginPct} %` : '—'}
-                      </Td>
+          <CardContent className="min-w-0">
+            <ResponsiveData
+              empty={
+                top.length === 0 ? (
+                  <p className="py-10 text-center text-[13px] text-zinc-500">
+                    Pas encore de données sur cette période
+                  </p>
+                ) : null
+              }
+              table={
+                <Table minWidth={620}>
+                  <THead>
+                    <Tr hover={false}>
+                      <Th hideBelow="sm">#</Th>
+                      <Th sticky>Article</Th>
+                      <Th align="right">Qté</Th>
+                      <Th align="right">CA TTC</Th>
+                      <Th align="right" hideBelow="md">
+                        Coût
+                      </Th>
+                      <Th align="right">Marge</Th>
+                      <Th align="right" hideBelow="md">
+                        Marge %
+                      </Th>
                     </Tr>
-                  ))
-                )}
-              </TBody>
-            </Table>
+                  </THead>
+                  <TBody>
+                    {top.map((row, i) => (
+                      <Tr key={row.name}>
+                        <Td hideBelow="sm" mono className="text-zinc-400">
+                          {i + 1}
+                        </Td>
+                        <Td sticky className="font-medium text-zinc-900">
+                          {row.name}
+                        </Td>
+                        <Td align="right" mono>
+                          {row.qty}
+                        </Td>
+                        <Td align="right" mono className="font-semibold">
+                          {formatFCFA(row.revenueTTC)}
+                        </Td>
+                        <Td align="right" hideBelow="md" mono>
+                          {row.costTTC != null ? formatFCFA(row.costTTC) : '—'}
+                        </Td>
+                        <Td align="right" mono>
+                          {row.marginTTC != null ? formatFCFA(row.marginTTC) : '—'}
+                        </Td>
+                        <Td align="right" hideBelow="md" mono>
+                          {row.marginPct != null ? `${row.marginPct} %` : '—'}
+                        </Td>
+                      </Tr>
+                    ))}
+                  </TBody>
+                </Table>
+              }
+              cards={
+                <ul className="grid gap-2">
+                  {top.map((row, i) => (
+                    <MobileDataCard
+                      key={row.name}
+                      title={`${i + 1}. ${row.name}`}
+                      body={
+                        <div className="grid grid-cols-2 gap-1.5">
+                          <span>Qté : {row.qty}</span>
+                          <span className="font-mono-nums font-semibold">
+                            CA : {formatFCFA(row.revenueTTC)}
+                          </span>
+                          <span>
+                            Coût :{' '}
+                            {row.costTTC != null ? formatFCFA(row.costTTC) : '—'}
+                          </span>
+                          <span>
+                            Marge :{' '}
+                            {row.marginTTC != null
+                              ? formatFCFA(row.marginTTC)
+                              : '—'}
+                            {row.marginPct != null ? ` (${row.marginPct} %)` : ''}
+                          </span>
+                        </div>
+                      }
+                    />
+                  ))}
+                </ul>
+              }
+            />
           </CardContent>
         </Card>
       </div>

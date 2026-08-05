@@ -49,10 +49,10 @@ export function Topbar({
         <button
           type="button"
           onClick={onOpenMobileMenu}
-          className="rounded-md p-1.5 text-indigo-600 transition hover:bg-indigo-50 hover:text-indigo-700 lg:hidden"
+          className="ui-icon-btn inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-md text-indigo-600 transition hover:bg-indigo-50 hover:text-indigo-700 lg:hidden"
           aria-label="Ouvrir le menu"
         >
-          <IconMenu className="h-4 w-4" />
+          <IconMenu className="h-5 w-5" />
         </button>
       ) : null}
 

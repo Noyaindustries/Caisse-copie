@@ -14,6 +14,11 @@ import { Field, Input, Select } from '../ui/Input'
 import { PageHeader, SectionHeader } from '../ui/PageHeader'
 import { Tabs } from '../ui/Tabs'
 import { Table, TBody, Td, Th, THead, Tr } from '../ui/Table'
+import {
+  MobileDataCard,
+  ResponsiveData,
+  TableScrollHint,
+} from '../ui/ResponsiveData'
 import { useToast } from '../ui/Toast'
 import { IconNetwork, IconPlus, IconStore, IconTruck } from '../ui/icons'
 
@@ -242,47 +247,99 @@ export function MultiStoreView({
         sortedProducts.length === 0 ? (
           <EmptyState title="Aucun produit" />
         ) : (
-          <Table minWidth={Math.max(560, 220 + stores.length * 80 + 80)}>
-            <THead>
-              <Tr hover={false}>
-                <Th sticky>Article</Th>
-                {stores.map((s) => (
-                  <Th key={s.id} align="right">
-                    {s.shortCode}
-                  </Th>
-                ))}
-                <Th align="right">Total</Th>
-              </Tr>
-            </THead>
-            <TBody>
+          <div className="min-w-0">
+            <TableScrollHint />
+            <div className="hidden md:block">
+              <Table minWidth={Math.max(560, 220 + stores.length * 80 + 80)}>
+                <THead>
+                  <Tr hover={false}>
+                    <Th sticky>Article</Th>
+                    {stores.map((s) => (
+                      <Th key={s.id} align="right">
+                        {s.shortCode}
+                      </Th>
+                    ))}
+                    <Th align="right">Total</Th>
+                  </Tr>
+                </THead>
+                <TBody>
+                  {sortedProducts.map((p) => {
+                    const row = stockMatrix.get(p.id)
+                    let total = 0
+                    return (
+                      <Tr key={p.id}>
+                        <Td sticky className="font-medium text-zinc-900">
+                          {p.name}
+                          <span className="block font-mono-nums text-[10px] text-zinc-400">
+                            {p.barcode}
+                          </span>
+                        </Td>
+                        {stores.map((s) => {
+                          const q = row?.get(s.id) ?? 0
+                          total += q
+                          return (
+                            <Td
+                              key={s.id}
+                              align="right"
+                              mono
+                              className="text-zinc-700"
+                            >
+                              {q}
+                            </Td>
+                          )
+                        })}
+                        <Td align="right" mono className="font-bold text-zinc-900">
+                          {total}
+                        </Td>
+                      </Tr>
+                    )
+                  })}
+                </TBody>
+              </Table>
+            </div>
+            <ul className="grid gap-2 md:hidden">
               {sortedProducts.map((p) => {
                 const row = stockMatrix.get(p.id)
                 let total = 0
+                const perStore = stores.map((s) => {
+                  const q = row?.get(s.id) ?? 0
+                  total += q
+                  return { code: s.shortCode, name: s.name, q }
+                })
                 return (
-                  <Tr key={p.id}>
-                    <Td sticky className="font-medium text-zinc-900">
-                      {p.name}
-                      <span className="block font-mono-nums text-[10px] text-zinc-400">
-                        {p.barcode}
-                      </span>
-                    </Td>
-                    {stores.map((s) => {
-                      const q = row?.get(s.id) ?? 0
-                      total += q
-                      return (
-                        <Td key={s.id} align="right" mono className="text-zinc-700">
-                          {q}
-                        </Td>
-                      )
-                    })}
-                    <Td align="right" mono className="font-bold text-zinc-900">
-                      {total}
-                    </Td>
-                  </Tr>
+                  <MobileDataCard
+                    key={p.id}
+                    title={p.name}
+                    meta={
+                      <span className="font-mono-nums">{p.barcode}</span>
+                    }
+                    body={
+                      <div className="space-y-1">
+                        {perStore.map((s) => (
+                          <div
+                            key={s.code}
+                            className="flex items-center justify-between gap-2"
+                          >
+                            <span className="truncate">
+                              {s.name}{' '}
+                              <span className="text-ink-subtle">({s.code})</span>
+                            </span>
+                            <span className="font-mono-nums font-medium text-ink">
+                              {s.q}
+                            </span>
+                          </div>
+                        ))}
+                        <div className="flex items-center justify-between border-t border-border/60 pt-1.5 font-semibold text-ink">
+                          <span>Total</span>
+                          <span className="font-mono-nums">{total}</span>
+                        </div>
+                      </div>
+                    }
+                  />
                 )
               })}
-            </TBody>
-          </Table>
+            </ul>
+          </div>
         )
       ) : null}
 
@@ -350,6 +407,8 @@ export function MultiStoreView({
                   <Button
                     variant="accent"
                     loading={tBusy}
+                    fullWidth
+                    className="sm:w-auto"
                     onClick={() => void doTransfer()}
                   >
                     Valider le transfert
@@ -496,49 +555,95 @@ export function MultiStoreView({
               variant="flat"
             />
           ) : (
-            <Table minWidth={860}>
-              <THead>
-                <Tr hover={false}>
-                  <Th>Terminal</Th>
-                  <Th>Magasin</Th>
-                  <Th>Utilisateur</Th>
-                  <Th>Statut</Th>
-                  <Th align="right">File sync</Th>
-                  <Th>Dernière synchro</Th>
-                  <Th>Dernière activité</Th>
-                </Tr>
-              </THead>
-              <TBody>
-                {terminals.map((t) => (
-                  <Tr key={t.id}>
-                    <Td>
-                      <span className="font-medium text-zinc-900">{t.label}</span>
-                      <span className="block font-mono-nums text-[11px] text-zinc-500">
-                        {t.id}
-                      </span>
-                    </Td>
-                    <Td>{t.storeName ?? t.storeId ?? '—'}</Td>
-                    <Td>{t.profileDisplayName ?? '—'}</Td>
-                    <Td>
-                      <Badge tone={t.online ? 'success' : 'warning'}>
-                        {t.online ? 'En ligne' : 'Inactif'}
-                      </Badge>
-                    </Td>
-                    <Td align="right" mono>
-                      {t.pendingSyncCount}
-                    </Td>
-                    <Td className="text-[12px] text-zinc-600">
-                      {t.lastSyncAt
-                        ? new Date(t.lastSyncAt).toLocaleString('fr-FR')
-                        : 'Jamais'}
-                    </Td>
-                    <Td className="text-[12px] text-zinc-600">
-                      {new Date(t.lastSeenAt).toLocaleString('fr-FR')}
-                    </Td>
-                  </Tr>
-                ))}
-              </TBody>
-            </Table>
+            <ResponsiveData
+              table={
+                <Table minWidth={860}>
+                  <THead>
+                    <Tr hover={false}>
+                      <Th sticky>Terminal</Th>
+                      <Th hideBelow="lg">Magasin</Th>
+                      <Th hideBelow="xl">Utilisateur</Th>
+                      <Th>Statut</Th>
+                      <Th align="right" hideBelow="lg">
+                        File sync
+                      </Th>
+                      <Th hideBelow="xl">Dernière synchro</Th>
+                      <Th hideBelow="lg">Dernière activité</Th>
+                    </Tr>
+                  </THead>
+                  <TBody>
+                    {terminals.map((t) => (
+                      <Tr key={t.id}>
+                        <Td sticky>
+                          <span className="font-medium text-zinc-900">
+                            {t.label}
+                          </span>
+                          <span className="block font-mono-nums text-[11px] text-zinc-500">
+                            {t.id}
+                          </span>
+                        </Td>
+                        <Td hideBelow="lg">{t.storeName ?? t.storeId ?? '—'}</Td>
+                        <Td hideBelow="xl">{t.profileDisplayName ?? '—'}</Td>
+                        <Td>
+                          <Badge tone={t.online ? 'success' : 'warning'}>
+                            {t.online ? 'En ligne' : 'Inactif'}
+                          </Badge>
+                        </Td>
+                        <Td align="right" mono hideBelow="lg">
+                          {t.pendingSyncCount}
+                        </Td>
+                        <Td className="text-[12px] text-zinc-600" hideBelow="xl">
+                          {t.lastSyncAt
+                            ? new Date(t.lastSyncAt).toLocaleString('fr-FR')
+                            : 'Jamais'}
+                        </Td>
+                        <Td className="text-[12px] text-zinc-600" hideBelow="lg">
+                          {new Date(t.lastSeenAt).toLocaleString('fr-FR')}
+                        </Td>
+                      </Tr>
+                    ))}
+                  </TBody>
+                </Table>
+              }
+              cards={
+                <ul className="grid gap-2">
+                  {terminals.map((t) => (
+                    <MobileDataCard
+                      key={t.id}
+                      title={t.label}
+                      meta={
+                        <span className="font-mono-nums text-[10px]">{t.id}</span>
+                      }
+                      body={
+                        <div className="space-y-1">
+                          <p>Magasin : {t.storeName ?? t.storeId ?? '—'}</p>
+                          <p>Utilisateur : {t.profileDisplayName ?? '—'}</p>
+                          <p>
+                            Statut :{' '}
+                            <Badge tone={t.online ? 'success' : 'warning'}>
+                              {t.online ? 'En ligne' : 'Inactif'}
+                            </Badge>
+                          </p>
+                          <p className="font-mono-nums">
+                            File sync : {t.pendingSyncCount}
+                          </p>
+                          <p className="text-[11px]">
+                            Sync :{' '}
+                            {t.lastSyncAt
+                              ? new Date(t.lastSyncAt).toLocaleString('fr-FR')
+                              : 'Jamais'}
+                          </p>
+                          <p className="text-[11px]">
+                            Activité :{' '}
+                            {new Date(t.lastSeenAt).toLocaleString('fr-FR')}
+                          </p>
+                        </div>
+                      }
+                    />
+                  ))}
+                </ul>
+              }
+            />
           )}
         </div>
       ) : null}

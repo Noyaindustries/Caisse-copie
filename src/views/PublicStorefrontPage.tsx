@@ -7,7 +7,10 @@ import {
   verifyStorefrontOrderPayment,
 } from '../lib/storefront/api'
 import type { ProductWithStock, Promotion } from '../db/types'
-import type { PublicStorefrontOrderInput } from '../lib/storefront/types'
+import type {
+  PublicStorefrontOrderInput,
+  StorefrontBranding,
+} from '../lib/storefront/types'
 import { Button } from '../ui/Button'
 import { Card, CardContent } from '../ui/Card'
 import { LuxuryStorefrontView } from './LuxuryStorefrontView'
@@ -47,6 +50,7 @@ export function PublicStorefrontPage({ storeCode, online }: Props) {
   const [storeId, setStoreId] = useState('store-main')
   const [usable, setUsable] = useState(true)
   const [waveEnabled, setWaveEnabled] = useState(false)
+  const [branding, setBranding] = useState<StorefrontBranding | undefined>()
   const [paymentBanner, setPaymentBanner] = useState<{
     tone: 'success' | 'error'
     message: string
@@ -76,6 +80,7 @@ export function PublicStorefrontPage({ storeCode, online }: Props) {
         setStoreId(menu.storeId)
         setProducts(menu.products)
         setPromotions(menu.promotions ?? [])
+        setBranding(menu.branding)
         setUsable(true)
       } catch (err) {
         if (!cancelled) {
@@ -153,29 +158,33 @@ export function PublicStorefrontPage({ storeCode, online }: Props) {
       products,
       promotions,
       waveEnabled,
+      branding,
       submitOrder: async (order: PublicStorefrontOrderInput) => {
         const result = await submitPublicStorefrontOrder(storeCode, order)
         return result
       },
     }),
-    [storeCode, storeId, storeName, products, promotions, waveEnabled],
+    [storeCode, storeId, storeName, products, promotions, waveEnabled, branding],
   )
 
   if (loading) {
     return (
-      <div className="flex min-h-svh items-center justify-center bg-zinc-950">
-        <div className="h-10 w-10 animate-spin rounded-full border-2 border-zinc-700 border-t-amber-200" />
+      <div className="storefront-shell flex min-h-svh items-center justify-center">
+        <div
+          className="h-10 w-10 animate-spin rounded-full border-2 border-stone-300"
+          style={{ borderTopColor: 'var(--storefront-accent, #c4a35a)' }}
+        />
       </div>
     )
   }
 
   if (!usable) {
     return (
-      <div className="flex min-h-svh items-center justify-center bg-zinc-950 px-4">
-        <Card className="max-w-md">
+      <div className="storefront-shell flex min-h-svh items-center justify-center px-4">
+        <Card className="max-w-md border-stone-200 bg-white shadow-sm">
           <CardContent className="space-y-3 p-8 text-center">
-            <h1 className="text-xl font-bold text-ink">{storeName}</h1>
-            <p className="text-sm text-ink-muted">
+            <h1 className="text-xl font-bold text-stone-900">{storeName}</h1>
+            <p className="text-sm text-stone-600">
               Cette boutique n’accepte pas de commandes en ligne pour le moment.
             </p>
           </CardContent>
@@ -186,13 +195,13 @@ export function PublicStorefrontPage({ storeCode, online }: Props) {
 
   if (error || products.length === 0) {
     return (
-      <div className="flex min-h-svh flex-col bg-zinc-950">
+      <div className="storefront-shell flex min-h-svh flex-col">
         {!online ? <OfflineBanner /> : null}
         <div className="flex flex-1 items-center justify-center px-4">
-          <Card className="max-w-lg">
+          <Card className="max-w-lg border-stone-200 bg-white shadow-sm">
             <CardContent className="space-y-4 p-8 text-center">
-              <h1 className="text-xl font-bold text-ink">Boutique en ligne</h1>
-              <p className="text-sm leading-relaxed text-ink-muted">
+              <h1 className="text-xl font-bold text-stone-900">Boutique en ligne</h1>
+              <p className="text-sm leading-relaxed text-stone-600">
                 {error ??
                   'Le menu n’a pas encore été publié. Le commerçant doit publier son catalogue depuis l’espace Abonnement.'}
               </p>
@@ -212,8 +221,8 @@ export function PublicStorefrontPage({ storeCode, online }: Props) {
         <div
           className={`fixed inset-x-0 top-0 z-50 border-b px-4 py-3 text-center text-sm ${
             paymentBanner.tone === 'success'
-              ? 'border-emerald-400/30 bg-emerald-950/95 text-emerald-100'
-              : 'border-rose-400/30 bg-rose-950/95 text-rose-100'
+              ? 'border-emerald-200 bg-emerald-50 text-emerald-900'
+              : 'border-rose-200 bg-rose-50 text-rose-900'
           }`}
           role="status"
         >

@@ -103,7 +103,7 @@ export function LoginScreen({ onSuccess }: Props) {
   }
 
   return (
-    <div className="grid min-h-svh grid-cols-1 lg:grid-cols-2">
+    <div className="grid min-h-svh max-w-[100vw] grid-cols-1 overflow-x-clip lg:grid-cols-2">
       <div className="relative hidden overflow-hidden bg-zinc-900 lg:block">
         <div className="absolute inset-0 opacity-[0.06]">
           <div className="absolute -left-1/4 top-1/4 h-[600px] w-[600px] rounded-full bg-emerald-400 blur-3xl" />

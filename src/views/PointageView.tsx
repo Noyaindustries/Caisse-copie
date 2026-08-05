@@ -36,6 +36,7 @@ import { Field, Input, Select } from '../ui/Input'
 import { Kpi } from '../ui/Kpi'
 import { PageHeader, SectionHeader } from '../ui/PageHeader'
 import { Table, TBody, Td, Th, THead, Tr } from '../ui/Table'
+import { MobileDataCard, ResponsiveData } from '../ui/ResponsiveData'
 import { Tabs } from '../ui/Tabs'
 import { useToast } from '../ui/Toast'
 import { IconDownload, IconLogin, IconLogout, IconTrash } from '../ui/icons'
@@ -667,43 +668,92 @@ export function PointageView({
                   </Select>
                 </Field>
               </div>
-              <Table>
-                <THead>
-                  <Tr>
-                    <Th>Collaborateur</Th>
-                    <Th>Statut</Th>
-                    <Th>Dernière action</Th>
-                    <Th>Magasin</Th>
-                    <Th align="right">Temps jour</Th>
-                  </Tr>
-                </THead>
-                <TBody>
-                  {teamPresence.map((row) => (
-                    <Tr key={row.profileId}>
-                      <Td className="font-medium">{row.displayName}</Td>
-                      <Td>
-                        <div className="flex flex-wrap gap-1">
-                          <Badge tone={row.onSite ? 'success' : 'neutral'}>
-                            {row.onSite ? 'Sur site' : row.punchedToday ? 'Parti' : 'Absent'}
-                          </Badge>
-                          {row.late ? <Badge tone="warning">Retard</Badge> : null}
-                        </div>
-                      </Td>
-                      <Td className="text-[12px] text-zinc-600">
-                        {row.lastPunchAt
-                          ? `${punchKindLabel(row.lastPunchKind ?? 'in')} · ${formatTimeHm(row.lastPunchAt)}`
-                          : '—'}
-                      </Td>
-                      <Td className="max-w-[120px] truncate text-[12px]">
-                        {row.storeName ?? '—'}
-                      </Td>
-                      <Td align="right" mono>
-                        {formatDurationMs(row.workedTodayMs)}
-                      </Td>
-                    </Tr>
-                  ))}
-                </TBody>
-              </Table>
+              <ResponsiveData
+                table={
+                  <Table>
+                    <THead>
+                      <Tr>
+                        <Th sticky>Collaborateur</Th>
+                        <Th>Statut</Th>
+                        <Th hideBelow="lg">Dernière action</Th>
+                        <Th hideBelow="xl">Magasin</Th>
+                        <Th align="right">Temps jour</Th>
+                      </Tr>
+                    </THead>
+                    <TBody>
+                      {teamPresence.map((row) => (
+                        <Tr key={row.profileId}>
+                          <Td sticky className="font-medium">
+                            {row.displayName}
+                          </Td>
+                          <Td>
+                            <div className="flex flex-wrap gap-1">
+                              <Badge tone={row.onSite ? 'success' : 'neutral'}>
+                                {row.onSite
+                                  ? 'Sur site'
+                                  : row.punchedToday
+                                    ? 'Parti'
+                                    : 'Absent'}
+                              </Badge>
+                              {row.late ? <Badge tone="warning">Retard</Badge> : null}
+                            </div>
+                          </Td>
+                          <Td className="text-[12px] text-zinc-600" hideBelow="lg">
+                            {row.lastPunchAt
+                              ? `${punchKindLabel(row.lastPunchKind ?? 'in')} · ${formatTimeHm(row.lastPunchAt)}`
+                              : '—'}
+                          </Td>
+                          <Td
+                            className="max-w-[120px] truncate text-[12px]"
+                            hideBelow="xl"
+                          >
+                            {row.storeName ?? '—'}
+                          </Td>
+                          <Td align="right" mono>
+                            {formatDurationMs(row.workedTodayMs)}
+                          </Td>
+                        </Tr>
+                      ))}
+                    </TBody>
+                  </Table>
+                }
+                cards={
+                  <ul className="grid gap-2">
+                    {teamPresence.map((row) => (
+                      <MobileDataCard
+                        key={row.profileId}
+                        title={row.displayName}
+                        meta={
+                          <span className="inline-flex flex-wrap gap-1">
+                            <Badge tone={row.onSite ? 'success' : 'neutral'}>
+                              {row.onSite
+                                ? 'Sur site'
+                                : row.punchedToday
+                                  ? 'Parti'
+                                  : 'Absent'}
+                            </Badge>
+                            {row.late ? <Badge tone="warning">Retard</Badge> : null}
+                          </span>
+                        }
+                        body={
+                          <div className="space-y-1">
+                            <p>
+                              Dernière action :{' '}
+                              {row.lastPunchAt
+                                ? `${punchKindLabel(row.lastPunchKind ?? 'in')} · ${formatTimeHm(row.lastPunchAt)}`
+                                : '—'}
+                            </p>
+                            <p>Magasin : {row.storeName ?? '—'}</p>
+                            <p className="font-mono-nums font-semibold text-ink">
+                              Temps jour : {formatDurationMs(row.workedTodayMs)}
+                            </p>
+                          </div>
+                        }
+                      />
+                    ))}
+                  </ul>
+                }
+              />
             </CardContent>
           </Card>
 
@@ -838,36 +888,70 @@ export function PointageView({
               {periodSummaries.length === 0 ? (
                 <EmptyState title="Aucune donnée" variant="flat" />
               ) : (
-                <Table>
-                  <THead>
-                    <Tr>
-                      <Th>Collaborateur</Th>
-                      <Th align="right">Heures totales</Th>
-                      <Th align="right">Jours pointés</Th>
-                      <Th align="right">Moy. / jour</Th>
-                    </Tr>
-                  </THead>
-                  <TBody>
-                    {periodSummaries.map((row) => (
-                      <Tr key={row.profileId}>
-                        <Td>{row.displayName}</Td>
-                        <Td align="right" mono>
-                          {formatDurationHm(row.totalMs)}
-                        </Td>
-                        <Td align="right" mono>
-                          {row.daysWithPunches}
-                        </Td>
-                        <Td align="right" mono>
-                          {row.daysWithPunches > 0
-                            ? formatDurationHm(
-                                Math.round(row.totalMs / row.daysWithPunches),
-                              )
-                            : '—'}
-                        </Td>
-                      </Tr>
-                    ))}
-                  </TBody>
-                </Table>
+                <ResponsiveData
+                  table={
+                    <Table>
+                      <THead>
+                        <Tr>
+                          <Th sticky>Collaborateur</Th>
+                          <Th align="right">Heures totales</Th>
+                          <Th align="right" hideBelow="lg">
+                            Jours pointés
+                          </Th>
+                          <Th align="right" hideBelow="lg">
+                            Moy. / jour
+                          </Th>
+                        </Tr>
+                      </THead>
+                      <TBody>
+                        {periodSummaries.map((row) => (
+                          <Tr key={row.profileId}>
+                            <Td sticky>{row.displayName}</Td>
+                            <Td align="right" mono>
+                              {formatDurationHm(row.totalMs)}
+                            </Td>
+                            <Td align="right" mono hideBelow="lg">
+                              {row.daysWithPunches}
+                            </Td>
+                            <Td align="right" mono hideBelow="lg">
+                              {row.daysWithPunches > 0
+                                ? formatDurationHm(
+                                    Math.round(row.totalMs / row.daysWithPunches),
+                                  )
+                                : '—'}
+                            </Td>
+                          </Tr>
+                        ))}
+                      </TBody>
+                    </Table>
+                  }
+                  cards={
+                    <ul className="grid gap-2">
+                      {periodSummaries.map((row) => (
+                        <MobileDataCard
+                          key={row.profileId}
+                          title={row.displayName}
+                          body={
+                            <div className="grid grid-cols-2 gap-1.5">
+                              <span className="col-span-2 font-mono-nums font-semibold text-ink">
+                                Total : {formatDurationHm(row.totalMs)}
+                              </span>
+                              <span>Jours : {row.daysWithPunches}</span>
+                              <span>
+                                Moy. :{' '}
+                                {row.daysWithPunches > 0
+                                  ? formatDurationHm(
+                                      Math.round(row.totalMs / row.daysWithPunches),
+                                    )
+                                  : '—'}
+                              </span>
+                            </div>
+                          }
+                        />
+                      ))}
+                    </ul>
+                  }
+                />
               )}
             </CardContent>
           </Card>
@@ -879,42 +963,75 @@ export function PointageView({
                 <EmptyState title="Aucune journée sur la période" variant="flat" />
               ) : (
                 <div className="ui-scroll max-h-[min(48vh,480px)] overflow-auto">
-                  <Table>
-                    <THead>
-                      <Tr>
-                        <Th>Date</Th>
-                        <Th>Collaborateur</Th>
-                        <Th>Arrivée</Th>
-                        <Th>Départ</Th>
-                        <Th align="right">Durée</Th>
-                        <Th>Retard</Th>
-                      </Tr>
-                    </THead>
-                    <TBody>
-                      {daySummaries.map((row) => (
-                        <Tr key={`${row.ymd}-${row.profileId}`}>
-                          <Td>{formatDateShortYmd(row.ymd)}</Td>
-                          <Td>{row.displayName}</Td>
-                          <Td mono>
-                            {row.firstIn ? formatTimeHm(row.firstIn) : '—'}
-                          </Td>
-                          <Td mono>
-                            {row.lastOut ? formatTimeHm(row.lastOut) : '—'}
-                          </Td>
-                          <Td align="right" mono>
-                            {formatDurationHm(row.workedMs)}
-                          </Td>
-                          <Td>
-                            {row.late ? (
-                              <Badge tone="warning">Oui</Badge>
-                            ) : (
-                              <span className="text-ink-subtle">—</span>
-                            )}
-                          </Td>
-                        </Tr>
-                      ))}
-                    </TBody>
-                  </Table>
+                  <ResponsiveData
+                    table={
+                      <Table>
+                        <THead>
+                          <Tr>
+                            <Th sticky>Date</Th>
+                            <Th>Collaborateur</Th>
+                            <Th hideBelow="lg">Arrivée</Th>
+                            <Th hideBelow="lg">Départ</Th>
+                            <Th align="right">Durée</Th>
+                            <Th hideBelow="xl">Retard</Th>
+                          </Tr>
+                        </THead>
+                        <TBody>
+                          {daySummaries.map((row) => (
+                            <Tr key={`${row.ymd}-${row.profileId}`}>
+                              <Td sticky>{formatDateShortYmd(row.ymd)}</Td>
+                              <Td>{row.displayName}</Td>
+                              <Td mono hideBelow="lg">
+                                {row.firstIn ? formatTimeHm(row.firstIn) : '—'}
+                              </Td>
+                              <Td mono hideBelow="lg">
+                                {row.lastOut ? formatTimeHm(row.lastOut) : '—'}
+                              </Td>
+                              <Td align="right" mono>
+                                {formatDurationHm(row.workedMs)}
+                              </Td>
+                              <Td hideBelow="xl">
+                                {row.late ? (
+                                  <Badge tone="warning">Oui</Badge>
+                                ) : (
+                                  <span className="text-ink-subtle">—</span>
+                                )}
+                              </Td>
+                            </Tr>
+                          ))}
+                        </TBody>
+                      </Table>
+                    }
+                    cards={
+                      <ul className="grid gap-2">
+                        {daySummaries.map((row) => (
+                          <MobileDataCard
+                            key={`${row.ymd}-${row.profileId}`}
+                            title={formatDateShortYmd(row.ymd)}
+                            meta={row.displayName}
+                            body={
+                              <div className="grid grid-cols-2 gap-1.5">
+                                <span>
+                                  Arrivée :{' '}
+                                  {row.firstIn ? formatTimeHm(row.firstIn) : '—'}
+                                </span>
+                                <span>
+                                  Départ :{' '}
+                                  {row.lastOut ? formatTimeHm(row.lastOut) : '—'}
+                                </span>
+                                <span className="font-mono-nums font-semibold">
+                                  Durée : {formatDurationHm(row.workedMs)}
+                                </span>
+                                <span>
+                                  Retard : {row.late ? 'Oui' : '—'}
+                                </span>
+                              </div>
+                            }
+                          />
+                        ))}
+                      </ul>
+                    }
+                  />
                 </div>
               )}
             </CardContent>
@@ -1015,70 +1132,132 @@ function HistoryCard({
           </p>
         ) : (
           <div className="ui-scroll -mx-1 max-h-[min(52vh,520px)] overflow-auto px-1">
-            <Table>
-              <THead>
-                <Tr>
-                  <Th>Date & heure</Th>
-                  <Th>Type</Th>
-                  {canViewTeamPointage ? <Th>Collaborateur</Th> : null}
-                  <Th>Magasin</Th>
-                  <Th>Note</Th>
-                  {onDelete ? <Th align="right">Action</Th> : null}
-                </Tr>
-              </THead>
-              <TBody>
-                {sortedTableDesc.map((p) => (
-                  <Tr key={p.id}>
-                    <Td className="whitespace-nowrap">
-                      <span className="block text-[12px] font-medium text-zinc-900">
-                        {formatDateLong(p.createdAt)}
-                      </span>
-                      <span className="font-mono-nums text-[11px] text-zinc-500">
-                        {formatTimeHm(p.createdAt)}
-                      </span>
-                    </Td>
-                    <Td>
-                      <div className="flex flex-wrap gap-1">
-                        <Badge tone={punchKindBadgeTone(p.kind)}>
-                          {punchKindLabel(p.kind)}
-                        </Badge>
-                        {p.source === 'manager' ? (
-                          <Badge tone="neutral">Manager</Badge>
+            <ResponsiveData
+              table={
+                <Table>
+                  <THead>
+                    <Tr>
+                      <Th sticky>Date & heure</Th>
+                      <Th>Type</Th>
+                      {canViewTeamPointage ? (
+                        <Th hideBelow="lg">Collaborateur</Th>
+                      ) : null}
+                      <Th hideBelow="xl">Magasin</Th>
+                      <Th hideBelow="lg">Note</Th>
+                      {onDelete ? <Th align="right">Action</Th> : null}
+                    </Tr>
+                  </THead>
+                  <TBody>
+                    {sortedTableDesc.map((p) => (
+                      <Tr key={p.id}>
+                        <Td sticky className="whitespace-nowrap">
+                          <span className="block text-[12px] font-medium text-zinc-900">
+                            {formatDateLong(p.createdAt)}
+                          </span>
+                          <span className="font-mono-nums text-[11px] text-zinc-500">
+                            {formatTimeHm(p.createdAt)}
+                          </span>
+                        </Td>
+                        <Td>
+                          <div className="flex flex-wrap gap-1">
+                            <Badge tone={punchKindBadgeTone(p.kind)}>
+                              {punchKindLabel(p.kind)}
+                            </Badge>
+                            {p.source === 'manager' ? (
+                              <Badge tone="neutral">Manager</Badge>
+                            ) : null}
+                          </div>
+                        </Td>
+                        {canViewTeamPointage ? (
+                          <Td
+                            className="max-w-[140px] truncate text-[12px]"
+                            hideBelow="lg"
+                          >
+                            {p.profileDisplayName}
+                          </Td>
                         ) : null}
-                      </div>
-                    </Td>
-                    {canViewTeamPointage ? (
-                      <Td className="max-w-[140px] truncate text-[12px]">
-                        {p.profileDisplayName}
-                      </Td>
-                    ) : null}
-                    <Td className="max-w-[120px] truncate text-[12px] text-zinc-600">
-                      {p.storeName ?? p.storeId}
-                    </Td>
-                    <Td className="max-w-[200px] truncate text-[12px] text-zinc-500">
-                      {p.note ?? '—'}
-                    </Td>
-                    {onDelete ? (
-                      <Td align="right">
-                        <Button
-                          size="sm"
-                          variant="ghost"
-                          iconLeft={<IconTrash />}
-                          onClick={() => void onDelete(p)}
-                          className={
-                            pendingDeleteId === p.id
-                              ? 'text-rose-700'
-                              : undefined
-                          }
+                        <Td
+                          className="max-w-[120px] truncate text-[12px] text-zinc-600"
+                          hideBelow="xl"
                         >
-                          {pendingDeleteId === p.id ? 'Confirmer' : 'Suppr.'}
-                        </Button>
-                      </Td>
-                    ) : null}
-                  </Tr>
-                ))}
-              </TBody>
-            </Table>
+                          {p.storeName ?? p.storeId}
+                        </Td>
+                        <Td
+                          className="max-w-[200px] truncate text-[12px] text-zinc-500"
+                          hideBelow="lg"
+                        >
+                          {p.note ?? '—'}
+                        </Td>
+                        {onDelete ? (
+                          <Td align="right">
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              iconLeft={<IconTrash />}
+                              onClick={() => void onDelete(p)}
+                              className={
+                                pendingDeleteId === p.id
+                                  ? 'text-rose-700'
+                                  : undefined
+                              }
+                            >
+                              {pendingDeleteId === p.id ? 'Confirmer' : 'Suppr.'}
+                            </Button>
+                          </Td>
+                        ) : null}
+                      </Tr>
+                    ))}
+                  </TBody>
+                </Table>
+              }
+              cards={
+                <ul className="grid gap-2">
+                  {sortedTableDesc.map((p) => (
+                    <MobileDataCard
+                      key={p.id}
+                      title={`${formatDateLong(p.createdAt)} · ${formatTimeHm(p.createdAt)}`}
+                      meta={
+                        <span className="inline-flex flex-wrap gap-1">
+                          <Badge tone={punchKindBadgeTone(p.kind)}>
+                            {punchKindLabel(p.kind)}
+                          </Badge>
+                          {p.source === 'manager' ? (
+                            <Badge tone="neutral">Manager</Badge>
+                          ) : null}
+                        </span>
+                      }
+                      body={
+                        <div className="space-y-1">
+                          {canViewTeamPointage ? (
+                            <p>{p.profileDisplayName}</p>
+                          ) : null}
+                          <p>Magasin : {p.storeName ?? p.storeId}</p>
+                          <p>Note : {p.note ?? '—'}</p>
+                        </div>
+                      }
+                      actions={
+                        onDelete ? (
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            fullWidth
+                            iconLeft={<IconTrash />}
+                            onClick={() => void onDelete(p)}
+                            className={
+                              pendingDeleteId === p.id
+                                ? 'text-rose-700'
+                                : undefined
+                            }
+                          >
+                            {pendingDeleteId === p.id ? 'Confirmer' : 'Supprimer'}
+                          </Button>
+                        ) : undefined
+                      }
+                    />
+                  ))}
+                </ul>
+              }
+            />
           </div>
         )}
       </CardContent>

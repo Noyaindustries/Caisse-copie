@@ -11,6 +11,7 @@ import { Field, Input, Select } from '../ui/Input'
 import { Kpi } from '../ui/Kpi'
 import { PageHeader } from '../ui/PageHeader'
 import { Table, TBody, Td, Th, THead, Tr } from '../ui/Table'
+import { MobileDataCard, ResponsiveData } from '../ui/ResponsiveData'
 import { useToast } from '../ui/Toast'
 import { saleNetTTC } from '../lib/refundMath'
 
@@ -111,7 +112,7 @@ export function CrmView({ actor }: Props) {
         title="CRM clients"
         subtitle="Segmentation clients, interactions commerciales et plan de relance"
         actions={
-          <Button variant="secondary" onClick={exportCrmCsv}>
+          <Button variant="secondary" className="w-full sm:w-auto" onClick={exportCrmCsv}>
             Export CRM
           </Button>
         }
@@ -152,7 +153,7 @@ export function CrmView({ actor }: Props) {
             <Input value={note} onChange={(e) => setNote(e.target.value)} placeholder="Ex: client intéressé par lot boisson, rappel vendredi..." />
           </Field>
           <div className="md:col-span-2">
-            <Button variant="accent" onClick={() => void addInteraction()}>
+            <Button variant="accent" fullWidth className="sm:w-auto" onClick={() => void addInteraction()}>
               Ajouter interaction
             </Button>
           </div>
@@ -164,32 +165,90 @@ export function CrmView({ actor }: Props) {
           {crmRows.length === 0 ? (
             <EmptyState title="Aucun client CRM" description="Les clients du programme fidélité apparaîtront ici." variant="flat" />
           ) : (
-            <Table minWidth={900}>
-              <THead>
-                <Tr hover={false}>
-                  <Th>Client</Th>
-                  <Th>Téléphone</Th>
-                  <Th align="right">Visites</Th>
-                  <Th align="right">Points</Th>
-                  <Th align="right">CA net</Th>
-                  <Th>Dernier achat</Th>
-                  <Th>Dernière interaction</Th>
-                </Tr>
-              </THead>
-              <TBody>
-                {crmRows.map((r) => (
-                  <Tr key={r.id}>
-                    <Td>{r.name}</Td>
-                    <Td mono>{r.phone}</Td>
-                    <Td align="right" mono>{r.visits}</Td>
-                    <Td align="right" mono>{r.points}</Td>
-                    <Td align="right" mono className="font-semibold">{formatFCFA(r.totalSpent)}</Td>
-                    <Td>{r.lastSaleAt ? new Date(r.lastSaleAt).toLocaleDateString('fr-FR') : '—'}</Td>
-                    <Td>{r.lastInteractionAt ? new Date(r.lastInteractionAt).toLocaleDateString('fr-FR') : '—'}</Td>
-                  </Tr>
-                ))}
-              </TBody>
-            </Table>
+            <ResponsiveData
+              table={
+                <Table minWidth={900}>
+                  <THead>
+                    <Tr hover={false}>
+                      <Th sticky>Client</Th>
+                      <Th>Téléphone</Th>
+                      <Th align="right" hideBelow="lg">
+                        Visites
+                      </Th>
+                      <Th align="right" hideBelow="lg">
+                        Points
+                      </Th>
+                      <Th align="right">CA net</Th>
+                      <Th hideBelow="xl">Dernier achat</Th>
+                      <Th hideBelow="xl">Dernière interaction</Th>
+                    </Tr>
+                  </THead>
+                  <TBody>
+                    {crmRows.map((r) => (
+                      <Tr key={r.id}>
+                        <Td sticky>{r.name}</Td>
+                        <Td mono>{r.phone}</Td>
+                        <Td align="right" mono hideBelow="lg">
+                          {r.visits}
+                        </Td>
+                        <Td align="right" mono hideBelow="lg">
+                          {r.points}
+                        </Td>
+                        <Td align="right" mono className="font-semibold">
+                          {formatFCFA(r.totalSpent)}
+                        </Td>
+                        <Td hideBelow="xl">
+                          {r.lastSaleAt
+                            ? new Date(r.lastSaleAt).toLocaleDateString('fr-FR')
+                            : '—'}
+                        </Td>
+                        <Td hideBelow="xl">
+                          {r.lastInteractionAt
+                            ? new Date(r.lastInteractionAt).toLocaleDateString('fr-FR')
+                            : '—'}
+                        </Td>
+                      </Tr>
+                    ))}
+                  </TBody>
+                </Table>
+              }
+              cards={
+                <ul className="grid gap-2">
+                  {crmRows.map((r) => (
+                    <MobileDataCard
+                      key={r.id}
+                      title={r.name}
+                      meta={
+                        <span className="font-mono-nums">{r.phone}</span>
+                      }
+                      body={
+                        <div className="grid grid-cols-2 gap-1.5">
+                          <span>Visites : {r.visits}</span>
+                          <span>Points : {r.points}</span>
+                          <span className="col-span-2 font-semibold text-ink">
+                            CA net : {formatFCFA(r.totalSpent)}
+                          </span>
+                          <span className="col-span-2 text-[11px]">
+                            Dernier achat :{' '}
+                            {r.lastSaleAt
+                              ? new Date(r.lastSaleAt).toLocaleDateString('fr-FR')
+                              : '—'}
+                          </span>
+                          <span className="col-span-2 text-[11px]">
+                            Dernière interaction :{' '}
+                            {r.lastInteractionAt
+                              ? new Date(r.lastInteractionAt).toLocaleDateString(
+                                  'fr-FR',
+                                )
+                              : '—'}
+                          </span>
+                        </div>
+                      }
+                    />
+                  ))}
+                </ul>
+              }
+            />
           )}
         </CardContent>
       </Card>

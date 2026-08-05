@@ -91,18 +91,20 @@ function ProductDetailModalContent({
   const maxQty = product.stock
   const canAddMore = qty + cartQty <= product.stock
 
-  const isDark = variant === 'storefront'
+  // Storefront uses the warm light commerce theme; backoffice stays light zinc.
+  const isDark = false
+  const isStorefront = variant === 'storefront'
 
-  const surface = isDark
-    ? 'bg-slate-950 border-amber-200/20 text-slate-100'
+  const surface = isStorefront
+    ? 'bg-[#FFFcf7] border-stone-200 text-stone-900'
     : 'bg-white border-zinc-200 text-zinc-900'
-  const sub = isDark ? 'text-slate-400' : 'text-zinc-500'
-  const strong = isDark ? 'text-white' : 'text-zinc-900'
-  const eyebrow = isDark
-    ? 'text-amber-200/80'
+  const sub = isStorefront ? 'text-stone-500' : 'text-zinc-500'
+  const strong = isStorefront ? 'text-stone-900' : 'text-zinc-900'
+  const eyebrow = isStorefront
+    ? 'text-stone-500'
     : 'text-zinc-500'
-  const chip = isDark
-    ? 'border-white/10 bg-slate-900/70 text-slate-200'
+  const chip = isStorefront
+    ? 'border-stone-200 bg-stone-50 text-stone-700'
     : 'border-zinc-200 bg-zinc-50 text-zinc-700'
 
   return (
@@ -189,7 +191,7 @@ function ProductDetailModalContent({
                   <span
                     className={cn(
                       'font-mono-nums text-2xl font-bold tracking-tight sm:text-3xl',
-                      isDark ? 'text-emerald-400' : 'text-emerald-600',
+                      isStorefront ? 'text-stone-900' : 'text-emerald-600',
                     )}
                   >
                     {formatFCFA(product.priceTTC)}
@@ -371,8 +373,8 @@ function ProductDetailModalContent({
                     }}
                     className={cn(
                       'inline-flex flex-1 items-center justify-center gap-2 rounded-xl px-4 py-3 text-sm font-semibold transition disabled:cursor-not-allowed disabled:opacity-50',
-                      isDark
-                        ? 'bg-amber-200 text-slate-950 hover:bg-amber-100'
+                      isStorefront
+                        ? 'storefront-btn-accent'
                         : 'bg-zinc-900 text-white hover:bg-zinc-800',
                     )}
                   >

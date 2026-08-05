@@ -6,6 +6,8 @@ import { SubscriptionBillingSection } from '../components/subscription/Subscript
 
 import { SubscriptionHero } from '../components/subscription/SubscriptionHero'
 
+import { StorefrontBrandingSection } from '../components/subscription/StorefrontBrandingSection'
+
 import { SubscriptionPlansSection } from '../components/subscription/SubscriptionPlansSection'
 
 import { useActiveStore } from '../context/ActiveStoreContext'
@@ -69,6 +71,8 @@ import { useHorizontalWheelScroll } from '../hooks/useHorizontalWheelScroll'
 const SECTION_NAV = [
 
   { id: 'sub-overview', label: 'Vue d’ensemble' },
+
+  { id: 'sub-appearance', label: 'Apparence' },
 
   { id: 'sub-plans', label: 'Formules' },
 
@@ -542,7 +546,11 @@ export function SubscriptionView() {
           onPublish={() => void handlePublishStorefront()}
         />
 
-
+        <StorefrontBrandingSection
+          boutiqueLink={boutiqueLink}
+          online={online}
+          usable={usable}
+        />
 
         <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
 

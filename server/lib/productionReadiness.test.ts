@@ -5,7 +5,7 @@ import {
   assertSubscriptionActive,
   planLimits,
 } from './quotaEnforcement.js'
-import { parsePlanId, parseStatus, isSubscriptionUsable } from './subscriptionPlans.js'
+import { parsePlanId, isSubscriptionUsable } from './subscriptionPlans.js'
 import { validateStaffPin } from './staffCredentials.js'
 
 describe('safeCompareSecret', () => {

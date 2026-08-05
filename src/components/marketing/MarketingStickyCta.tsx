@@ -55,12 +55,16 @@ export function MarketingStickyCta({
 
   return (
     <div
-      className="pointer-events-none fixed inset-x-0 bottom-0 z-50 px-3 pb-3 sm:px-6 sm:pb-4"
-      style={{ paddingBottom: 'max(0.75rem, env(safe-area-inset-bottom))' }}
+      className="pointer-events-none fixed inset-x-0 bottom-0 z-50 px-3 sm:px-6"
+      style={{
+        paddingBottom: 'max(0.75rem, env(safe-area-inset-bottom, 0px))',
+        paddingLeft: 'max(0.75rem, env(safe-area-inset-left, 0px))',
+        paddingRight: 'max(0.75rem, env(safe-area-inset-right, 0px))',
+      }}
     >
       <div
         className={cn(
-          'marketing-sticky-bar pointer-events-auto mx-auto flex max-w-3xl items-center gap-2 rounded-2xl p-2',
+          'marketing-sticky-bar pointer-events-auto mx-auto flex min-w-0 max-w-3xl items-center gap-2 rounded-2xl p-2',
           'sm:gap-3 sm:p-2.5',
         )}
       >

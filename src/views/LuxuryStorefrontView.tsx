@@ -27,7 +27,15 @@ import {
   isKitchenModuleDemoOn,
 } from '../lib/integrationsConfig'
 
-import type { PublicStorefrontOrderInput, StorefrontPaymentMethod } from '../lib/storefront/types'
+import type {
+  PublicStorefrontOrderInput,
+  StorefrontBranding,
+  StorefrontPaymentMethod,
+} from '../lib/storefront/types'
+import {
+  storefrontAccentColor,
+  storefrontDisplayName,
+} from '../lib/storefront/types'
 import { openWaveCheckout } from '../lib/wavePayment'
 
 type PublicStorefrontConfig = {
@@ -36,6 +44,7 @@ type PublicStorefrontConfig = {
   products: ProductWithStock[]
   promotions?: Promotion[]
   waveEnabled?: boolean
+  branding?: StorefrontBranding
   submitOrder: (
     order: PublicStorefrontOrderInput,
   ) => Promise<{
@@ -167,6 +176,15 @@ export function LuxuryStorefrontView({
       }
     : storeCtx?.activeStore
   const isPublicStorefront = Boolean(publicStorefront)
+  const branding = publicStorefront?.branding
+  const shopTitle = storefrontDisplayName(
+    branding,
+    publicStorefront?.storeName ?? activeStore?.name ?? BRAND_NAME,
+  )
+  const accentColor = storefrontAccentColor(branding)
+  const logoUrl = branding?.logoUrl?.trim() || null
+  const bannerUrl = branding?.bannerUrl?.trim() || null
+  const welcomeMessage = branding?.welcomeMessage?.trim() || null
   const cardDensity: 'compact' | 'confort' = 'compact'
   const [cart, setCart] = useState<CartLine[]>([])
   const [customerName, setCustomerName] = useState('')
@@ -791,121 +809,171 @@ export function LuxuryStorefrontView({
   ])
 
   return (
-    <div className="min-h-svh bg-linear-to-b from-[#090f1d] via-[#0f172a] to-premium-navy text-slate-100">
+    <div
+      className="storefront-shell min-h-svh"
+      style={{ ['--storefront-accent' as string]: accentColor }}
+    >
       {!online ? <OfflineBanner /> : null}
-      <div className="mx-auto flex w-full max-w-7xl flex-col px-2 pb-16 pt-6 sm:px-5 lg:px-7">
-        <header className="premium-dark-card sticky top-3 z-20 rounded-3xl bg-linear-to-r from-slate-900 via-slate-900 to-amber-950/70 p-3 shadow-2xl shadow-amber-900/20 sm:p-4">
-          {!isPublicStorefront && onOpenOwnerSpace ? (
-            <div className="mb-3 flex flex-wrap items-center justify-between gap-2 rounded-2xl border border-amber-200/30 bg-amber-500/10 px-3 py-2">
-              <p className="text-[11px] font-medium text-amber-100">
-                Aperçu boutique — vous êtes connecté en tant que propriétaire
-              </p>
-              <div className="flex flex-wrap items-center gap-1.5">
-                <button
-                  type="button"
-                  onClick={onOpenOwnerSpace}
-                  className="rounded-lg bg-amber-200 px-2.5 py-1.5 text-[11px] font-bold text-slate-900 transition hover:bg-amber-100"
-                >
-                  ← Espace abonnement
-                </button>
-                <button
-                  type="button"
-                  onClick={onOpenStaffLogin}
-                  className="rounded-lg border border-white/20 bg-white/10 px-2.5 py-1.5 text-[11px] font-semibold text-white transition hover:bg-white/15"
-                >
-                  Connexion caisse
-                </button>
-              </div>
-            </div>
-          ) : (
-            <div className="mb-3 flex flex-wrap items-center gap-2 rounded-2xl border border-white/10 bg-black/20 px-3 py-2 text-[11px] text-slate-300">
-              <p className="truncate">
-                Boutique {publicStorefront?.storeName ?? BRAND_NAME} · Commande rapide et
-                livraison locale
-              </p>
-            </div>
-          )}
 
-          <div className="flex flex-wrap items-center gap-2 px-1 py-1">
+      {!isPublicStorefront && onOpenOwnerSpace ? (
+        <div className="border-b border-stone-300/70 bg-amber-50 px-3 py-2 sm:px-5">
+          <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-2">
+            <p className="text-[11px] font-medium text-amber-950">
+              Aperçu boutique — vous êtes connecté en tant que propriétaire
+            </p>
+            <div className="flex flex-wrap items-center gap-1.5">
+              <button
+                type="button"
+                onClick={onOpenOwnerSpace}
+                className="rounded-lg bg-stone-900 px-2.5 py-1.5 text-[11px] font-bold text-white transition hover:bg-stone-800"
+              >
+                ← Espace abonnement
+              </button>
+              <button
+                type="button"
+                onClick={onOpenStaffLogin}
+                className="rounded-lg border border-stone-300 bg-white px-2.5 py-1.5 text-[11px] font-semibold text-stone-800 transition hover:bg-stone-50"
+              >
+                Connexion caisse
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      <header className="storefront-header sticky top-0 z-30 border-x-0 border-t-0">
+        <div className="mx-auto flex max-w-6xl items-center gap-3 px-3 py-2.5 sm:px-5">
+          <button
+            type="button"
+            onClick={() => {
+              setIsCartOpen(false)
+              window.scrollTo({ top: 0, behavior: 'smooth' })
+            }}
+            title={shopTitle}
+            className="flex min-w-0 flex-1 items-center gap-2.5 text-left"
+          >
+            {logoUrl ? (
+              <img
+                src={logoUrl}
+                alt=""
+                className="h-10 w-10 shrink-0 rounded-full border border-stone-200 object-cover"
+              />
+            ) : (
+              <BrandLogo size="md" alt="" ring="gold" />
+            )}
+            <span className="min-w-0 truncate text-[15px] font-bold tracking-tight text-stone-900">
+              {shopTitle}
+            </span>
+          </button>
+          <nav className="hidden items-center gap-1 sm:flex">
             <button
               type="button"
-              onClick={() => {
-                setIsCartOpen(false)
-                window.scrollTo({ top: 0, behavior: 'smooth' })
-              }}
-              title="Haut de page"
-              className="shrink-0 rounded-full border border-amber-200/35 bg-white/5 p-0.5 ring-1 ring-emerald-200/25"
+              onClick={scrollToProducts}
+              className="rounded-lg px-2.5 py-1.5 text-[12px] font-semibold text-stone-600 transition hover:bg-stone-100 hover:text-stone-900"
             >
-              <BrandLogo size="md" alt={BRAND_NAME} ring="gold" />
+              Menu
             </button>
-            <nav className="ui-scroll flex min-w-0 flex-1 items-center gap-1.5 overflow-x-auto whitespace-nowrap lg:justify-center">
-              {!isPublicStorefront && onOpenOwnerSpace ? (
-                <button
-                  type="button"
-                  onClick={onOpenOwnerSpace}
-                  className="shrink-0 rounded-lg border border-amber-200/45 bg-amber-200/15 px-2.5 py-1 text-[11px] font-semibold text-amber-100 transition hover:bg-amber-200/25"
-                >
-                  Quitter la boutique
-                </button>
-              ) : null}
-              <button
-                type="button"
-                onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
-                className="shrink-0 rounded-lg border border-white/15 px-2.5 py-1 text-[11px] font-semibold text-slate-100 transition hover:border-amber-200/45 hover:text-amber-100"
-              >
-                Haut de page
-              </button>
-              <button
-                type="button"
-                onClick={scrollToProducts}
-                className="shrink-0 rounded-lg border border-white/15 px-2.5 py-1 text-[11px] font-semibold text-slate-100 transition hover:border-amber-200/45 hover:text-amber-100"
-              >
-                Produits
-              </button>
-              <button
-                type="button"
-                onClick={() => checkoutFormRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })}
-                className="shrink-0 rounded-lg border border-white/15 px-2.5 py-1 text-[11px] font-semibold text-slate-100 transition hover:border-amber-200/45 hover:text-amber-100"
-              >
-                Commander
-              </button>
-              <button
-                type="button"
-                onClick={scrollToContact}
-                className="shrink-0 rounded-lg border border-white/15 px-2.5 py-1 text-[11px] font-semibold text-slate-100 transition hover:border-amber-200/45 hover:text-amber-100"
-              >
-                Contact
-              </button>
-            </nav>
             <button
               type="button"
-              onClick={toggleCart}
-              aria-label="Afficher le panier"
-              className="relative inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-amber-200/45 bg-black/25 text-amber-100 transition hover:bg-black/40"
+              onClick={() =>
+                checkoutFormRef.current?.scrollIntoView({
+                  behavior: 'smooth',
+                  block: 'start',
+                })
+              }
+              className="rounded-lg px-2.5 py-1.5 text-[12px] font-semibold text-stone-600 transition hover:bg-stone-100 hover:text-stone-900"
             >
-              <span
-                ref={cartBadgeRef}
-                className={`absolute -right-1 -top-1 inline-flex min-w-5 items-center justify-center rounded-full bg-amber-200 px-1 py-0.5 text-[10px] font-bold leading-none text-slate-900 transition ${
-                  cartBadgePulse ? 'animate-pulse ring-2 ring-amber-100/80' : ''
-                }`}
-              >
-                {itemCount}
-              </span>
-              <CartIcon className="h-4 w-4" />
+              Commander
+            </button>
+          </nav>
+          <button
+            type="button"
+            onClick={toggleCart}
+            aria-label="Afficher le panier"
+            className="relative inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-stone-300 bg-white text-stone-800 transition hover:border-stone-400"
+          >
+            <span
+              ref={cartBadgeRef}
+              className={`absolute -right-1 -top-1 inline-flex min-w-5 items-center justify-center rounded-full px-1 py-0.5 text-[10px] font-bold leading-none text-stone-900 transition ${
+                cartBadgePulse ? 'animate-pulse ring-2 ring-white' : ''
+              }`}
+              style={{ backgroundColor: 'var(--storefront-accent)' }}
+            >
+              {itemCount}
+            </span>
+            <CartIcon className="h-4 w-4" />
+          </button>
+        </div>
+      </header>
+
+      <section className="storefront-hero">
+        {bannerUrl ? (
+          <img
+            src={bannerUrl}
+            alt=""
+            className="storefront-hero-media"
+          />
+        ) : null}
+        <div className="storefront-hero-overlay" />
+        <div className="storefront-hero-content mx-auto flex min-h-[inherit] max-w-6xl flex-col justify-end px-4 pb-10 pt-20 sm:px-5 sm:pb-14">
+          {logoUrl ? (
+            <img
+              src={logoUrl}
+              alt=""
+              className={`mb-4 h-16 w-16 rounded-full object-cover shadow-lg sm:h-20 sm:w-20 ${
+                bannerUrl ? 'border-2 border-white/70' : 'border-2 border-stone-200'
+              }`}
+            />
+          ) : null}
+          <h1
+            className={`max-w-2xl font-display text-4xl font-bold tracking-tight text-balance sm:text-5xl lg:text-6xl ${
+              bannerUrl ? 'text-white' : 'text-stone-900'
+            }`}
+          >
+            {shopTitle}
+          </h1>
+          <p
+            className={`mt-3 max-w-xl text-base leading-relaxed sm:text-lg ${
+              bannerUrl ? 'text-white/85' : 'text-stone-700'
+            }`}
+          >
+            {welcomeMessage ??
+              'Commandez en ligne, retirez en boutique ou faites-vous livrer près de chez vous.'}
+          </p>
+          <div className="mt-6 flex flex-wrap gap-2">
+            <button
+              type="button"
+              onClick={scrollToProducts}
+              className="storefront-btn-accent rounded-xl px-5 py-2.5 text-sm"
+            >
+              Voir le menu
+            </button>
+            <button
+              type="button"
+              onClick={openCart}
+              className={
+                bannerUrl
+                  ? 'rounded-xl border border-white/40 bg-white/10 px-5 py-2.5 text-sm font-semibold text-white backdrop-blur-sm transition hover:bg-white/20'
+                  : 'rounded-xl border border-stone-300 bg-white/80 px-5 py-2.5 text-sm font-semibold text-stone-800 transition hover:bg-white'
+              }
+            >
+              Panier ({itemCount})
             </button>
           </div>
-        </header>
+        </div>
+      </section>
 
+      <div className="mx-auto flex w-full max-w-6xl flex-col px-3 pb-24 pt-6 sm:px-5">
         {confirmation ? (
-          <div className="mt-3 flex justify-center">
+          <div className="mb-4 flex justify-center">
             <div
               className={`inline-flex max-w-3xl items-center justify-center gap-2 rounded-xl border px-4 py-2 text-center text-sm ${
                 confirmationTone === 'success'
-                  ? 'border-emerald-200/40 bg-emerald-100/10 text-emerald-100'
-                  : 'border-rose-200/40 bg-rose-100/10 text-rose-100'
+                  ? 'border-emerald-200 bg-emerald-50 text-emerald-900'
+                  : 'border-rose-200 bg-rose-50 text-rose-900'
               }`}
             >
-              <span className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-white/10">
+              <span className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-white/80">
                 <StatusIcon tone={confirmationTone} className="h-4 w-4" />
               </span>
               <span>{confirmation}</span>
@@ -919,103 +987,65 @@ export function LuxuryStorefrontView({
               type="button"
               aria-label="Fermer le panier"
               onClick={() => setIsCartOpen(false)}
-              className="fixed inset-0 z-30 bg-black/45 backdrop-blur-[1px]"
+              className="fixed inset-0 z-30 bg-stone-900/35 backdrop-blur-[1px]"
             />
             <aside
               ref={cartPanelRef}
-              className="premium-dark-card premium-ring fixed left-1/2 top-20 z-40 max-h-[calc(100svh-6rem)] w-[calc(100%-1.25rem)] max-w-lg -translate-x-1/2 overflow-y-auto rounded-3xl border border-amber-200/20 bg-linear-to-b from-slate-900 via-slate-900 to-slate-950 p-4 shadow-2xl shadow-black/40 sm:left-auto sm:right-4 sm:w-[min(92vw,34rem)] sm:translate-x-0"
+              className="storefront-cart-panel fixed left-1/2 top-16 z-40 max-h-[calc(100svh-5rem)] w-[calc(100%-1.25rem)] max-w-lg -translate-x-1/2 overflow-y-auto rounded-2xl p-4 sm:left-auto sm:right-4 sm:w-[min(92vw,34rem)] sm:translate-x-0"
             >
-          <div className="flex items-center justify-between">
-            <h2 className="flex items-center gap-2 text-lg font-semibold text-white">
-              <span className="inline-flex h-8 w-8 items-center justify-center rounded-lg bg-amber-100/10 text-amber-100 ring-1 ring-amber-200/25">
+          <div className="flex items-center justify-between gap-2">
+            <h2 className="flex items-center gap-2 text-lg font-semibold text-stone-900">
+              <span
+                className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-stone-900"
+                style={{ backgroundColor: 'var(--storefront-accent)' }}
+              >
                 <CartIcon className="h-4 w-4" />
               </span>
               Votre panier
             </h2>
-            <div className="flex items-center gap-2">
-              <span
-                className={`inline-flex min-w-7 items-center justify-center rounded-full bg-amber-200 px-2 py-0.5 text-xs font-bold text-slate-900 transition ${
-                  cartBadgePulse ? 'animate-pulse ring-2 ring-amber-100/80' : ''
-                }`}
-              >
-                {itemCount}
-              </span>
-              <span className="rounded-full border border-white/15 bg-white/5 px-2 py-0.5 text-[10px] font-semibold text-slate-300">
-                {distinctItemCount} ligne(s)
-              </span>
-              <button
-                type="button"
-                onClick={() => setIsCartOpen(false)}
-                className="rounded-md border border-slate-700 px-2 py-1 text-xs text-slate-300 hover:border-slate-500 hover:text-white"
-              >
-                Fermer
-              </button>
-            </div>
+            <button
+              type="button"
+              onClick={() => setIsCartOpen(false)}
+              className="rounded-md border border-stone-300 px-2 py-1 text-xs text-stone-600 hover:border-stone-400 hover:text-stone-900"
+            >
+              Fermer
+            </button>
           </div>
-          <p className="mt-1 text-xs text-slate-400">
-            Livraison locale ou retrait boutique.
-          </p>
-          <div className="mt-3 rounded-xl border border-emerald-300/20 bg-emerald-500/10 p-2.5">
+          <div className="mt-3 rounded-xl border border-stone-200 bg-stone-50 p-2.5">
             <div className="flex items-center justify-between text-[11px]">
-              <span className="text-emerald-100">
-                Livraison offerte des {formatFCFA(FREE_DELIVERY_THRESHOLD)}
+              <span className="text-stone-600">
+                Livraison offerte dès {formatFCFA(FREE_DELIVERY_THRESHOLD)}
               </span>
-              <span className="font-semibold text-emerald-100">
+              <span className="font-semibold text-stone-800">
                 {freeDeliveryProgressPct}%
               </span>
             </div>
-            <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-slate-800">
+            <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-stone-200">
               <div
-                className="h-full rounded-full bg-linear-to-r from-emerald-400 to-amber-300 transition-all duration-500"
-                style={{ width: `${freeDeliveryProgressPct}%` }}
+                className="h-full rounded-full transition-all duration-500"
+                style={{
+                  width: `${freeDeliveryProgressPct}%`,
+                  backgroundColor: 'var(--storefront-accent)',
+                }}
               />
             </div>
-            <p className="mt-1.5 text-[11px] text-emerald-100/90">
+            <p className="mt-1.5 text-[11px] text-stone-600">
               {hasFreeDelivery
                 ? 'Bravo, la livraison est offerte.'
-                : `Encore ${formatFCFA(freeDeliveryRemaining)} pour debloquer la livraison offerte.`}
+                : `Encore ${formatFCFA(freeDeliveryRemaining)} pour débloquer la livraison offerte.`}
             </p>
-          </div>
-          <div className="mt-2 rounded-full border border-amber-200/25 bg-amber-100/8 px-3 py-1 text-[10px] font-semibold uppercase tracking-wide text-amber-100">
-            Panier + informations + paiement
-          </div>
-          <div className="mt-3 flex items-center justify-between rounded-xl border border-white/10 bg-slate-950/70 px-3 py-2">
-            <p className="text-xs text-slate-300">Articles dans le panier</p>
-            <p className="text-sm font-semibold text-amber-100">{itemCount}</p>
-          </div>
-          <div className="mt-2 grid grid-cols-2 gap-2">
-            <div className="rounded-lg border border-white/10 bg-slate-950/60 px-2.5 py-2">
-              <p className="text-[10px] uppercase tracking-wide text-slate-400">
-                Réception
-              </p>
-              <p className="mt-0.5 text-xs font-semibold text-slate-100">
-                {fulfillmentLabel}
-              </p>
-            </div>
-            <div className="rounded-lg border border-white/10 bg-slate-950/60 px-2.5 py-2">
-              <p className="text-[10px] uppercase tracking-wide text-slate-400">
-                Paiement
-              </p>
-              <p className="mt-0.5 text-xs font-semibold text-slate-100">
-                {paymentMethod === 'mobile'
-                  ? 'Mobile money'
-                  : paymentMethod === 'card'
-                    ? 'Carte bancaire'
-                    : 'Espèces'}
-              </p>
-            </div>
           </div>
 
           <div className="mt-4 space-y-2">
             {cart.length === 0 ? (
-              <p className="rounded-xl border border-dashed border-slate-700 p-4 text-sm text-slate-400">
+              <p className="rounded-xl border border-dashed border-stone-300 p-4 text-sm text-stone-500">
                 Votre panier est vide.
               </p>
             ) : (
               cart.map((line) => (
                 <div
                   key={line.productId}
-                  className="rounded-2xl border border-amber-200/15 bg-linear-to-r from-slate-950/90 to-slate-900/70 px-2.5 py-2 shadow-lg shadow-black/20"
+                  className="rounded-xl border border-stone-200 bg-white px-2.5 py-2"
                 >
                   <div className="flex items-center gap-2">
                     <ProductImage
@@ -1025,50 +1055,45 @@ export function LuxuryStorefrontView({
                           name: line.name,
                         }
                       }
-                      className="h-9 w-9 rounded-xl border border-white/15 object-cover"
+                      className="h-9 w-9 rounded-lg border border-stone-200 object-cover"
                     />
                     <div className="min-w-0">
-                      <p className="truncate text-[12px] font-semibold text-slate-100">
+                      <p className="truncate text-[12px] font-semibold text-stone-900">
                         {line.name}
                       </p>
-                      <p className="text-[10px] text-slate-400">
+                      <p className="text-[10px] text-stone-500">
                         {formatFCFA(line.unitPriceTTC)} / unité
                       </p>
-                      {productById.get(line.productId) ? (
-                        <p className="text-[9px] text-slate-500">
-                          Reste: {productById.get(line.productId)?.stock ?? 0}
-                        </p>
-                      ) : null}
                     </div>
                   </div>
                   <div className="mt-2 flex items-center justify-between gap-1.5">
-                    <div className="inline-flex items-center overflow-hidden rounded-lg border border-slate-700/80 bg-slate-950/75">
+                    <div className="inline-flex items-center overflow-hidden rounded-lg border border-stone-300 bg-stone-50">
                       <button
                         type="button"
                         onClick={() => handleDecLine(line.productId)}
-                        className="px-2 py-1 text-[11px] text-slate-200 hover:bg-slate-800"
+                        className="px-2 py-1 text-[11px] text-stone-700 hover:bg-stone-100"
                       >
                         −
                       </button>
-                      <span className="border-x border-slate-700 px-2 py-1 text-[11px] font-semibold text-slate-100">
+                      <span className="border-x border-stone-300 px-2 py-1 text-[11px] font-semibold text-stone-900">
                         {line.qty}
                       </span>
                       <button
                         type="button"
                         onClick={() => handleIncLine(line.productId)}
-                        className="px-2 py-1 text-[11px] text-slate-200 hover:bg-slate-800"
+                        className="px-2 py-1 text-[11px] text-stone-700 hover:bg-stone-100"
                       >
                         +
                       </button>
                     </div>
                     <div className="flex items-center gap-2">
-                      <p className="text-[11px] font-semibold text-amber-100">
+                      <p className="text-[11px] font-semibold text-stone-900">
                         {formatFCFA(line.unitPriceTTC * line.qty)}
                       </p>
                       <button
                         type="button"
                         onClick={() => handleRemove(line.productId)}
-                        className="rounded-lg border border-slate-700 px-2 py-1 text-[10px] text-slate-300 hover:border-red-300 hover:text-red-300"
+                        className="rounded-lg border border-stone-300 px-2 py-1 text-[10px] text-stone-600 hover:border-rose-300 hover:text-rose-700"
                       >
                         Retirer
                       </button>
@@ -1079,35 +1104,35 @@ export function LuxuryStorefrontView({
             )}
           </div>
 
-          <div className="mt-2 rounded-xl border border-white/10 bg-slate-950/60 p-3 text-sm">
-              <p className="mb-2 text-[10px] font-semibold uppercase tracking-wide text-slate-400">
-                Résumé de commande
+          <div className="mt-2 rounded-xl border border-stone-200 bg-stone-50 p-3 text-sm">
+              <p className="mb-2 text-[10px] font-semibold uppercase tracking-wide text-stone-500">
+                Résumé
               </p>
-              <div className="flex items-center justify-between text-slate-300">
+              <div className="flex items-center justify-between text-stone-600">
                 <span>Sous-total HT</span>
                 <span>{formatFCFA(totals.subtotalHT)}</span>
               </div>
-              <div className="mt-1 flex items-center justify-between text-slate-300">
+              <div className="mt-1 flex items-center justify-between text-stone-600">
                 <span>TVA</span>
                 <span>{formatFCFA(totals.tva)}</span>
               </div>
               {discountAmount > 0 ? (
-                <div className="mt-1 flex items-center justify-between text-emerald-300">
+                <div className="mt-1 flex items-center justify-between text-emerald-700">
                   <span>Remise promo</span>
                   <span>- {formatFCFA(discountAmount)}</span>
                 </div>
               ) : null}
               {deliveryFeeTTC > 0 ? (
-                <div className="mt-1 flex items-center justify-between text-slate-300">
+                <div className="mt-1 flex items-center justify-between text-stone-600">
                   <span>Livraison</span>
                   <span>{formatFCFA(deliveryFeeTTC)}</span>
                 </div>
               ) : null}
-              <div className="mt-1 flex items-center justify-between text-slate-300">
-                <span>Delai estime</span>
+              <div className="mt-1 flex items-center justify-between text-stone-600">
+                <span>Délai estimé</span>
                 <span>{estimatedWindow}</span>
               </div>
-              <div className="mt-2 flex items-center justify-between text-base font-semibold text-amber-100">
+              <div className="mt-2 flex items-center justify-between text-base font-semibold text-stone-900">
                 <span>Total à payer</span>
                 <span>{formatFCFA(grandTotalTTC)}</span>
               </div>
@@ -1118,7 +1143,7 @@ export function LuxuryStorefrontView({
               type="button"
               onClick={handleClearCart}
               disabled={cart.length === 0}
-              className="rounded-md border border-slate-700 px-2.5 py-1 text-xs text-slate-300 hover:border-amber-200 hover:text-amber-100 disabled:cursor-not-allowed disabled:opacity-50"
+              className="rounded-md border border-stone-300 px-2.5 py-1 text-xs text-stone-600 hover:border-stone-400 hover:text-stone-900 disabled:cursor-not-allowed disabled:opacity-50"
             >
               Vider le panier
             </button>
@@ -1129,13 +1154,13 @@ export function LuxuryStorefrontView({
                 value={customerName}
                 onChange={(e) => setCustomerName(e.target.value)}
                 placeholder="Nom complet"
-                className="premium-input w-full rounded-xl bg-slate-950/80 px-3 py-2 text-sm text-slate-100"
+                className="storefront-input w-full rounded-xl px-3 py-2 text-sm"
               />
               <input
                 value={customerPhone}
                 onChange={(e) => setCustomerPhone(e.target.value)}
-                placeholder="Telephone"
-                className="premium-input w-full rounded-xl bg-slate-950/80 px-3 py-2 text-sm text-slate-100"
+                placeholder="Téléphone"
+                className="storefront-input w-full rounded-xl px-3 py-2 text-sm"
               />
               <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
                 <select
@@ -1144,7 +1169,7 @@ export function LuxuryStorefrontView({
                     setFulfillmentMode(e.target.value as 'pickup' | 'delivery')
                   }
                   aria-label="Mode de réception"
-                  className="premium-input w-full rounded-xl bg-slate-950/80 px-3 py-2 text-sm text-slate-100"
+                  className="storefront-input w-full rounded-xl px-3 py-2 text-sm"
                 >
                   <option value="pickup">Retrait boutique</option>
                   <option value="delivery">Livraison locale (+1000)</option>
@@ -1157,12 +1182,12 @@ export function LuxuryStorefrontView({
                       setPromoFeedback(null)
                     }}
                     placeholder="Code promo"
-                    className="premium-input w-full rounded-xl bg-slate-950/80 px-3 py-2 text-sm text-slate-100"
+                    className="storefront-input w-full rounded-xl px-3 py-2 text-sm"
                   />
                   <button
                     type="button"
                     onClick={handleApplyPromo}
-                    className="rounded-lg border border-amber-200/40 px-2.5 text-xs font-semibold text-amber-100 hover:bg-amber-100/10"
+                    className="rounded-lg border border-stone-300 px-2.5 text-xs font-semibold text-stone-800 hover:bg-stone-100"
                   >
                     OK
                   </button>
@@ -1174,7 +1199,7 @@ export function LuxuryStorefrontView({
                         setPromoFeedback(null)
                         setDiscountPct(0)
                       }}
-                      className="rounded-lg border border-slate-700 px-2.5 text-xs font-semibold text-slate-300 hover:border-slate-500 hover:text-white"
+                      className="rounded-lg border border-stone-300 px-2.5 text-xs font-semibold text-stone-600 hover:border-stone-400"
                     >
                       X
                     </button>
@@ -1186,15 +1211,15 @@ export function LuxuryStorefrontView({
                 onChange={(e) => setCustomerAddress(e.target.value)}
                 placeholder="Adresse de livraison (optionnelle)"
                 rows={2}
-                className="premium-input w-full resize-none rounded-xl bg-slate-950/80 px-3 py-2 text-sm text-slate-100"
+                className="storefront-input w-full resize-none rounded-xl px-3 py-2 text-sm"
               />
               <select
                 value={desiredTimeSlot}
                 onChange={(e) => setDesiredTimeSlot(e.target.value)}
-                aria-label="Creneau souhaite"
-                className="premium-input w-full rounded-xl bg-slate-950/80 px-3 py-2 text-sm text-slate-100"
+                aria-label="Créneau souhaité"
+                className="storefront-input w-full rounded-xl px-3 py-2 text-sm"
               >
-                <option value="">Choisir un creneau horaire</option>
+                <option value="">Choisir un créneau horaire</option>
                 {DESIRED_TIME_SLOTS.map((slot) => (
                   <option key={slot} value={slot}>
                     {slot}
@@ -1204,12 +1229,12 @@ export function LuxuryStorefrontView({
               <textarea
                 value={customerNote}
                 onChange={(e) => setCustomerNote(e.target.value)}
-                placeholder="Note client (code portail, instruction de livraison...)"
+                placeholder="Note client (code portail, instruction de livraison…)"
                 rows={2}
-                className="premium-input w-full resize-none rounded-xl bg-slate-950/80 px-3 py-2 text-sm text-slate-100"
+                className="storefront-input w-full resize-none rounded-xl px-3 py-2 text-sm"
               />
               {promoFeedback ? (
-                <p className="text-xs text-amber-200">{promoFeedback}</p>
+                <p className="text-xs text-stone-700">{promoFeedback}</p>
               ) : null}
               <select
                 value={paymentMethod}
@@ -1217,46 +1242,37 @@ export function LuxuryStorefrontView({
                   setPaymentMethod(e.target.value as StorefrontPaymentMethod)
                 }
                 aria-label="Mode de paiement"
-                className="premium-input w-full rounded-xl bg-slate-950/80 px-3 py-2 text-sm text-slate-100"
+                className="storefront-input w-full rounded-xl px-3 py-2 text-sm"
               >
                 {isPublicStorefront && publicStorefront?.waveEnabled ? (
                   <option value="wave">Wave (paiement immédiat)</option>
                 ) : null}
                 <option value="mobile">Mobile Money</option>
                 <option value="card">Carte bancaire</option>
-                <option value="cash">Especes a la livraison</option>
+                <option value="cash">Espèces à la livraison</option>
               </select>
               {isPublicStorefront &&
               publicStorefront?.waveEnabled &&
               paymentMethod === 'wave' ? (
-                <div className="flex items-center gap-3 rounded-xl border border-sky-400/30 bg-sky-950/40 px-3 py-2">
+                <div className="flex items-center gap-3 rounded-xl border border-sky-200 bg-sky-50 px-3 py-2">
                   <img
                     src="/branding/wave-logo.png"
                     alt="Wave"
                     className="h-10 w-10 rounded-lg object-cover"
                   />
-                  <p className="text-xs text-sky-100">
-                    Vous serez redirigé vers l’application Wave CI ou la page Wave
-                    pour scanner le QR code et valider le paiement.
+                  <p className="text-xs text-sky-900">
+                    Vous serez redirigé vers Wave CI pour valider le paiement.
                   </p>
                 </div>
               ) : null}
-              <div className="grid grid-cols-2 gap-2 text-[11px] text-slate-300">
-                <p className="rounded-lg border border-white/10 bg-slate-950/70 px-2.5 py-2">
-                  Paiement securise SSL
-                </p>
-                <p className="rounded-lg border border-white/10 bg-slate-950/70 px-2.5 py-2">
-                  Validation sous 10 min
-                </p>
-              </div>
               <button
                 type="button"
                 onClick={() => void handleCheckout()}
                 disabled={submitting || cart.length === 0}
-                className="premium-btn w-full rounded-xl px-4 py-2 text-sm font-semibold disabled:cursor-not-allowed disabled:bg-slate-700 disabled:text-slate-400"
+                className="storefront-btn-accent w-full rounded-xl px-4 py-2.5 text-sm"
               >
                 {submitting
-                  ? 'Validation en cours...'
+                  ? 'Validation en cours…'
                   : paymentMethod === 'wave'
                     ? 'Payer avec Wave'
                     : 'Valider la commande'}
@@ -1267,28 +1283,26 @@ export function LuxuryStorefrontView({
           </>
         ) : null}
 
-        <main className="mt-6">
+        <main className="mt-2">
           {topOrderedProducts && topOrderedProducts.length > 0 ? (
-            <section className="premium-dark-card mb-4 rounded-3xl border border-amber-200/20 bg-slate-900/75 p-4 shadow-xl">
-              <div className="mb-3 flex items-center justify-between gap-3">
-                <h2 className="text-sm font-semibold uppercase tracking-[0.16em] text-amber-100/90">
-                  Produits les plus commandés
+            <section className="mb-6">
+              <div className="mb-3 flex items-end justify-between gap-3">
+                <h2 className="text-lg font-bold tracking-tight text-stone-900">
+                  Les plus commandés
                 </h2>
-                <span className="rounded-full border border-amber-200/35 bg-amber-100/10 px-2.5 py-1 text-[10px] font-semibold text-amber-100">
+                <span className="text-[11px] font-semibold text-stone-500">
                   Top {topOrderedProducts.length}
                 </span>
               </div>
-              <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-6">
+              <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
                 {topOrderedProducts.map(({ product, orderedQty }, index) => {
                   const qty = lineQty(product.id)
                   const soldOut = product.stock <= 0
                   return (
                     <article
                       key={product.id}
-                      className={`overflow-hidden rounded-xl border bg-slate-950/70 transition hover:shadow-md hover:shadow-emerald-950/30 ${
-                        soldOut
-                          ? 'border-slate-600/55 hover:border-slate-500/70'
-                          : 'border-emerald-400/35 hover:border-amber-200/55'
+                      className={`storefront-product-card overflow-hidden rounded-2xl ${
+                        soldOut ? 'opacity-70' : ''
                       }`}
                     >
                       <button
@@ -1299,43 +1313,42 @@ export function LuxuryStorefrontView({
                       >
                         <ProductImage
                           product={product}
-                          className="h-24 w-full object-cover"
+                          className="h-28 w-full object-cover"
                         />
-                        <span className="absolute left-1.5 top-1.5 rounded-full bg-black/65 px-2 py-0.5 text-[10px] font-semibold text-amber-100">
+                        <span className="absolute left-2 top-2 rounded-full bg-stone-900/80 px-2 py-0.5 text-[10px] font-semibold text-white">
                           #{index + 1}
                         </span>
                         {soldOut ? (
-                          <span className="absolute right-1.5 top-1.5 rounded-full bg-slate-700 px-1.5 py-0.5 text-[9px] font-semibold text-slate-300">
+                          <span className="absolute right-2 top-2 rounded-full bg-stone-700 px-1.5 py-0.5 text-[9px] font-semibold text-white">
                             Rupture
                           </span>
                         ) : null}
                       </button>
-                      <button
-                        type="button"
-                        onClick={() => setDetailProduct(product)}
-                        className="block w-full space-y-1 p-2 text-left"
-                      >
-                        <p className="line-clamp-2 text-[10px] font-semibold text-slate-100">
-                          {product.name}
-                        </p>
-                        <p className="font-mono-nums text-[10px] font-semibold text-emerald-400">
-                          {formatFCFA(
-                            discountPct > 0
-                              ? product.priceTTC * (1 - discountPct / 100)
-                              : product.priceTTC,
-                          )}
-                        </p>
-                        <p className="text-[9px] text-slate-400">
-                          {orderedQty} commande(s)
-                        </p>
-                      </button>
-                      <div className="flex items-center justify-between border-t border-white/10 px-2 py-1.5">
-                        <p className="text-[9px] text-slate-400">Panier: {qty}</p>
+                      <div className="space-y-1 p-2.5">
+                        <button
+                          type="button"
+                          onClick={() => setDetailProduct(product)}
+                          className="block w-full text-left"
+                        >
+                          <p className="line-clamp-2 text-xs font-semibold text-stone-900">
+                            {product.name}
+                          </p>
+                          <p className="mt-0.5 font-mono-nums text-xs font-bold text-stone-800">
+                            {formatFCFA(
+                              discountPct > 0
+                                ? product.priceTTC * (1 - discountPct / 100)
+                                : product.priceTTC,
+                            )}
+                          </p>
+                          <p className="text-[10px] text-stone-500">
+                            {orderedQty} commande(s) · panier {qty}
+                          </p>
+                        </button>
                         <button
                           type="button"
                           disabled={soldOut}
                           onClick={(e) => handleAdd(product, e.currentTarget)}
-                          className="rounded-md bg-amber-200 px-1.5 py-0.5 text-[9px] font-semibold text-slate-900 transition hover:bg-amber-100 disabled:cursor-not-allowed disabled:bg-slate-700 disabled:text-slate-400"
+                          className="storefront-btn-accent mt-1 w-full rounded-lg px-2 py-1.5 text-[11px]"
                         >
                           Ajouter
                         </button>
@@ -1346,14 +1359,14 @@ export function LuxuryStorefrontView({
               </div>
             </section>
           ) : null}
-          <section
-            ref={productsSectionRef}
-            className="premium-dark-card rounded-3xl border border-white/10 bg-slate-900/80 p-5 shadow-xl"
-          >
+          <section ref={productsSectionRef} className="scroll-mt-24">
             {!seedReady ? (
-              <div className="mt-6 flex flex-col items-center gap-3 py-4">
+              <div className="mt-6 flex flex-col items-center gap-3 py-8">
                 <div className="relative flex h-20 w-20 items-center justify-center">
-                  <span className="absolute inset-0 rounded-full border-2 border-emerald-300/55" />
+                  <span
+                    className="absolute inset-0 rounded-full border-2 opacity-40"
+                    style={{ borderColor: 'var(--storefront-accent)' }}
+                  />
                   <BrandLogo
                     size="xl"
                     alt="Chargement catalogue"
@@ -1361,26 +1374,20 @@ export function LuxuryStorefrontView({
                     className="animate-pulse"
                   />
                 </div>
-                <p className="text-sm text-slate-400">
-                  Chargement du catalogue premium...
-                </p>
+                <p className="text-sm text-stone-500">Chargement du catalogue…</p>
               </div>
             ) : (
-              <div className="space-y-5">
+              <div className="space-y-8">
                 {featuredByCategory.map(([category, products]) => (
-                  <section key={category} className="space-y-2">
-                    <div className="flex items-center gap-2">
-                      <span className="h-px flex-1 bg-white/10" />
-                      <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-amber-100/85">
-                        {category}
-                      </p>
-                      <span className="h-px flex-1 bg-white/10" />
-                    </div>
+                  <section key={category} className="space-y-3">
+                    <h2 className="text-sm font-bold uppercase tracking-[0.14em] text-stone-500">
+                      {category}
+                    </h2>
                     <div
                       className={`${
                         cardDensity === 'compact'
-                          ? 'grid grid-cols-2 gap-1.5 sm:grid-cols-3 lg:grid-cols-5 xl:grid-cols-7'
-                          : 'grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6'
+                          ? 'grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5'
+                          : 'grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4'
                       }`}
                     >
                       {products.map((product) => {
@@ -1389,92 +1396,57 @@ export function LuxuryStorefrontView({
                         return (
                           <article
                             key={product.id}
-                            className={`group overflow-hidden border bg-slate-950/75 transition duration-200 hover:-translate-y-0.5 hover:shadow-lg hover:shadow-black/30 ${
-                              soldOut
-                                ? 'border-slate-600/50 hover:border-slate-500/65'
-                                : 'border-emerald-400/35 hover:border-amber-200/55'
-                            } ${
-                              cardDensity === 'compact' ? 'rounded-lg' : 'rounded-xl'
+                            className={`storefront-product-card group overflow-hidden rounded-2xl ${
+                              soldOut ? 'opacity-70' : ''
                             }`}
                           >
                             <button
                               type="button"
                               onClick={() => setDetailProduct(product)}
-                              className="relative block w-full cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-300"
+                              className="relative block w-full cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2"
                               aria-label={`Voir le détail : ${product.name}`}
                             >
                               <ProductImage
                                 product={product}
-                                className={`w-full object-cover transition duration-300 group-hover:scale-[1.06] ${
+                                className={`w-full object-cover ${
                                   cardDensity === 'compact'
-                                    ? 'h-24 sm:h-28'
-                                    : 'h-32 sm:h-36'
+                                    ? 'h-32 sm:h-36'
+                                    : 'h-40 sm:h-44'
                                 }`}
                               />
-                              <div className="pointer-events-none absolute inset-0 bg-linear-to-t from-black/30 via-transparent to-transparent opacity-70 transition duration-300 group-hover:opacity-90" />
                               {soldOut ? (
-                                <span className="absolute right-2 top-2 rounded-full bg-slate-700 px-2 py-1 text-[10px] font-semibold uppercase text-slate-300">
+                                <span className="absolute right-2 top-2 rounded-full bg-stone-800 px-2 py-1 text-[10px] font-semibold uppercase text-white">
                                   Rupture
                                 </span>
                               ) : null}
                             </button>
-
-                            <button
-                              type="button"
-                              onClick={() => setDetailProduct(product)}
-                              className={`block w-full cursor-pointer text-left ${
-                                cardDensity === 'compact' ? 'p-1.5' : 'p-2'
-                              }`}
-                            >
-                              <h3
-                                className={`line-clamp-2 font-semibold text-white transition-colors group-hover:text-amber-100 ${
-                                  cardDensity === 'compact'
-                                    ? 'text-[10px]'
-                                    : 'text-[11px]'
-                                }`}
+                            <div className={cardDensity === 'compact' ? 'p-2.5' : 'p-3'}>
+                              <button
+                                type="button"
+                                onClick={() => setDetailProduct(product)}
+                                className="block w-full cursor-pointer text-left"
                               >
-                                {product.name}
-                              </h3>
-                              <p
-                                className={`mt-0.5 font-mono-nums font-semibold text-emerald-400 ${
-                                  cardDensity === 'compact'
-                                    ? 'text-[10px]'
-                                    : 'text-[11px]'
-                                }`}
-                              >
-                                {formatFCFA(
-                                  discountPct > 0
-                                    ? product.priceTTC * (1 - discountPct / 100)
-                                    : product.priceTTC,
-                                )}
-                              </p>
-                            </button>
-
-                            <div
-                              className={`flex items-center justify-between border-t border-white/10 ${
-                                cardDensity === 'compact'
-                                  ? 'gap-1 px-1.5 py-1'
-                                  : 'gap-1.5 px-2 py-1.5'
-                              }`}
-                            >
-                              <p
-                                className={`text-slate-400 ${
-                                  cardDensity === 'compact'
-                                    ? 'text-[9px]'
-                                    : 'text-[10px]'
-                                }`}
-                              >
-                                Panier: {qty}
-                              </p>
+                                <h3 className="line-clamp-2 text-sm font-semibold text-stone-900">
+                                  {product.name}
+                                </h3>
+                                <p className="mt-1 font-mono-nums text-sm font-bold text-stone-900">
+                                  {formatFCFA(
+                                    discountPct > 0
+                                      ? product.priceTTC * (1 - discountPct / 100)
+                                      : product.priceTTC,
+                                  )}
+                                </p>
+                                {qty > 0 ? (
+                                  <p className="mt-0.5 text-[11px] text-stone-500">
+                                    Dans le panier : {qty}
+                                  </p>
+                                ) : null}
+                              </button>
                               <button
                                 type="button"
                                 disabled={soldOut}
                                 onClick={(e) => handleAdd(product, e.currentTarget)}
-                                className={`rounded-md bg-amber-200 font-semibold text-slate-900 transition hover:bg-amber-100 disabled:cursor-not-allowed disabled:bg-slate-700 disabled:text-slate-400 ${
-                                  cardDensity === 'compact'
-                                    ? 'px-1.5 py-0.5 text-[9px]'
-                                    : 'px-2 py-0.5 text-[10px]'
-                                }`}
+                                className="storefront-btn-accent mt-2 w-full rounded-xl px-3 py-2 text-xs"
                               >
                                 Ajouter
                               </button>
@@ -1487,28 +1459,25 @@ export function LuxuryStorefrontView({
                 ))}
               </div>
             )}
-
             {seedReady && featuredProducts.length === 0 ? (
-              <p className="mt-8 text-sm text-slate-400">
-                Aucun article disponible.
-              </p>
+              <p className="mt-8 text-sm text-stone-500">Aucun article disponible.</p>
             ) : null}
           </section>
 
           <section
             ref={contactRef}
             id="contact"
-            className="premium-dark-card premium-ring mt-6 scroll-mt-24 rounded-3xl border border-amber-200/20 bg-linear-to-br from-slate-950 via-slate-900 to-amber-950/40 p-5 sm:p-7"
+            className="mt-10 scroll-mt-24 rounded-2xl border border-stone-200 bg-white p-5 sm:p-7"
           >
             <div className="grid gap-6 lg:grid-cols-[1.1fr_1fr]">
               <div>
-                <p className="text-[10px] font-bold uppercase tracking-[0.28em] text-amber-200/80">
+                <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-stone-500">
                   Restons en contact
                 </p>
-                <h2 className="premium-dark-title mt-2 font-display text-2xl font-semibold sm:text-3xl">
+                <h2 className="mt-2 font-display text-2xl font-semibold tracking-tight text-stone-900 sm:text-3xl">
                   Une question ? Une commande spéciale ?
                 </h2>
-                <p className="mt-3 max-w-md text-sm leading-relaxed text-slate-300">
+                <p className="mt-3 max-w-md text-sm leading-relaxed text-stone-600">
                   Notre équipe vous répond du lundi au samedi. Pour les
                   livraisons groupées, événements ou demandes professionnelles,
                   contactez-nous directement.
@@ -1518,11 +1487,11 @@ export function LuxuryStorefrontView({
                   <li>
                     <a
                       href="tel:+22507000000"
-                      className="flex items-start gap-3 rounded-2xl border border-white/10 bg-slate-950/60 p-3 transition hover:border-amber-200/40 hover:bg-slate-900/70"
+                      className="flex items-start gap-3 rounded-xl border border-stone-200 bg-stone-50 p-3 transition hover:border-stone-300"
                     >
                       <span
                         aria-hidden
-                        className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-amber-200/10 text-amber-200"
+                        className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-stone-200 text-stone-800"
                       >
                         <svg
                           viewBox="0 0 24 24"
@@ -1537,13 +1506,13 @@ export function LuxuryStorefrontView({
                         </svg>
                       </span>
                       <span className="min-w-0">
-                        <span className="block text-[10px] font-semibold uppercase tracking-wider text-slate-400">
+                        <span className="block text-[10px] font-semibold uppercase tracking-wider text-stone-500">
                           Téléphone
                         </span>
-                        <span className="block font-mono-nums text-sm font-semibold text-slate-100">
+                        <span className="block font-mono-nums text-sm font-semibold text-stone-900">
                           +225 07 00 00 00 00
                         </span>
-                        <span className="block text-[11px] text-slate-400">
+                        <span className="block text-[11px] text-stone-500">
                           Appel direct
                         </span>
                       </span>
@@ -1554,11 +1523,11 @@ export function LuxuryStorefrontView({
                       href="https://wa.me/22507000000"
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="flex items-start gap-3 rounded-2xl border border-white/10 bg-slate-950/60 p-3 transition hover:border-emerald-300/40 hover:bg-slate-900/70"
+                      className="flex items-start gap-3 rounded-xl border border-stone-200 bg-stone-50 p-3 transition hover:border-stone-300"
                     >
                       <span
                         aria-hidden
-                        className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-emerald-400/10 text-emerald-300"
+                        className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-emerald-100 text-emerald-800"
                       >
                         <svg
                           viewBox="0 0 24 24"
@@ -1569,13 +1538,13 @@ export function LuxuryStorefrontView({
                         </svg>
                       </span>
                       <span className="min-w-0">
-                        <span className="block text-[10px] font-semibold uppercase tracking-wider text-slate-400">
+                        <span className="block text-[10px] font-semibold uppercase tracking-wider text-stone-500">
                           WhatsApp
                         </span>
-                        <span className="block font-mono-nums text-sm font-semibold text-slate-100">
+                        <span className="block font-mono-nums text-sm font-semibold text-stone-900">
                           +225 07 00 00 00 00
                         </span>
-                        <span className="block text-[11px] text-emerald-300/90">
+                        <span className="block text-[11px] text-emerald-700">
                           Message instantané
                         </span>
                       </span>
@@ -1584,11 +1553,11 @@ export function LuxuryStorefrontView({
                   <li>
                     <a
                       href="mailto:support@caisseci.local"
-                      className="flex items-start gap-3 rounded-2xl border border-white/10 bg-slate-950/60 p-3 transition hover:border-amber-200/40 hover:bg-slate-900/70"
+                      className="flex items-start gap-3 rounded-xl border border-stone-200 bg-stone-50 p-3 transition hover:border-stone-300"
                     >
                       <span
                         aria-hidden
-                        className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-amber-200/10 text-amber-200"
+                        className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-stone-200 text-stone-800"
                       >
                         <svg
                           viewBox="0 0 24 24"
@@ -1604,23 +1573,23 @@ export function LuxuryStorefrontView({
                         </svg>
                       </span>
                       <span className="min-w-0">
-                        <span className="block text-[10px] font-semibold uppercase tracking-wider text-slate-400">
+                        <span className="block text-[10px] font-semibold uppercase tracking-wider text-stone-500">
                           Email
                         </span>
-                        <span className="block truncate text-sm font-semibold text-slate-100">
+                        <span className="block truncate text-sm font-semibold text-stone-900">
                           support@caisseci.local
                         </span>
-                        <span className="block text-[11px] text-slate-400">
+                        <span className="block text-[11px] text-stone-500">
                           Réponse sous 24 h
                         </span>
                       </span>
                     </a>
                   </li>
                   <li>
-                    <div className="flex items-start gap-3 rounded-2xl border border-white/10 bg-slate-950/60 p-3">
+                    <div className="flex items-start gap-3 rounded-2xl border border-stone-200 bg-stone-50 p-3">
                       <span
                         aria-hidden
-                        className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-amber-200/10 text-amber-200"
+                        className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-stone-200 text-stone-800"
                       >
                         <svg
                           viewBox="0 0 24 24"
@@ -1636,17 +1605,17 @@ export function LuxuryStorefrontView({
                         </svg>
                       </span>
                       <span className="min-w-0">
-                        <span className="block text-[10px] font-semibold uppercase tracking-wider text-slate-400">
+                        <span className="block text-[10px] font-semibold uppercase tracking-wider text-stone-500">
                           Adresse
                         </span>
-                        <span className="block text-sm font-semibold text-slate-100">
+                        <span className="block text-sm font-semibold text-stone-900">
                           Cocody, Abidjan
                         </span>
                         <a
                           href="https://maps.google.com/?q=Cocody+Abidjan"
                           target="_blank"
                           rel="noopener noreferrer"
-                          className="text-[11px] text-amber-200 underline decoration-dotted underline-offset-2 hover:text-amber-100"
+                          className="text-[11px] text-stone-700 underline decoration-dotted underline-offset-2 hover:text-stone-900"
                         >
                           Voir l'itinéraire
                         </a>
@@ -1655,24 +1624,24 @@ export function LuxuryStorefrontView({
                   </li>
                 </ul>
 
-                <div className="mt-5 rounded-2xl border border-white/10 bg-slate-950/50 p-4">
-                  <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">
+                <div className="mt-5 rounded-xl border border-stone-200 bg-stone-50 p-4">
+                  <p className="text-[10px] font-semibold uppercase tracking-wider text-stone-500">
                     Horaires d'ouverture
                   </p>
                   <ul className="mt-2 space-y-1 text-sm">
-                    <li className="flex items-center justify-between gap-3 text-slate-200">
+                    <li className="flex items-center justify-between gap-3 text-stone-800">
                       <span>Lundi — Vendredi</span>
-                      <span className="font-mono-nums text-amber-100">
+                      <span className="font-mono-nums text-stone-900">
                         8h00 — 20h00
                       </span>
                     </li>
-                    <li className="flex items-center justify-between gap-3 text-slate-200">
+                    <li className="flex items-center justify-between gap-3 text-stone-800">
                       <span>Samedi</span>
-                      <span className="font-mono-nums text-amber-100">
+                      <span className="font-mono-nums text-stone-900">
                         9h00 — 21h00
                       </span>
                     </li>
-                    <li className="flex items-center justify-between gap-3 text-slate-400">
+                    <li className="flex items-center justify-between gap-3 text-stone-500">
                       <span>Dimanche</span>
                       <span className="font-mono-nums">Fermé</span>
                     </li>
@@ -1683,21 +1652,21 @@ export function LuxuryStorefrontView({
               {/* Formulaire */}
               <form
                 onSubmit={submitContact}
-                className="rounded-3xl border border-amber-200/15 bg-slate-950/60 p-4 sm:p-5"
+                className="rounded-2xl border border-stone-200 bg-stone-50 p-4 sm:p-5"
               >
-                <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-amber-200/80">
+                <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-stone-500">
                   Écrivez-nous
                 </p>
-                <h3 className="premium-dark-title mt-1 text-lg font-semibold">
+                <h3 className="mt-1 text-lg font-semibold text-stone-900">
                   Message rapide
                 </h3>
-                <p className="mt-1 text-xs text-slate-400">
+                <p className="mt-1 text-xs text-stone-500">
                   Votre client mail s'ouvrira pré-rempli.
                 </p>
 
                 <div className="mt-4 space-y-3">
                   <label className="block">
-                    <span className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">
+                    <span className="text-[10px] font-semibold uppercase tracking-wider text-stone-500">
                       Nom *
                     </span>
                     <input
@@ -1706,11 +1675,11 @@ export function LuxuryStorefrontView({
                       onChange={(e) => setContactName(e.target.value)}
                       placeholder="Votre nom"
                       required
-                      className="premium-input mt-1 w-full rounded-xl bg-slate-900/70 px-3 py-2 text-sm text-slate-100"
+                      className="storefront-input mt-1 w-full rounded-xl px-3 py-2 text-sm"
                     />
                   </label>
                   <label className="block">
-                    <span className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">
+                    <span className="text-[10px] font-semibold uppercase tracking-wider text-stone-500">
                       Email
                     </span>
                     <input
@@ -1718,11 +1687,11 @@ export function LuxuryStorefrontView({
                       value={contactEmail}
                       onChange={(e) => setContactEmail(e.target.value)}
                       placeholder="vous@domaine.com"
-                      className="premium-input mt-1 w-full rounded-xl bg-slate-900/70 px-3 py-2 text-sm text-slate-100"
+                      className="storefront-input mt-1 w-full rounded-xl px-3 py-2 text-sm"
                     />
                   </label>
                   <label className="block">
-                    <span className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">
+                    <span className="text-[10px] font-semibold uppercase tracking-wider text-stone-500">
                       Message *
                     </span>
                     <textarea
@@ -1731,7 +1700,7 @@ export function LuxuryStorefrontView({
                       placeholder="Votre demande, commande spéciale, événement…"
                       rows={4}
                       required
-                      className="premium-input mt-1 w-full resize-none rounded-xl bg-slate-900/70 px-3 py-2 text-sm text-slate-100"
+                      className="storefront-input mt-1 w-full resize-none rounded-xl px-3 py-2 text-sm"
                     />
                   </label>
                 </div>
@@ -1739,7 +1708,7 @@ export function LuxuryStorefrontView({
                 <button
                   type="submit"
                   disabled={!contactName.trim() || !contactMessage.trim()}
-                  className="premium-btn mt-4 inline-flex w-full items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold disabled:cursor-not-allowed disabled:bg-slate-700 disabled:text-slate-400"
+                  className="storefront-btn-accent mt-4 inline-flex w-full items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   Envoyer le message
                   <svg
@@ -1758,7 +1727,7 @@ export function LuxuryStorefrontView({
                 {contactSent ? (
                   <p
                     role="status"
-                    className="mt-3 rounded-xl border border-emerald-300/30 bg-emerald-400/10 px-3 py-2 text-xs text-emerald-200"
+                    className="mt-3 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs text-emerald-800"
                   >
                     Votre client mail s'est ouvert. Si rien ne s'affiche,
                     écrivez directement à{' '}
@@ -1769,7 +1738,7 @@ export function LuxuryStorefrontView({
                   </p>
                 ) : null}
 
-                <p className="mt-3 text-[11px] text-slate-500">
+                <p className="mt-3 text-[11px] text-stone-500">
                   En soumettant, vous acceptez d'être recontacté à propos de
                   votre demande.
                 </p>
@@ -1778,46 +1747,59 @@ export function LuxuryStorefrontView({
           </section>
         </main>
 
-        <footer className="premium-dark-card premium-ring mt-6 rounded-3xl border border-white/10 bg-slate-950/75 p-5">
+        <footer className="mt-10 border-t border-stone-200 pt-6 pb-2">
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
             <div>
-              <BrandLogo size="xl" alt={BRAND_NAME} ring="gold" />
-              <p className="mt-2 text-sm text-slate-300">
-                Commande premium avec validation en magasin, livraison locale et
+              {logoUrl ? (
+                <img
+                  src={logoUrl}
+                  alt={shopTitle}
+                  className="h-16 w-16 rounded-2xl object-cover ring-1 ring-stone-200"
+                />
+              ) : (
+                <BrandLogo size="xl" alt={BRAND_NAME} ring="gold" />
+              )}
+              <p className="mt-2 text-sm font-semibold text-stone-900">{shopTitle}</p>
+              <p className="mt-1 text-sm text-stone-600">
+                Commande en ligne avec validation en magasin, livraison locale et
                 retrait rapide.
               </p>
             </div>
 
             <div>
-              <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-300">
+              <p className="text-xs font-semibold uppercase tracking-[0.16em] text-stone-600">
                 Navigation
               </p>
               <div className="mt-2 flex flex-wrap gap-1.5">
                 <button
                   type="button"
                   onClick={scrollToProducts}
-                  className="rounded-lg border border-white/15 px-2 py-1 text-[11px] text-slate-200 transition hover:border-amber-200/45 hover:text-amber-100"
+                  className="rounded-lg border border-stone-300 px-2 py-1 text-[11px] text-stone-700 transition hover:border-stone-400 hover:bg-stone-100"
                 >
                   Produits
                 </button>
                 <button
                   type="button"
                   onClick={openCart}
-                  className="rounded-lg border border-white/15 px-2 py-1 text-[11px] text-slate-200 transition hover:border-amber-200/45 hover:text-amber-100"
+                  className="rounded-lg border border-stone-300 px-2 py-1 text-[11px] text-stone-700 transition hover:border-stone-400 hover:bg-stone-100"
                 >
                   Panier
                 </button>
                 <button
                   type="button"
                   onClick={scrollToCheckoutForm}
-                  className="rounded-lg border border-white/15 px-2 py-1 text-[11px] text-slate-200 transition hover:border-amber-200/45 hover:text-amber-100"
+                  className="rounded-lg border border-stone-300 px-2 py-1 text-[11px] text-stone-700 transition hover:border-stone-400 hover:bg-stone-100"
                 >
                   Commander
                 </button>
                 <button
                   type="button"
                   onClick={scrollToContact}
-                  className="rounded-lg border border-amber-200/35 bg-amber-200/10 px-2 py-1 text-[11px] font-semibold text-amber-100 transition hover:bg-amber-200/20"
+                  className="rounded-lg border border-stone-300 px-2 py-1 text-[11px] font-semibold text-stone-800 transition hover:bg-stone-100"
+                  style={{
+                    borderColor: 'color-mix(in srgb, var(--storefront-accent) 45%, #d6d3d1)',
+                    backgroundColor: 'color-mix(in srgb, var(--storefront-accent) 12%, white)',
+                  }}
                 >
                   Contact
                 </button>
@@ -1825,57 +1807,57 @@ export function LuxuryStorefrontView({
             </div>
 
             <div>
-              <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-300">
+              <p className="text-xs font-semibold uppercase tracking-[0.16em] text-stone-600">
                 Contact & Horaires
               </p>
               <a
                 href="tel:+22507000000"
-                className="mt-2 block text-sm text-slate-200 hover:text-amber-100"
+                className="mt-2 block text-sm text-stone-800 hover:text-stone-900"
               >
                 +225 07 00 00 00 00
               </a>
               <a
                 href="mailto:support@caisseci.local"
-                className="block text-sm text-slate-200 hover:text-amber-100"
+                className="block text-sm text-stone-800 hover:text-stone-900"
               >
                 support@caisseci.local
               </a>
-              <p className="mt-1 text-xs text-slate-400">
+              <p className="mt-1 text-xs text-stone-500">
                 Lun-Ven 8h-20h · Sam 9h-21h
               </p>
             </div>
 
             <div>
-              <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-300">
+              <p className="text-xs font-semibold uppercase tracking-[0.16em] text-stone-600">
                 Assistance client
               </p>
-              <p className="mt-2 text-sm text-slate-300">
+              <p className="mt-2 text-sm text-stone-600">
                 FAQ, suivi commande et support achat.
               </p>
-              <p className="mt-2 text-xs text-slate-400">
+              <p className="mt-2 text-xs text-stone-500">
                 Réponse rapide pendant les horaires d'ouverture.
               </p>
             </div>
           </div>
 
-          <div className="mt-4 border-t border-white/10 pt-3 text-[11px] text-slate-400">
-            <p>
-              Service de commande en ligne premium.
-            </p>
+          <div className="mt-4 border-t border-stone-200 pt-3 text-[11px] text-stone-500">
+            <p>Propulsé par CaisseCI · {BRAND_NAME}</p>
           </div>
         </footer>
       </div>
       {itemCount > 0 ? (
-        <div className="fixed bottom-3 left-1/2 z-20 w-[calc(100%-1.5rem)] max-w-md -translate-x-1/2 rounded-2xl border border-amber-200/35 bg-slate-950/90 p-2 shadow-2xl shadow-black/40 backdrop-blur-md lg:hidden">
+        <div
+          className="fixed bottom-[max(0.75rem,env(safe-area-inset-bottom,0px))] left-1/2 z-20 w-[calc(100%-1.5rem)] max-w-md -translate-x-1/2 rounded-2xl border border-stone-200 bg-white p-2 shadow-xl shadow-stone-900/15 lg:hidden"
+        >
           <button
             type="button"
             onClick={openCart}
-            className="flex w-full items-center justify-between rounded-xl bg-amber-200 px-3 py-2 text-left text-slate-900"
+            className="storefront-btn-accent flex min-h-11 w-full items-center justify-between rounded-xl px-3 py-2 text-left"
           >
             <span className="text-sm font-bold">{formatFCFA(grandTotalTTC)}</span>
             <span className="inline-flex items-center gap-2 text-sm font-semibold">
               <span
-                className={`inline-flex min-w-6 items-center justify-center rounded-full bg-slate-900 px-1.5 py-0.5 text-[10px] font-bold text-amber-100 transition ${
+                className={`inline-flex min-w-6 items-center justify-center rounded-full bg-stone-900 px-1.5 py-0.5 text-[10px] font-bold text-white transition ${
                   cartBadgePulse ? 'animate-pulse' : ''
                 }`}
               >
@@ -1891,7 +1873,7 @@ export function LuxuryStorefrontView({
           src={flyToCart.src}
           alt=""
           aria-hidden
-          className="pointer-events-none fixed z-40 h-10 w-10 rounded-lg border border-amber-100/60 object-cover shadow-xl shadow-black/50"
+          className="pointer-events-none fixed z-40 h-10 w-10 rounded-lg border border-white object-cover shadow-xl shadow-stone-900/40"
           style={{
             left: flyToCart.x - 20,
             top: flyToCart.y - 20,

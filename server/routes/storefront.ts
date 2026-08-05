@@ -9,7 +9,7 @@ import {
 } from '../lib/orgPaymentCredentials.js'
 import { ensurePaymentConfigReady } from '../lib/paymentProviderSettings.js'
 import { prisma } from '../lib/prisma.js'
-import { resolveOrgFromRequest, requireActiveOrg } from '../lib/orgAuth.js'
+import { requireActiveOrg } from '../lib/orgAuth.js'
 import { publicAppUrl } from '../lib/stripe.js'
 import {
   markStorefrontOrderPaid,
@@ -82,6 +82,83 @@ const publishMenuSchema = z.object({
   promotions: z.array(publishedPromotionSchema).max(200).default([]),
 })
 
+// data:image base64 (logo/bannière ≤ 500 Ko) ≈ 700k chars ; https reste court.
+const optionalHttpsOrDataUrl = z
+  .string()
+  .max(1_500_000)
+  .refine(
+    (value) =>
+      value === '' ||
+      value.startsWith('data:image/') ||
+      /^https?:\/\//i.test(value) ||
+      value.startsWith('/uploads/'),
+    { message: 'URL image invalide' },
+  )
+  .optional()
+
+const storefrontBrandingSchema = z.object({
+  shopName: z.string().trim().max(120).optional(),
+  logoUrl: optionalHttpsOrDataUrl,
+  primaryColor: z
+    .string()
+    .trim()
+    .transform((value) => {
+      const raw = value.trim()
+      if (!raw) return ''
+      const withHash = raw.startsWith('#') ? raw : `#${raw}`
+      return withHash.toUpperCase()
+    })
+    .refine((value) => value === '' || /^#[0-9A-F]{6}$/.test(value), {
+      message: 'Couleur hex invalide',
+    })
+    .optional(),
+  bannerUrl: optionalHttpsOrDataUrl,
+  welcomeMessage: z.string().trim().max(500).optional(),
+})
+
+function readExistingBranding(menu: unknown): Record<string, string> | undefined {
+  if (!menu || typeof menu !== 'object') return undefined
+  const branding = (menu as { branding?: unknown }).branding
+  if (!branding || typeof branding !== 'object') return undefined
+  const raw = branding as Record<string, unknown>
+  const next: Record<string, string> = {}
+  for (const key of [
+    'shopName',
+    'logoUrl',
+    'primaryColor',
+    'bannerUrl',
+    'welcomeMessage',
+  ] as const) {
+    if (typeof raw[key] === 'string' && raw[key].trim()) {
+      next[key] = raw[key].trim()
+    }
+  }
+  return Object.keys(next).length > 0 ? next : undefined
+}
+
+function mergeBrandingPatch(
+  current: Record<string, string> | undefined,
+  patch: z.infer<typeof storefrontBrandingSchema>,
+): Record<string, string> | undefined {
+  const next: Record<string, string> = { ...(current ?? {}) }
+  for (const key of [
+    'shopName',
+    'logoUrl',
+    'primaryColor',
+    'bannerUrl',
+    'welcomeMessage',
+  ] as const) {
+    if (!(key in patch)) continue
+    const value = patch[key]
+    if (value == null || value.trim() === '') {
+      delete next[key]
+    } else {
+      next[key] = value.trim()
+    }
+  }
+  return Object.keys(next).length > 0 ? next : undefined
+}
+
 const orderLineSchema = z.object({
   productId: z.string().min(1).max(120),
   name: z.string().min(1).max(200),
@@ -122,6 +199,86 @@ async function findOrgByStoreCodeParam(raw: string) {
   return prisma.organization.findUnique({ where: { storeCode: normalized } })
 }
 
+storefrontRouter.get('/billing/storefront/branding', async (req, res) => {
+  try {
+    const org = await requireActiveOrg(req, res)
+    if (!org || !org.storeCode) return
+    const menu =
+      org.storefrontMenu && typeof org.storefrontMenu === 'object'
+        ? (org.storefrontMenu as { storeName?: string })
+        : null
+    res.json({
+      branding: readExistingBranding(org.storefrontMenu) ?? {},
+      storeName: typeof menu?.storeName === 'string' ? menu.storeName : org.name,
+      menuPublished: Boolean(org.storefrontMenu),
+      publishedAt: org.storefrontPublishedAt?.toISOString() ?? null,
+      storefrontUrl: publicStorefrontUrl(req, org.storeCode),
+      storeCode: org.storeCode,
+    })
+  } catch (err) {
+    console.error('[storefront/branding-get]', err)
+    res.status(500).json({ error: 'Impossible de charger l’apparence boutique.' })
+  }
+})
+
+storefrontRouter.patch('/billing/storefront/branding', async (req, res) => {
+  try {
+    const org = await requireActiveOrg(req, res)
+    if (!org || !org.storeCode) return
+    const patch = storefrontBrandingSchema.parse(req.body ?? {})
+    const existingMenu =
+      org.storefrontMenu && typeof org.storefrontMenu === 'object'
+        ? (org.storefrontMenu as Record<string, unknown>)
+        : null
+    const branding = mergeBrandingPatch(
+      readExistingBranding(org.storefrontMenu),
+      patch,
+    )
+    const publishedAt = new Date()
+    const nextMenu = {
+      storeId:
+        typeof existingMenu?.storeId === 'string' && existingMenu.storeId
+          ? existingMenu.storeId
+          : 'store-main',
+      storeName:
+        typeof existingMenu?.storeName === 'string' && existingMenu.storeName
+          ? existingMenu.storeName
+          : org.name,
+      products: Array.isArray(existingMenu?.products) ? existingMenu.products : [],
+      promotions: Array.isArray(existingMenu?.promotions)
+        ? existingMenu.promotions
+        : [],
+      publishedAt: publishedAt.toISOString(),
+      ...(branding ? { branding } : {}),
+    }
+    await prisma.organization.update({
+      where: { id: org.id },
+      data: {
+        storefrontMenu: nextMenu,
+        ...(existingMenu ? { storefrontPublishedAt: publishedAt } : {}),
+      },
+    })
+    res.json({
+      ok: true,
+      branding: branding ?? {},
+      publishedAt: existingMenu ? publishedAt.toISOString() : null,
+      storefrontUrl: publicStorefrontUrl(req, org.storeCode),
+    })
+  } catch (err) {
+    if (err instanceof z.ZodError) {
+      const detail = err.issues[0]?.message
+      res.status(400).json({
+        error: detail
+          ? `Apparence boutique invalide (${detail}).`
+          : 'Apparence boutique invalide.',
+      })
+      return
+    }
+    console.error('[storefront/branding-patch]', err)
+    res.status(500).json({ error: 'Enregistrement impossible.' })
+  }
+})
+
 storefrontRouter.get('/billing/storefront/:storeCode', async (req, res) => {
   try {
     const org = await findOrgByStoreCodeParam(req.params.storeCode)
@@ -137,6 +294,7 @@ storefrontRouter.get('/billing/storefront/:storeCode', async (req, res) => {
     )
     await ensurePaymentConfigReady()
     const merchantCreds = merchantPaymentCreds(asOrgPaymentFields(org))
+    const branding = readExistingBranding(org.storefrontMenu)
     res.json({
       organizationId: org.id,
       name: org.name,
@@ -147,6 +305,7 @@ storefrontRouter.get('/billing/storefront/:storeCode', async (req, res) => {
       menuPublished: Boolean(org.storefrontMenu),
       publishedAt: org.storefrontPublishedAt?.toISOString() ?? null,
       waveEnabled: waveCredsEnabled(merchantCreds),
+      ...(branding ? { branding } : {}),
     })
   } catch (err) {
     console.error('[storefront/info]', err)
@@ -453,10 +612,15 @@ storefrontRouter.post('/billing/storefront/publish', async (req, res) => {
     if (!org || !org.storeCode) return
     const menu = publishMenuSchema.parse(req.body)
     const publishedAt = new Date()
+    const branding = readExistingBranding(org.storefrontMenu)
     await prisma.organization.update({
       where: { id: org.id },
       data: {
-        storefrontMenu: { ...menu, publishedAt: publishedAt.toISOString() },
+        storefrontMenu: {
+          ...menu,
+          publishedAt: publishedAt.toISOString(),
+          ...(branding ? { branding } : {}),
+        },
         storefrontPublishedAt: publishedAt,
       },
     })

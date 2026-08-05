@@ -14,9 +14,7 @@ import { MOBILE_MONEY_CHANNELS_CI } from '../lib/mobileMoneyChannels.js'
 import { mobileMoneyEnabled } from '../lib/cinetpay.js'
 import {
   asOrgPaymentFields,
-  merchantPaymentCreds,
   orgPaymentProvidersPublicStatus,
-  platformPaymentCreds,
   updateOrganizationPaymentProviders,
   type OrgPaymentProvidersUpdateInput,
 } from '../lib/orgPaymentCredentials.js'
@@ -35,7 +33,7 @@ import {
   validateOwnerPassword,
   verifyOwnerPassword,
 } from '../lib/ownerAuth.js'
-import { resolveOrgFromRequest, readLicenseKey, readBearerToken } from '../lib/orgAuth.js'
+import { resolveOrgFromRequest, readBearerToken } from '../lib/orgAuth.js'
 import { createOrgSession, revokeOrgSession } from '../lib/sessionTokens.js'
 
 export const billingRouter = Router()

@@ -494,7 +494,7 @@ export function PlatformAdminPage({ onExit }: Props) {
                   autoComplete="current-password"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  className={cn(inputClass, 'mt-1.5')}
+                  className={cn(inputClass, 'mt-1.5 min-h-11')}
                   placeholder="Secret défini dans .env"
                 />
               </label>
@@ -507,7 +507,7 @@ export function PlatformAdminPage({ onExit }: Props) {
                     autoComplete="one-time-code"
                     value={totpCode}
                     onChange={(e) => setTotpCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
-                    className={cn(inputClass, 'mt-1.5 font-mono tracking-widest')}
+                    className={cn(inputClass, 'mt-1.5 min-h-11 font-mono tracking-widest')}
                     placeholder="000000"
                   />
                 </label>
@@ -772,7 +772,10 @@ export function PlatformAdminPage({ onExit }: Props) {
           <div className="flex items-center gap-3">
             <button
               type="button"
-              className={cn('rounded-lg p-2 lg:hidden', dark ? 'hover:bg-zinc-800' : 'hover:bg-zinc-100')}
+              className={cn(
+                'ui-icon-btn inline-flex h-11 w-11 items-center justify-center rounded-lg lg:hidden',
+                dark ? 'hover:bg-zinc-800' : 'hover:bg-zinc-100',
+              )}
               onClick={() => setSidebarOpen(true)}
               aria-label="Ouvrir le menu"
             >
@@ -831,59 +834,98 @@ export function PlatformAdminPage({ onExit }: Props) {
 
             <Card className={theme.card}>
               <CardHeader title="Organisations" subtitle="Cliquez sur une ligne pour gérer l’abonnement" />
-              <CardContent className="overflow-x-auto p-0 pt-0">
-                <table className="w-full min-w-[640px] text-left text-sm">
-                  <thead className={cn('border-y text-xs uppercase tracking-wide', theme.tableHead)}>
-                    <tr>
-                      <th className="px-5 py-3 font-semibold">Magasin</th>
-                      <th className="px-4 py-3 font-semibold">Plan</th>
-                      <th className="px-4 py-3 font-semibold">Statut</th>
-                      <th className="px-4 py-3 font-semibold">Fin période</th>
-                      <th className="px-4 py-3 font-semibold">Accès</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {orgs.map((org) => (
-                      <tr
-                        key={org.id}
+              <CardContent className="p-0 pt-0">
+                <div className="hidden overflow-x-auto md:block">
+                  <table className="w-full min-w-[640px] text-left text-sm">
+                    <thead className={cn('border-y text-xs uppercase tracking-wide', theme.tableHead)}>
+                      <tr>
+                        <th className="px-5 py-3 font-semibold">Magasin</th>
+                        <th className="px-4 py-3 font-semibold">Plan</th>
+                        <th className="px-4 py-3 font-semibold">Statut</th>
+                        <th className="px-4 py-3 font-semibold">Fin période</th>
+                        <th className="px-4 py-3 font-semibold">Accès</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {orgs.map((org) => (
+                        <tr
+                          key={org.id}
+                          onClick={() => {
+                            setSelected(org)
+                            setActionMessage(null)
+                          }}
+                          className={cn(
+                            'cursor-pointer border-b border-border/40 transition dark:border-zinc-800/80',
+                            theme.tableRowHover,
+                            selected?.id === org.id && theme.tableRowSelected,
+                          )}
+                        >
+                          <td className="px-5 py-3.5">
+                            <p className="font-semibold">{org.name}</p>
+                            <p className={cn('mt-0.5 text-xs', theme.muted)}>
+                              {org.storeCode ?? '—'} · {org.email}
+                            </p>
+                          </td>
+                          <td className="px-4 py-3.5">
+                            <Badge tone="violet">{org.planName}</Badge>
+                          </td>
+                          <td className="px-4 py-3.5">
+                            <Badge tone={statusTone(org.status)} dot>
+                              {statusLabel(org.status)}
+                            </Badge>
+                          </td>
+                          <td className={cn('px-4 py-3.5', theme.muted)}>
+                            {formatDate(org.currentPeriodEnd)}
+                          </td>
+                          <td className="px-4 py-3.5">
+                            {org.usable ? (
+                              <Badge tone="success">Oui</Badge>
+                            ) : (
+                              <Badge tone="danger">Non</Badge>
+                            )}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+                <ul className="grid gap-2 p-3 md:hidden">
+                  {orgs.map((org) => (
+                    <li key={org.id}>
+                      <button
+                        type="button"
                         onClick={() => {
                           setSelected(org)
                           setActionMessage(null)
                         }}
                         className={cn(
-                          'cursor-pointer border-b border-border/40 transition dark:border-zinc-800/80',
-                          theme.tableRowHover,
+                          'w-full rounded-xl border p-3 text-left transition',
+                          theme.card,
                           selected?.id === org.id && theme.tableRowSelected,
                         )}
                       >
-                        <td className="px-5 py-3.5">
-                          <p className="font-semibold">{org.name}</p>
-                          <p className={cn('mt-0.5 text-xs', theme.muted)}>
-                            {org.storeCode ?? '—'} · {org.email}
-                          </p>
-                        </td>
-                        <td className="px-4 py-3.5">
+                        <p className="text-[13px] font-semibold">{org.name}</p>
+                        <p className={cn('mt-0.5 text-[11px]', theme.muted)}>
+                          {org.storeCode ?? '—'} · {org.email}
+                        </p>
+                        <div className="mt-2 flex flex-wrap items-center gap-1.5">
                           <Badge tone="violet">{org.planName}</Badge>
-                        </td>
-                        <td className="px-4 py-3.5">
                           <Badge tone={statusTone(org.status)} dot>
                             {statusLabel(org.status)}
                           </Badge>
-                        </td>
-                        <td className={cn('px-4 py-3.5', theme.muted)}>
-                          {formatDate(org.currentPeriodEnd)}
-                        </td>
-                        <td className="px-4 py-3.5">
                           {org.usable ? (
-                            <Badge tone="success">Oui</Badge>
+                            <Badge tone="success">Accès</Badge>
                           ) : (
-                            <Badge tone="danger">Non</Badge>
+                            <Badge tone="danger">Bloqué</Badge>
                           )}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+                        </div>
+                        <p className={cn('mt-1.5 text-[11px]', theme.muted)}>
+                          Fin période : {formatDate(org.currentPeriodEnd)}
+                        </p>
+                      </button>
+                    </li>
+                  ))}
+                </ul>
                 {orgs.length === 0 ? (
                   <p className={cn('px-5 py-10 text-center text-sm', theme.muted)}>
                     Aucune organisation trouvée.
