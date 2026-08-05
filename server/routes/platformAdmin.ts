@@ -26,6 +26,16 @@ import {
   updatePaymentProviderSettings,
   type PaymentProvidersUpdateInput,
 } from '../lib/paymentProviderSettings.js'
+import {
+  getSiteBranding,
+  siteBrandingUpdateSchema,
+  updateSiteBranding,
+} from '../lib/siteBranding.js'
+import {
+  isBlobStorageConfigured,
+  parseImageDataUrl,
+  uploadPlatformSiteLogo,
+} from '../lib/blobStorage.js'
 import { prisma } from '../lib/prisma.js'
 import { SUBSCRIPTION_PLANS, type PlanId, type SubscriptionStatus } from '../lib/subscriptionPlans.js'
 import { runSubscriptionReminders } from '../lib/subscriptionReminders.js'
@@ -37,6 +47,17 @@ platformAdminRouter.get('/platform-admin/status', (_req, res) => {
     configured: platformAdminConfigured(),
     mfaRequired: platformAdminMfaConfigured(),
   })
+})
+
+/** Branding public (page d’accueil) — pas d’auth. */
+platformAdminRouter.get('/site-branding', async (_req, res) => {
+  try {
+    res.json(await getSiteBranding())
+  } catch (error) {
+    const message =
+      error instanceof Error ? error.message : 'Impossible de charger le branding.'
+    res.status(500).json({ error: message })
+  }
 })
 
 platformAdminRouter.post('/platform-admin/auth', (req, res) => {
@@ -229,5 +250,64 @@ platformAdminRouter.put('/platform-admin/payment-providers', async (req, res) =>
     const message =
       error instanceof Error ? error.message : 'Enregistrement des clés impossible.'
     res.status(400).json({ error: message })
+  }
+})
+
+platformAdminRouter.get('/platform-admin/site-branding', async (_req, res) => {
+  try {
+    res.json({
+      ...(await getSiteBranding()),
+      blobConfigured: isBlobStorageConfigured(),
+    })
+  } catch (error) {
+    const message =
+      error instanceof Error ? error.message : 'Impossible de charger le branding.'
+    res.status(500).json({ error: message })
+  }
+})
+
+platformAdminRouter.put('/platform-admin/site-branding', async (req, res) => {
+  try {
+    const body = siteBrandingUpdateSchema.parse(req.body ?? {})
+    const next = await updateSiteBranding(body)
+    res.json({ ...next, blobConfigured: isBlobStorageConfigured() })
+  } catch (error) {
+    if (error instanceof Error && error.name === 'ZodError') {
+      res.status(400).json({ error: 'Données invalides.' })
+      return
+    }
+    const message =
+      error instanceof Error ? error.message : 'Enregistrement impossible.'
+    res.status(400).json({ error: message })
+  }
+})
+
+platformAdminRouter.post('/platform-admin/site-branding/logo', async (req, res) => {
+  try {
+    const dataUrl =
+      typeof req.body?.dataUrl === 'string' ? req.body.dataUrl : ''
+    if (!dataUrl) {
+      res.status(400).json({ error: 'Image manquante (dataUrl).' })
+      return
+    }
+
+    // Valide le format / taille même sans Blob.
+    parseImageDataUrl(dataUrl)
+
+    let logoUrl: string
+    if (isBlobStorageConfigured()) {
+      logoUrl = await uploadPlatformSiteLogo({ dataUrl })
+    } else {
+      // Repli local / Render sans Blob : stocke la data URL en base.
+      logoUrl = dataUrl
+    }
+
+    const next = await updateSiteBranding({ logoUrl })
+    res.status(201).json({ ...next, blobConfigured: isBlobStorageConfigured() })
+  } catch (error) {
+    const message =
+      error instanceof Error ? error.message : 'Upload du logo impossible.'
+    const status = message.includes('non configuré') ? 503 : 400
+    res.status(status).json({ error: message })
   }
 })

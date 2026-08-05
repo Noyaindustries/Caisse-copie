@@ -16,6 +16,7 @@ import {
 import { getPlatformAdminSecret } from '../lib/platformAdmin/session'
 import { adminThemeClasses, useAdminTheme, type AdminThemeClasses } from '../lib/platformAdmin/theme'
 import { PaymentProvidersAdminPanel } from '../components/platformAdmin/PaymentProvidersAdminPanel'
+import { SiteBrandingAdminPanel } from '../components/platformAdmin/SiteBrandingAdminPanel'
 import type { PlanId, SubscriptionStatus } from '../lib/subscription/types'
 import { Badge, type BadgeTone } from '../ui/Badge'
 import { Button } from '../ui/Button'
@@ -33,7 +34,7 @@ import {
   IconStore,
 } from '../ui/icons'
 
-type AdminSection = 'organizations' | 'payments'
+type AdminSection = 'organizations' | 'payments' | 'branding'
 
 const STATUS_OPTIONS: SubscriptionStatus[] = [
   'trialing',
@@ -602,12 +603,26 @@ export function PlatformAdminPage({ onExit }: Props) {
               setSidebarOpen(false)
             }}
             className={cn(
-              'flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-sm font-medium transition',
+              'mb-1 flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-sm font-medium transition',
               section === 'payments' ? theme.navActive : theme.navIdle,
             )}
           >
             <IconMobile className="h-4 w-4" />
             Wave & Orange
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              setSection('branding')
+              setSidebarOpen(false)
+            }}
+            className={cn(
+              'flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-sm font-medium transition',
+              section === 'branding' ? theme.navActive : theme.navIdle,
+            )}
+          >
+            <BrandLogo size="xs" alt="" ring={false} className="!h-4 !w-4" />
+            Apparence site
           </button>
         </div>
 
@@ -785,12 +800,16 @@ export function PlatformAdminPage({ onExit }: Props) {
               <h1 className="text-sm font-bold sm:text-base">
                 {section === 'payments'
                   ? 'Wave & Orange Money'
-                  : 'Abonnements plateforme'}
+                  : section === 'branding'
+                    ? 'Apparence du site'
+                    : 'Abonnements plateforme'}
               </h1>
               <p className={cn('text-xs', theme.muted)}>
                 {section === 'payments'
                   ? 'Clés API paiement'
-                  : `${orgs.length} organisation(s)`}
+                  : section === 'branding'
+                    ? 'Logo et nom sur la page d’accueil'
+                    : `${orgs.length} organisation(s)`}
               </p>
             </div>
           </div>
@@ -812,6 +831,8 @@ export function PlatformAdminPage({ onExit }: Props) {
           <main className="min-w-0 flex-1 overflow-y-auto p-4 sm:p-6">
             {section === 'payments' ? (
               <PaymentProvidersAdminPanel theme={theme} inputClass={inputClass} />
+            ) : section === 'branding' ? (
+              <SiteBrandingAdminPanel theme={theme} inputClass={inputClass} />
             ) : (
               <>
             {loadError ? (

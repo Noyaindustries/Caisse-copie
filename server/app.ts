@@ -110,7 +110,10 @@ import { prisma } from './lib/prisma.js'
 const startedAt = Date.now()
 const APP_VERSION = process.env.npm_package_version ?? '1.0.0'
 
-app.get('/health', async (_req, res) => {
+async function healthHandler(
+  _req: express.Request,
+  res: express.Response,
+): Promise<void> {
   let dbOk = false
   try {
     await prisma.organization.count({ take: 1 })
@@ -125,7 +128,11 @@ app.get('/health', async (_req, res) => {
     uptimeSec: Math.floor((Date.now() - startedAt) / 1000),
     db: dbOk ? 'up' : 'down',
   })
-})
+}
+
+app.get('/health', healthHandler)
+/** Alias sous /api quand seul /api/* est routé vers Express (Vercel serverless). */
+app.get('/api/health', healthHandler)
 
 app.use('/api', syncRouter)
 app.use('/api', staffRouter)

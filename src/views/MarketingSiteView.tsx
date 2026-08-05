@@ -13,7 +13,7 @@ import { MarketingStickyCta } from '../components/marketing/MarketingStickyCta'
 import { MarketingTrustBar } from '../components/marketing/MarketingTrustBar'
 import { MarketingUseCases } from '../components/marketing/MarketingUseCases'
 import { BrandLogo } from '../components/BrandLogo'
-import { BRAND_NAME } from '../brand'
+import { useSiteBranding } from '../context/SiteBrandingContext'
 import { fetchPlans } from '../lib/subscription/api'
 import { signupUrl, ROUTES } from '../lib/siteRoutes'
 import type { PlanId } from '../lib/subscription/types'
@@ -41,6 +41,7 @@ export function MarketingSiteView({
   const [trialDays, setTrialDays] = useState(30)
   const [navScrolled, setNavScrolled] = useState(false)
   const [mobileNavOpen, setMobileNavOpen] = useState(false)
+  const { brandName } = useSiteBranding()
 
   useEffect(() => {
     void fetchPlans()
@@ -96,7 +97,7 @@ export function MarketingSiteView({
           )}
         >
           <button type="button" onClick={() => onNavigate(ROUTES.home)} className="flex min-w-0 items-center gap-2.5">
-            <BrandLogo size="md" alt={BRAND_NAME} ring={navScrolled || mobileNavOpen ? 'subtle' : 'light'} />
+            <BrandLogo size="md" alt={brandName} ring={navScrolled || mobileNavOpen ? 'subtle' : 'light'} />
             <span className={cn('hidden truncate font-bold tracking-tight sm:inline', !navScrolled && !mobileNavOpen && 'text-white')}>
               CaisseCI
             </span>

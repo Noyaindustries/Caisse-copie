@@ -97,3 +97,25 @@ export async function uploadOrganizationAsset(params: {
 
   return result.url
 }
+
+export async function uploadPlatformSiteLogo(params: {
+  dataUrl: string
+}): Promise<string> {
+  const token = process.env.BLOB_READ_WRITE_TOKEN?.trim()
+  if (!token) {
+    throw new Error('Stockage Vercel Blob non configuré.')
+  }
+
+  const { contentType, buffer } = parseImageDataUrl(params.dataUrl)
+  const ext = extensionForContentType(contentType)
+  const pathname = `platform/site-logo.${ext}`
+
+  const result = await put(pathname, buffer, {
+    access: 'public',
+    token,
+    contentType,
+    addRandomSuffix: true,
+  })
+
+  return result.url
+}

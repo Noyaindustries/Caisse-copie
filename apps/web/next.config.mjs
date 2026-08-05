@@ -37,13 +37,17 @@ const withPWACfg = withPWA({
   dest: 'public',
   register: true,
   disable: process.env.NODE_ENV === 'development',
-  publicExcludes: ['!marketing/**/*'],
-  fallbacks: {
-    document: '/',
-  },
-  navigateFallback: '/',
-  navigateFallbackDenylist: [/^\/__/, /\.(?:png|jpg|jpeg|svg|gif|webp|ico)$/i],
+  // Exclure les assets marketing lourds du precache.
+  publicExcludes: ['marketing/**/*'],
+  // App Router : `/` n’est pas dans le precache Workbox.
+  // `navigateFallback: '/'` → Uncaught non-precached-url au démarrage du SW.
+  fallbacks: false,
   runtimeCaching: [
+    {
+      // Ne jamais servir l’API depuis le cache (auth, billing, sync).
+      urlPattern: ({ url }) => url.pathname.startsWith('/api/'),
+      handler: 'NetworkOnly',
+    },
     {
       urlPattern: /\/marketing\/.+\.(?:png|jpg|jpeg|webp)$/i,
       handler: 'CacheFirst',

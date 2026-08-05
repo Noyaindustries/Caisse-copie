@@ -199,3 +199,40 @@ export async function savePaymentProviders(
   })
   return parseJson(res)
 }
+
+export type SiteBrandingAdmin = {
+  logoUrl: string | null
+  brandName: string | null
+  updatedAt: string | null
+  blobConfigured: boolean
+}
+
+export async function fetchSiteBrandingAdmin(): Promise<SiteBrandingAdmin> {
+  const res = await fetch(apiUrl('/platform-admin/site-branding'), {
+    headers: adminHeaders(),
+  })
+  return parseJson(res)
+}
+
+export async function saveSiteBrandingAdmin(body: {
+  logoUrl?: string | null
+  brandName?: string | null
+}): Promise<SiteBrandingAdmin> {
+  const res = await fetch(apiUrl('/platform-admin/site-branding'), {
+    method: 'PUT',
+    headers: adminHeaders(),
+    body: JSON.stringify(body),
+  })
+  return parseJson(res)
+}
+
+export async function uploadSiteBrandingLogo(
+  dataUrl: string,
+): Promise<SiteBrandingAdmin> {
+  const res = await fetch(apiUrl('/platform-admin/site-branding/logo'), {
+    method: 'POST',
+    headers: adminHeaders(),
+    body: JSON.stringify({ dataUrl }),
+  })
+  return parseJson(res)
+}

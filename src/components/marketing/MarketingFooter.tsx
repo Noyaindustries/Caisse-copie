@@ -1,5 +1,5 @@
-import { BRAND_NAME } from '../../brand'
 import { BrandLogo } from '../BrandLogo'
+import { useSiteBranding } from '../../context/SiteBrandingContext'
 import { formatTrialPeriod } from '../../lib/subscription/plans'
 import { signupUrl, ROUTES } from '../../lib/siteRoutes'
 import { Badge } from '../../ui/Badge'
@@ -13,14 +13,15 @@ export function MarketingFooter({
   onNavigate: (to: string) => void
   onScrollTo: (id: string) => void
 }) {
+  const { brandName } = useSiteBranding()
   return (
     <footer className="border-t border-border/60 bg-linear-to-b from-white to-[#f8f9fc]">
       <div className="mx-auto max-w-7xl px-4 py-14 sm:px-6">
         <div className="flex flex-col gap-10 lg:flex-row lg:justify-between">
           <div className="max-w-sm">
-            <BrandLogo size="lg" alt={BRAND_NAME} />
+            <BrandLogo size="lg" alt={brandName} />
             <p className="mt-4 text-sm leading-relaxed text-ink-muted">
-              Caisse POS offline-first — 20 modules métier, mobile money CI, multi-postes. Par {BRAND_NAME}.
+              Caisse POS offline-first — 20 modules métier, mobile money CI, multi-postes. Par {brandName}.
             </p>
           </div>
           <div className="grid grid-cols-2 gap-8 sm:grid-cols-3">
@@ -50,7 +51,7 @@ export function MarketingFooter({
           </div>
         </div>
         <div className="mt-12 flex flex-col items-center justify-between gap-4 border-t border-border/50 pt-8 sm:flex-row">
-          <p className="text-sm text-ink-subtle">© {new Date().getFullYear()} {BRAND_NAME}</p>
+          <p className="text-sm text-ink-subtle">© {new Date().getFullYear()} {brandName}</p>
           <div className="flex flex-wrap justify-center gap-2">
             <Badge tone="accent">29+ modules</Badge>
             <Badge tone="violet">Offline-first</Badge>

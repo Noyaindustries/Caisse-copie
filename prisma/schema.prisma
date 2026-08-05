@@ -200,3 +200,16 @@ model PlatformPaymentConfig {
   updatedAt          DateTime @updatedAt
   createdAt          DateTime @default(now())
 }
+
+/** Branding site marketing (logo page d’accueil) — editable via /admin. */
+model PlatformSiteBranding {
+  id        String   @id @default(auto()) @map("_id") @db.ObjectId
+  /** Singleton : toujours "default". */
+  key       String   @unique @default("default")
+  /** URL publique (Blob) ou data URL. Null = logo fichier local. */
+  logoUrl   String?
+  /** Nom affiché optionnel (sinon BRAND_NAME côté client). */
+  brandName String?
+  updatedAt DateTime @updatedAt
+  createdAt DateTime @default(now())
+}

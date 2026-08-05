@@ -1,4 +1,5 @@
-import { BRAND_LOGO_SRC, BRAND_NAME } from '../brand'
+import { BRAND_NAME } from '../brand'
+import { useSiteBranding } from '../context/SiteBrandingContext'
 import { cn } from '../ui/cn'
 
 const SIZES = {
@@ -16,18 +17,25 @@ type BrandLogoProps = {
   alt?: string
   className?: string
   ring?: 'light' | 'dark' | 'subtle' | 'gold' | false
+  /** Force une URL (ex. aperçu admin) au lieu du branding global. */
+  src?: string
 }
 
 export function BrandLogo({
   size = 'md',
-  alt = BRAND_NAME,
+  alt,
   className,
   ring = 'subtle',
+  src,
 }: BrandLogoProps) {
+  const { logoSrc, brandName } = useSiteBranding()
+  const resolvedSrc = src?.trim() || logoSrc
+  const resolvedAlt = alt ?? (brandName || BRAND_NAME)
+
   return (
     <img
-      src={BRAND_LOGO_SRC}
-      alt={alt}
+      src={resolvedSrc}
+      alt={resolvedAlt}
       className={cn(
         'shrink-0 rounded-full object-contain bg-white',
         SIZES[size],

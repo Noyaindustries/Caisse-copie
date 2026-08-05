@@ -6,6 +6,7 @@ import { ToastProvider } from '../src/ui/Toast'
 import { SitePathProvider } from './SitePathProvider'
 import { SubscriptionProvider } from '../src/context/SubscriptionContext'
 import { StaffSessionProvider } from '../src/context/StaffSessionContext'
+import { SiteBrandingProvider } from '../src/context/SiteBrandingContext'
 import { useOnlineStatus } from '../src/hooks/useOnlineStatus'
 import { initClientSentry } from '../src/lib/sentry'
 
@@ -41,7 +42,9 @@ export default function Providers({ children }: { children: React.ReactNode }) {
   return (
     <ToastProvider>
       <SitePathProvider>
-        <OnlineSubscription>{children}</OnlineSubscription>
+        <SiteBrandingProvider>
+          <OnlineSubscription>{children}</OnlineSubscription>
+        </SiteBrandingProvider>
       </SitePathProvider>
     </ToastProvider>
   )
