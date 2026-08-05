@@ -551,47 +551,13 @@ body {
     position: relative;
     isolation: isolate;
     overflow: hidden;
-    min-height: min(72svh, 560px);
+    min-height: min(52svh, 420px);
     background:
       linear-gradient(
         145deg,
         color-mix(in oklab, var(--storefront-accent, #b8922e) 72%, #5c4a1f) 0%,
         color-mix(in oklab, var(--storefront-accent, #b8922e) 28%, #e8dfd0) 48%,
         #f7f3ec 100%
-      );
-  }
-
-  .storefront-hero:has(.storefront-hero-media) {
-    background: #1c1917;
-  }
-
-  .storefront-hero-media {
-    position: absolute;
-    inset: 0;
-    width: 100%;
-    height: 100%;
-    object-fit: cover;
-  }
-
-  .storefront-hero-overlay {
-    position: absolute;
-    inset: 0;
-    background:
-      linear-gradient(
-        180deg,
-        color-mix(in oklab, #1c1917 8%, transparent) 0%,
-        color-mix(in oklab, #1c1917 18%, transparent) 55%,
-        color-mix(in oklab, #1c1917 28%, transparent) 100%
-      );
-  }
-
-  .storefront-hero:has(.storefront-hero-media) .storefront-hero-overlay {
-    background:
-      linear-gradient(
-        180deg,
-        color-mix(in oklab, #1c1917 35%, transparent) 0%,
-        color-mix(in oklab, #1c1917 55%, transparent) 55%,
-        color-mix(in oklab, #1c1917 72%, transparent) 100%
       );
   }
 

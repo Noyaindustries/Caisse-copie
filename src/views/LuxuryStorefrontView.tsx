@@ -183,7 +183,6 @@ export function LuxuryStorefrontView({
   )
   const accentColor = storefrontAccentColor(branding)
   const logoUrl = branding?.logoUrl?.trim() || null
-  const bannerUrl = branding?.bannerUrl?.trim() || null
   const welcomeMessage = branding?.welcomeMessage?.trim() || null
   const cardDensity: 'compact' | 'confort' = 'compact'
   const [cart, setCart] = useState<CartLine[]>([])
@@ -907,36 +906,18 @@ export function LuxuryStorefrontView({
       </header>
 
       <section className="storefront-hero">
-        {bannerUrl ? (
-          <img
-            src={bannerUrl}
-            alt=""
-            className="storefront-hero-media"
-          />
-        ) : null}
-        <div className="storefront-hero-overlay" />
         <div className="storefront-hero-content mx-auto flex min-h-[inherit] max-w-6xl flex-col justify-end px-4 pb-10 pt-20 sm:px-5 sm:pb-14">
           {logoUrl ? (
             <img
               src={logoUrl}
               alt=""
-              className={`mb-4 h-16 w-16 rounded-full object-cover shadow-lg sm:h-20 sm:w-20 ${
-                bannerUrl ? 'border-2 border-white/70' : 'border-2 border-stone-200'
-              }`}
+              className="mb-4 h-16 w-16 rounded-full border-2 border-stone-200 object-cover shadow-lg sm:h-20 sm:w-20"
             />
           ) : null}
-          <h1
-            className={`max-w-2xl font-display text-4xl font-bold tracking-tight text-balance sm:text-5xl lg:text-6xl ${
-              bannerUrl ? 'text-white' : 'text-stone-900'
-            }`}
-          >
+          <h1 className="max-w-2xl font-display text-4xl font-bold tracking-tight text-balance text-stone-900 sm:text-5xl lg:text-6xl">
             {shopTitle}
           </h1>
-          <p
-            className={`mt-3 max-w-xl text-base leading-relaxed sm:text-lg ${
-              bannerUrl ? 'text-white/85' : 'text-stone-700'
-            }`}
-          >
+          <p className="mt-3 max-w-xl text-base leading-relaxed text-stone-700 sm:text-lg">
             {welcomeMessage ??
               'Commandez en ligne, retirez en boutique ou faites-vous livrer près de chez vous.'}
           </p>
@@ -951,11 +932,7 @@ export function LuxuryStorefrontView({
             <button
               type="button"
               onClick={openCart}
-              className={
-                bannerUrl
-                  ? 'rounded-xl border border-white/40 bg-white/10 px-5 py-2.5 text-sm font-semibold text-white backdrop-blur-sm transition hover:bg-white/20'
-                  : 'rounded-xl border border-stone-300 bg-white/80 px-5 py-2.5 text-sm font-semibold text-stone-800 transition hover:bg-white'
-              }
+              className="rounded-xl border border-stone-300 bg-white/80 px-5 py-2.5 text-sm font-semibold text-stone-800 transition hover:bg-white"
             >
               Panier ({itemCount})
             </button>
