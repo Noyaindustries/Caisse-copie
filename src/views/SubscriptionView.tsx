@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { useLiveQuery } from 'dexie-react-hooks'
 
 import { MobileMoneyCheckoutModal } from '../components/MobileMoneyCheckoutModal'
 
@@ -10,11 +9,13 @@ import { SubscriptionHero } from '../components/subscription/SubscriptionHero'
 import { SubscriptionPlansSection } from '../components/subscription/SubscriptionPlansSection'
 
 import { useActiveStore } from '../context/ActiveStoreContext'
-import { db } from '../db/db'
 
 import { useSubscription } from '../context/SubscriptionContext'
 
-import { publishStorefrontMenu } from '../lib/storefront/api'
+import {
+  getLastStorefrontPublishedAt,
+  publishActiveStorefrontMenu,
+} from '../lib/storefront/autoPublish'
 
 import { storefrontUrl } from '../lib/siteRoutes'
 
@@ -91,19 +92,7 @@ export function SubscriptionView() {
 
   const { subscription, refresh, usable, online } = useSubscription()
 
-  const { displayProducts, activeStoreId, activeStore } = useActiveStore()
-  const promotions =
-    useLiveQuery(
-      () =>
-        db.promotions
-          .filter(
-            (promotion) =>
-              promotion.storeId == null || promotion.storeId === activeStoreId,
-          )
-          .toArray(),
-      [activeStoreId],
-      [],
-    ) ?? []
+  const { activeStoreId } = useActiveStore()
 
   const [plans, setPlans] = useState<PlanDefinition[]>([])
 
@@ -130,6 +119,9 @@ export function SubscriptionView() {
   const [settingsBusy, setSettingsBusy] = useState(false)
 
   const [publishBusy, setPublishBusy] = useState(false)
+  const [lastPublishedAt, setLastPublishedAt] = useState<string | null>(() =>
+    getLastStorefrontPublishedAt(),
+  )
 
   const [activeSection, setActiveSection] = useState<string>(SECTION_NAV[0].id)
 
@@ -167,54 +159,31 @@ export function SubscriptionView() {
 
 
   const handlePublishStorefront = useCallback(async () => {
-
     if (!subscription?.licenseKey) return
-
     setPublishBusy(true)
-
     try {
-
-      const result = await publishStorefrontMenu(subscription.licenseKey, {
-
+      const result = await publishActiveStorefrontMenu({
+        licenseKey: subscription.licenseKey,
         storeId: activeStoreId,
-
-        storeName: activeStore?.name ?? subscription.name,
-
-        products: displayProducts,
-
-        promotions,
-
+        force: true,
       })
-
+      setLastPublishedAt(result.publishedAt)
       toast.success(`Boutique publiée · ${result.productCount} article(s)`)
-
     } catch (err) {
-
       toast.error(err instanceof Error ? err.message : 'Publication impossible')
-
     } finally {
-
       setPublishBusy(false)
-
     }
+  }, [subscription?.licenseKey, activeStoreId, toast])
 
-  }, [
-
-    subscription?.licenseKey,
-
-    subscription?.name,
-
-    activeStoreId,
-
-    activeStore?.name,
-
-    displayProducts,
-
-    promotions,
-
-    toast,
-
-  ])
+  useEffect(() => {
+    const refreshPublishedAt = () => {
+      setLastPublishedAt(getLastStorefrontPublishedAt())
+    }
+    refreshPublishedAt()
+    const id = window.setInterval(refreshPublishedAt, 5_000)
+    return () => window.clearInterval(id)
+  }, [])
 
 
 
@@ -565,17 +534,12 @@ export function SubscriptionView() {
           portalBusy={portalBusy}
 
           publishBusy={publishBusy}
-
-          canPublish={online && displayProducts.length > 0}
-
+          lastPublishedAt={lastPublishedAt}
+          canPublish={online && usable}
           onRefresh={() => void refresh()}
-
           onPortal={() => void handlePortal()}
-
           onCopy={handleCopy}
-
           onPublish={() => void handlePublishStorefront()}
-
         />
 
 

@@ -1,5 +1,6 @@
 import { apiUrl } from '../apiUrl'
 import { parseApiResponse } from '../parseApiResponse'
+import { buildOrgAuthHeaders } from '../subscription/authHeaders'
 import { getOrganizationCredentials } from '../subscription/store'
 
 let blobUploadEnabled: boolean | null = null
@@ -30,16 +31,13 @@ export function resetBlobUploadAvailabilityCache(): void {
 }
 
 export async function uploadProductImageToBlob(
-  licenseKey: string,
+  _licenseKey: string,
   productId: string,
   dataUrl: string,
 ): Promise<string> {
   const res = await fetch(apiUrl('/uploads/product-image'), {
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'x-license-key': licenseKey,
-    },
+    headers: buildOrgAuthHeaders({ 'Content-Type': 'application/json' }),
     body: JSON.stringify({ productId, dataUrl }),
   })
   const data = await parseJson<{ url: string }>(res)

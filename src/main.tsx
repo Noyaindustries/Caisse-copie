@@ -10,6 +10,8 @@ import '@fontsource/dm-sans/latin-ext-700.css'
 import '@fontsource/jetbrains-mono/latin-ext-400.css'
 import '@fontsource/jetbrains-mono/latin-ext-500.css'
 import './index.css'
+import { initClientSentry } from './lib/sentry'
+initClientSentry()
 import App from './App.tsx'
 import { ToastProvider } from './ui/Toast'
 

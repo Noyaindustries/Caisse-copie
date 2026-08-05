@@ -1,3 +1,6 @@
+import { apiUrl } from '../apiUrl'
+import { parseApiResponse } from '../parseApiResponse'
+import { buildOrgAuthHeaders } from './authHeaders'
 import type {
   MobileMoneyChannel,
   MobileMoneyChannelId,
@@ -6,11 +9,16 @@ import type {
   PlanId,
   SubscriptionSnapshot,
 } from './types'
-import { apiUrl } from '../apiUrl'
-import { parseApiResponse } from '../parseApiResponse'
 
 async function parseJson<T>(res: Response): Promise<T> {
   return parseApiResponse<T>(res)
+}
+
+function authHeaders(extra?: Record<string, string>): Record<string, string> {
+  return buildOrgAuthHeaders({
+    'Content-Type': 'application/json',
+    ...extra,
+  })
 }
 
 export async function fetchPlans(): Promise<{
@@ -46,10 +54,7 @@ export async function startMobileMoneyCheckout(
 }> {
   const res = await fetch(apiUrl('/billing/mobile-money/checkout'), {
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'x-license-key': licenseKey,
-    },
+    headers: authHeaders({ 'x-license-key': licenseKey }),
     body: JSON.stringify(input),
   })
   return parseJson(res)
@@ -61,30 +66,27 @@ export async function verifyMobileMoneyPayment(
 ): Promise<{ status: 'accepted' | 'refused' | 'pending'; planId?: string }> {
   const res = await fetch(
     apiUrl(`/billing/mobile-money/verify/${encodeURIComponent(transactionId)}`),
-    { headers: { 'x-license-key': licenseKey } },
+    { headers: authHeaders({ 'x-license-key': licenseKey }) },
   )
   return parseJson(res)
 }
 
 export async function fetchPaymentHistory(
-  licenseKey: string,
+  _licenseKey: string,
 ): Promise<{ payments: MobileMoneyPaymentRecord[] }> {
   const res = await fetch(apiUrl('/billing/payments/history'), {
-    headers: { 'x-license-key': licenseKey },
+    headers: buildOrgAuthHeaders(),
   })
   return parseJson(res)
 }
 
 export async function updateBillingSettings(
-  licenseKey: string,
+  _licenseKey: string,
   input: { billingPhone?: string; smsRemindersEnabled?: boolean },
 ): Promise<SubscriptionSnapshot> {
   const res = await fetch(apiUrl('/billing/settings'), {
     method: 'PATCH',
-    headers: {
-      'Content-Type': 'application/json',
-      'x-license-key': licenseKey,
-    },
+    headers: authHeaders(),
     body: JSON.stringify(input),
   })
   const data = await parseJson<Omit<SubscriptionSnapshot, 'cachedAt'>>(res)
@@ -133,25 +135,29 @@ export async function attachStoreCode(
 }
 
 export async function refreshSubscription(
-  licenseKey: string,
+  _licenseKey: string,
 ): Promise<SubscriptionSnapshot> {
   const res = await fetch(apiUrl('/billing/status'), {
-    headers: { 'x-license-key': licenseKey },
+    headers: buildOrgAuthHeaders(),
   })
   const data = await parseJson<Omit<SubscriptionSnapshot, 'cachedAt'>>(res)
   return { ...data, cachedAt: Date.now() }
 }
 
+export async function logoutOrganization(): Promise<void> {
+  await fetch(apiUrl('/billing/logout'), {
+    method: 'POST',
+    headers: buildOrgAuthHeaders(),
+  }).catch(() => undefined)
+}
+
 export async function startCheckout(
-  licenseKey: string,
+  _licenseKey: string,
   planId: string,
 ): Promise<string> {
   const res = await fetch(apiUrl('/billing/checkout'), {
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'x-license-key': licenseKey,
-    },
+    headers: authHeaders(),
     body: JSON.stringify({ planId }),
   })
   const data = await parseJson<{ url: string | null }>(res)
@@ -159,11 +165,64 @@ export async function startCheckout(
   return data.url
 }
 
-export async function openBillingPortal(licenseKey: string): Promise<string> {
+export async function openBillingPortal(_licenseKey: string): Promise<string> {
   const res = await fetch(apiUrl('/billing/portal'), {
     method: 'POST',
-    headers: { 'x-license-key': licenseKey },
+    headers: buildOrgAuthHeaders(),
   })
   const data = await parseJson<{ url: string }>(res)
   return data.url
+}
+
+export type OrgPaymentProvidersStatus = {
+  wave: {
+    configured: boolean
+    demoMode: boolean
+    enabled: boolean
+    apiKeyHint: string | null
+    webhookSecretSet: boolean
+    signingSecretSet: boolean
+  }
+  orangeMoney: {
+    configured: boolean
+    demoMode: boolean
+    enabled: boolean
+    apiKeyHint: string | null
+    siteIdHint: string | null
+  }
+  webhookUrls: {
+    wave: string
+    cinetpay: string
+  }
+}
+
+export type OrgPaymentProvidersUpdateBody = {
+  waveApiKey?: string | null
+  waveWebhookSecret?: string | null
+  waveSigningSecret?: string | null
+  waveDemoMode?: boolean
+  cinetpayApiKey?: string | null
+  cinetpaySiteId?: string | null
+  cinetpayDemoMode?: boolean
+}
+
+export async function fetchOrgPaymentProviders(
+  _licenseKey: string,
+): Promise<OrgPaymentProvidersStatus> {
+  const res = await fetch(apiUrl('/billing/payment-providers'), {
+    headers: buildOrgAuthHeaders(),
+  })
+  return parseJson(res)
+}
+
+export async function saveOrgPaymentProviders(
+  _licenseKey: string,
+  body: OrgPaymentProvidersUpdateBody,
+): Promise<OrgPaymentProvidersStatus> {
+  const res = await fetch(apiUrl('/billing/payment-providers'), {
+    method: 'PUT',
+    headers: authHeaders(),
+    body: JSON.stringify(body),
+  })
+  return parseJson(res)
 }

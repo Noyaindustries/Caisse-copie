@@ -57,14 +57,83 @@ model Organization {
   billingProvider       String?
   billingPhone          String?
   smsRemindersEnabled   Boolean                   @default(true)
+  /** NIF / identifiant fiscal (FNE Côte d’Ivoire). */
+  taxId                 String?
+  fiscalRegime          String?                   @default("REEL")
+  fneEnabled            Boolean                   @default(false)
   createdAt             DateTime                  @default(now())
   updatedAt             DateTime                  @updatedAt
   storefrontMenu        Json?
   storefrontPublishedAt DateTime?
+  /** Clés paiement commerçant (boutique) — distinctes de la config plateforme. */
+  waveApiKey            String?
+  waveWebhookSecret     String?
+  waveSigningSecret     String?
+  waveDemoMode          Boolean                   @default(false)
+  cinetpayApiKey        String?
+  cinetpaySiteId        String?
+  cinetpayDemoMode      Boolean                   @default(false)
   mobilePayments        MobileMoneyPayment[]
   reminderLogs          SubscriptionReminderLog[]
   storefrontOrders      StorefrontOrder[]
   syncBatches           SyncBatch[]
+  sessions              OrgSession[]
+  staffMembers          StaffMember[]
+  integration           OrgIntegration?
+  auditLogs             AuditLog[]
+}
+
+model OrgSession {
+  id             String       @id @default(auto()) @map("_id") @db.ObjectId
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  organizationId String       @db.ObjectId
+  tokenHash      String       @unique
+  expiresAt      DateTime
+  revokedAt      DateTime?
+  createdAt      DateTime     @default(now())
+
+  @@index([organizationId, expiresAt])
+}
+
+model StaffMember {
+  id             String       @id @default(auto()) @map("_id") @db.ObjectId
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  organizationId String       @db.ObjectId
+  profileId      String
+  displayName    String
+  initials       String
+  role           String
+  storeId        String?
+  pinHash        String
+  passwordHash   String?
+  active         Boolean      @default(true)
+  revokedAt      DateTime?
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  @@unique([organizationId, profileId])
+  @@index([organizationId, active])
+}
+
+model OrgIntegration {
+  id             String       @id @default(auto()) @map("_id") @db.ObjectId
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  organizationId String       @unique @db.ObjectId
+  config         Json         @default("{}")
+  updatedAt      DateTime     @updatedAt
+  createdAt      DateTime     @default(now())
+}
+
+model AuditLog {
+  id             String        @id @default(auto()) @map("_id") @db.ObjectId
+  organization   Organization? @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  organizationId String?       @db.ObjectId
+  action         String
+  actor          String?
+  metadata       Json?
+  createdAt      DateTime      @default(now())
+
+  @@index([organizationId, createdAt])
 }
 
 model StorefrontOrder {
@@ -114,4 +183,20 @@ model MobileMoneyPayment {
   createdAt      DateTime     @default(now())
   updatedAt      DateTime     @updatedAt
   paidAt         DateTime?
+}
+
+/** Config globale Wave / CinetPay (Orange Money) — editable via /admin. */
+model PlatformPaymentConfig {
+  id                 String   @id @default(auto()) @map("_id") @db.ObjectId
+  /** Singleton : toujours "default". */
+  key                String   @unique @default("default")
+  waveApiKey         String?
+  waveWebhookSecret  String?
+  waveSigningSecret  String?
+  waveDemoMode       Boolean  @default(false)
+  cinetpayApiKey     String?
+  cinetpaySiteId     String?
+  cinetpayDemoMode   Boolean  @default(false)
+  updatedAt          DateTime @updatedAt
+  createdAt          DateTime @default(now())
 }

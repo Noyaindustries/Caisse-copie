@@ -117,7 +117,7 @@ export function PersonnelView({ currentProfileId }: Props) {
 
   const activeCount = useMemo(() => countActiveStaffProfiles(), [profiles])
   const totalByRole = useMemo(() => {
-    const rows = { caissier: 0, gerant: 0, admin: 0 }
+    const rows = { caissier: 0, gerant: 0, admin: 0, cuisinier: 0 }
     for (const p of profiles) {
       if (p.active === false) continue
       rows[p.role] += 1
@@ -436,6 +436,7 @@ export function PersonnelView({ currentProfileId }: Props) {
                 disabled={atStaffLimit}
               >
                 <option value="caissier">Caissier</option>
+                <option value="cuisinier">Cuisinier</option>
                 <option value="gerant">Gérant</option>
                 <option value="admin">Administrateur</option>
               </Select>
@@ -626,6 +627,7 @@ export function PersonnelView({ currentProfileId }: Props) {
                         onChange={(e) => setEditRole(e.target.value as UserRole)}
                       >
                         <option value="caissier">Caissier</option>
+                        <option value="cuisinier">Cuisinier</option>
                         <option value="gerant">Gérant</option>
                         <option value="admin">Administrateur</option>
                       </Select>
@@ -672,7 +674,9 @@ export function PersonnelView({ currentProfileId }: Props) {
                         ? 'Pilotage complet : personnel, intégrations, création de magasins, tous plafonds.'
                         : p.role === 'gerant'
                           ? 'Magasin au quotidien : catalogue, prix, stocks, transferts, clôture, analytique.'
-                          : 'Vente et consultation : caisse, catalogue lecture, rapport du jour ; remises limitées.'}
+                          : p.role === 'cuisinier'
+                            ? 'Espace cuisine : tickets KDS, préparation, stocks d’ingrédients et pointage.'
+                            : 'Vente et consultation : caisse, catalogue lecture, rapport du jour ; remises limitées.'}
                     </p>
                     {custom ? (
                       <div className="flex flex-wrap gap-2">

@@ -1,6 +1,10 @@
 import { randomBytes } from 'node:crypto'
 import type { MobileMoneyChannelId } from './mobileMoneyChannels.js'
 import { channelById, splitCiPhone } from './mobileMoneyChannels.js'
+import {
+  platformPaymentCreds,
+  type PaymentProviderCreds,
+} from './orgPaymentCredentials.js'
 import { waveEnabled } from './wave.js'
 
 const CHECKOUT_URL = 'https://api-checkout.cinetpay.com/v2/payment'
@@ -20,19 +24,30 @@ type CinetpayResponse<T> = {
   data?: T
 }
 
-export function cinetpayConfigured(): boolean {
-  return Boolean(
-    process.env.CINETPAY_API_KEY?.trim() && process.env.CINETPAY_SITE_ID?.trim(),
+function defaultCreds(): PaymentProviderCreds {
+  return platformPaymentCreds()
+}
+
+export function cinetpayConfigured(
+  creds: PaymentProviderCreds = defaultCreds(),
+): boolean {
+  return Boolean(creds.cinetpayApiKey && creds.cinetpaySiteId)
+}
+
+export function cinetpayDemoMode(
+  creds: PaymentProviderCreds = defaultCreds(),
+): boolean {
+  return creds.cinetpayDemoMode
+}
+
+export function mobileMoneyEnabled(
+  creds: PaymentProviderCreds = defaultCreds(),
+): boolean {
+  return (
+    cinetpayConfigured(creds) ||
+    cinetpayDemoMode(creds) ||
+    waveEnabled(creds)
   )
-}
-
-export function cinetpayDemoMode(): boolean {
-  if (process.env.NODE_ENV === 'production') return false
-  return process.env.CINETPAY_DEMO_MODE === 'true' || process.env.CINETPAY_DEMO_MODE === '1'
-}
-
-export function mobileMoneyEnabled(): boolean {
-  return cinetpayConfigured() || cinetpayDemoMode() || waveEnabled()
 }
 
 export function generateTransactionId(): string {
@@ -40,15 +55,23 @@ export function generateTransactionId(): string {
   return `CC${Date.now()}${suffix}`.slice(0, 30)
 }
 
-function apiKey(): string {
-  const key = process.env.CINETPAY_API_KEY?.trim()
-  if (!key) throw new Error('CINETPAY_API_KEY manquant')
+function requireApiKey(creds: PaymentProviderCreds): string {
+  const key = creds.cinetpayApiKey
+  if (!key) {
+    throw new Error(
+      'Clé CinetPay manquante. Configurez Orange Money pour cet abonnement (Intégrations).',
+    )
+  }
   return key
 }
 
-function siteId(): string {
-  const id = process.env.CINETPAY_SITE_ID?.trim()
-  if (!id) throw new Error('CINETPAY_SITE_ID manquant')
+function requireSiteId(creds: PaymentProviderCreds): string {
+  const id = creds.cinetpaySiteId
+  if (!id) {
+    throw new Error(
+      'Site ID CinetPay manquant. Configurez Orange Money pour cet abonnement (Intégrations).',
+    )
+  }
   return id
 }
 
@@ -62,19 +85,22 @@ async function postJson<T>(url: string, body: Record<string, unknown>): Promise<
   return data
 }
 
-export async function initCinetpayPayment(input: {
-  transactionId: string
-  amountFcfa: number
-  description: string
-  customerName: string
-  customerEmail: string
-  customerPhoneE164: string
-  channelId: MobileMoneyChannelId
-  notifyUrl: string
-  returnUrl: string
-  metadata: Record<string, string>
-}): Promise<CinetpayInitResult> {
-  if (cinetpayDemoMode() && !cinetpayConfigured()) {
+export async function initCinetpayPayment(
+  input: {
+    transactionId: string
+    amountFcfa: number
+    description: string
+    customerName: string
+    customerEmail: string
+    customerPhoneE164: string
+    channelId: MobileMoneyChannelId
+    notifyUrl: string
+    returnUrl: string
+    metadata: Record<string, string>
+  },
+  creds: PaymentProviderCreds = defaultCreds(),
+): Promise<CinetpayInitResult> {
+  if (cinetpayDemoMode(creds) && !cinetpayConfigured(creds)) {
     const base = process.env.APP_URL?.trim() || 'http://localhost:4000'
     return {
       transactionId: input.transactionId,
@@ -91,8 +117,8 @@ export async function initCinetpayPayment(input: {
   const customerSurname = nameParts.slice(1).join(' ') || 'CaisseCI'
 
   const payload: Record<string, unknown> = {
-    apikey: apiKey(),
-    site_id: siteId(),
+    apikey: requireApiKey(creds),
+    site_id: requireSiteId(creds),
     transaction_id: input.transactionId,
     amount: input.amountFcfa,
     currency: 'XOF',
@@ -113,10 +139,9 @@ export async function initCinetpayPayment(input: {
     metadata: JSON.stringify(input.metadata),
   }
 
-  const response = await postJson<CinetpayResponse<{ payment_token?: string; payment_url?: string }>>(
-    CHECKOUT_URL,
-    payload,
-  )
+  const response = await postJson<
+    CinetpayResponse<{ payment_token?: string; payment_url?: string }>
+  >(CHECKOUT_URL, payload)
 
   if (response.code !== '201' || !response.data?.payment_url) {
     throw new Error(
@@ -142,8 +167,9 @@ export type CinetpayCheckResult = {
 
 export async function checkCinetpayPayment(
   transactionId: string,
+  creds: PaymentProviderCreds = defaultCreds(),
 ): Promise<CinetpayCheckResult> {
-  if (cinetpayDemoMode() && !cinetpayConfigured()) {
+  if (cinetpayDemoMode(creds) && !cinetpayConfigured(creds)) {
     return {
       status: 'PENDING',
       amount: null,
@@ -161,8 +187,8 @@ export async function checkCinetpayPayment(
       payment_method?: string
     }>
   >(CHECK_URL, {
-    apikey: apiKey(),
-    site_id: siteId(),
+    apikey: requireApiKey(creds),
+    site_id: requireSiteId(creds),
     transaction_id: transactionId,
   })
 

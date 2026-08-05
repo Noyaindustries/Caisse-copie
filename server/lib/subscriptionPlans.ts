@@ -73,6 +73,24 @@ export function planAtLeast(current: PlanId, required: PlanId): boolean {
   return PLAN_ORDER.indexOf(current) >= PLAN_ORDER.indexOf(required)
 }
 
+export function parsePlanId(value: string | undefined): PlanId {
+  if (value === 'pro' || value === 'business') return value
+  return 'starter'
+}
+
+export function parseStatus(value: string | undefined): SubscriptionStatus {
+  if (
+    value === 'active' ||
+    value === 'trialing' ||
+    value === 'past_due' ||
+    value === 'canceled' ||
+    value === 'expired'
+  ) {
+    return value
+  }
+  return 'expired'
+}
+
 export function isSubscriptionUsable(
   status: SubscriptionStatus,
   periodEnd: Date | null,

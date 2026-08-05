@@ -22,6 +22,9 @@ import {
   setKitchenStationDemo,
   setEcomModuleDemo,
 } from '../lib/integrationsConfig'
+import { OrgPaymentProvidersPanel } from '../components/OrgPaymentProvidersPanel'
+import { apiUrl } from '../lib/apiUrl'
+import { getOrganizationCredentials } from '../lib/subscription/store'
 import { Badge } from '../ui/Badge'
 import { Button } from '../ui/Button'
 import { Card, CardContent } from '../ui/Card'
@@ -41,7 +44,7 @@ import {
   IconFile,
 } from '../ui/icons'
 
-type TabId = 'marketplace' | 'api' | 'mobile'
+type TabId = 'paiements' | 'marketplace' | 'api' | 'mobile'
 
 const PARTNERS = [
   {
@@ -81,7 +84,8 @@ function IconPlug({ className }: { className?: string }) {
 
 export function IntegrationsView() {
   const toast = useToast()
-  const [tab, setTab] = useState<TabId>('marketplace')
+  const [tab, setTab] = useState<TabId>('paiements')
+  const licenseKey = getOrganizationCredentials()?.licenseKey ?? null
   const [apiKey] = useState(() => getOrCreateDemoApiKey())
   const [comptaOn, setComptaOn] = useState(() => isComptaModuleDemoOn())
   const [ecomOn, setEcomOn] = useState(() => isEcomModuleDemoOn())
@@ -106,11 +110,7 @@ export function IntegrationsView() {
     getDeviceConnectivityDemo(),
   )
 
-  const webhookUrl = useMemo(
-    () =>
-      `${typeof window !== 'undefined' ? window.location.origin : ''}/api/webhooks/caisseci`,
-    [],
-  )
+  const webhookUrl = useMemo(() => apiUrl('/webhooks/caisseci'), [])
 
   const copyKey = useCallback(async () => {
     try {
@@ -123,6 +123,7 @@ export function IntegrationsView() {
 
   const tabs = useMemo(
     () => [
+      { id: 'paiements' as const, label: 'Wave & Orange' },
       { id: 'marketplace' as const, label: 'Marketplace' },
       { id: 'api' as const, label: 'API partenaires' },
       { id: 'mobile' as const, label: 'App mobile' },
@@ -135,10 +136,28 @@ export function IntegrationsView() {
       <PageHeader
         eyebrow="Écosystème"
         title="Intégrations"
-        subtitle="Modules métiers, exposition API et application mobile gérant"
+        subtitle="Paiements boutique, modules métiers, API et application mobile"
       />
 
       <Tabs items={tabs} active={tab} onChange={setTab} />
+
+      {tab === 'paiements' ? (
+        licenseKey ? (
+          <OrgPaymentProvidersPanel licenseKey={licenseKey} />
+        ) : (
+          <Card>
+            <CardContent className="space-y-2 py-8 text-center">
+              <p className="text-[14px] font-semibold text-zinc-900">
+                Abonnement requis
+              </p>
+              <p className="text-[13px] text-zinc-500">
+                Connectez votre licence (menu Abonnement) pour configurer les clés
+                Wave et Orange Money de votre boutique.
+              </p>
+            </CardContent>
+          </Card>
+        )
+      ) : null}
 
       {tab === 'marketplace' ? (
         <div className="grid gap-3 lg:grid-cols-2">

@@ -55,16 +55,19 @@ async function parseJson<T>(res: Response): Promise<T> {
   return parseApiResponse<T>(res)
 }
 
-export async function fetchPlatformAdminStatus(): Promise<{ configured: boolean }> {
+export async function fetchPlatformAdminStatus(): Promise<{
+  configured: boolean
+  mfaRequired?: boolean
+}> {
   const res = await fetch(apiUrl('/platform-admin/status'))
   return parseJson(res)
 }
 
-export async function loginPlatformAdmin(secret: string): Promise<void> {
+export async function loginPlatformAdmin(secret: string, totpCode?: string): Promise<void> {
   const res = await fetch(apiUrl('/platform-admin/auth'), {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ secret }),
+    body: JSON.stringify({ secret, totpCode: totpCode?.trim() || undefined }),
   })
   const data = await parseJson<{ ok: boolean; error?: string }>(res)
   if (!data.ok) throw new Error(data.error ?? 'Connexion refusée')
@@ -141,6 +144,58 @@ export async function runPlatformReminders(organizationId?: string): Promise<{
     method: 'POST',
     headers: adminHeaders(),
     body: JSON.stringify(organizationId ? { organizationId } : {}),
+  })
+  return parseJson(res)
+}
+
+export type PaymentProvidersStatus = {
+  wave: {
+    configured: boolean
+    demoMode: boolean
+    enabled: boolean
+    apiKeyHint: string | null
+    webhookSecretSet: boolean
+    signingSecretSet: boolean
+    source: 'db' | 'env' | 'none' | 'mixed'
+  }
+  orangeMoney: {
+    configured: boolean
+    demoMode: boolean
+    enabled: boolean
+    apiKeyHint: string | null
+    siteIdHint: string | null
+    source: 'db' | 'env' | 'none' | 'mixed'
+  }
+  webhookUrls: {
+    wave: string
+    cinetpay: string
+  }
+}
+
+export type PaymentProvidersUpdateBody = {
+  waveApiKey?: string | null
+  waveWebhookSecret?: string | null
+  waveSigningSecret?: string | null
+  waveDemoMode?: boolean
+  cinetpayApiKey?: string | null
+  cinetpaySiteId?: string | null
+  cinetpayDemoMode?: boolean
+}
+
+export async function fetchPaymentProviders(): Promise<PaymentProvidersStatus> {
+  const res = await fetch(apiUrl('/platform-admin/payment-providers'), {
+    headers: adminHeaders(),
+  })
+  return parseJson(res)
+}
+
+export async function savePaymentProviders(
+  body: PaymentProvidersUpdateBody,
+): Promise<PaymentProvidersStatus> {
+  const res = await fetch(apiUrl('/platform-admin/payment-providers'), {
+    method: 'PUT',
+    headers: adminHeaders(),
+    body: JSON.stringify(body),
   })
   return parseJson(res)
 }

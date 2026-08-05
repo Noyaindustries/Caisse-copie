@@ -22,6 +22,7 @@ export type SubscriptionSnapshot = {
   name: string
   email: string
   licenseKey: string
+  sessionToken?: string
   storeCode: string | null
   planId: PlanId
   plan: PlanDefinition
@@ -67,6 +68,7 @@ export type MobileMoneyChannel = {
 
 export type OrganizationCredentials = {
   licenseKey: string
+  sessionToken?: string
   organizationId: string
   name: string
   storeCode?: string | null

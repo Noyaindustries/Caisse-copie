@@ -11,6 +11,7 @@ import {
 import type { NavViewId } from '../navigation'
 import { ROUTES } from '../lib/siteRoutes'
 import { refreshSubscription, verifyMobileMoneyPayment } from '../lib/subscription/api'
+import { pullCloudData } from '../lib/cloudPull'
 import { planAtLeast, viewAllowedByPlan } from '../lib/subscription/plans'
 import {
   clearOrganizationCredentials,
@@ -55,18 +56,15 @@ export function SubscriptionProvider({
   const applySnapshot = useCallback((snap: SubscriptionSnapshot) => {
     setSubscription(snap)
     setCachedSubscription(snap)
-    setOrganization({
+    const creds = {
       licenseKey: snap.licenseKey,
+      sessionToken: snap.sessionToken,
       organizationId: snap.organizationId,
       name: snap.name,
       storeCode: snap.storeCode,
-    })
-    setOrganizationCredentials({
-      licenseKey: snap.licenseKey,
-      organizationId: snap.organizationId,
-      name: snap.name,
-      storeCode: snap.storeCode,
-    })
+    }
+    setOrganization(creds)
+    setOrganizationCredentials(creds)
   }, [])
 
   const refresh = useCallback(async () => {
@@ -89,6 +87,7 @@ export function SubscriptionProvider({
         try {
           const snap = await refreshSubscription(creds.licenseKey)
           if (!cancelled) applySnapshot(snap)
+          if (!cancelled) void pullCloudData().catch(() => undefined)
         } catch {
           const cached = getCachedSubscription()
           if (!cancelled && cached) setSubscription(cached)
@@ -115,12 +114,15 @@ export function SubscriptionProvider({
     const params = new URLSearchParams(window.location.search)
     if (params.get('subscription') !== 'success') return
     const tx = params.get('tx')?.trim()
-    if (!tx) return
 
     void (async () => {
       try {
-        const result = await verifyMobileMoneyPayment(creds.licenseKey, tx)
-        if (result.status === 'accepted') {
+        if (tx) {
+          const result = await verifyMobileMoneyPayment(creds.licenseKey, tx)
+          if (result.status === 'accepted') {
+            await refresh()
+          }
+        } else {
           await refresh()
         }
       } finally {

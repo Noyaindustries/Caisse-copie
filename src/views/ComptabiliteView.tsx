@@ -1,9 +1,12 @@
 import { useLiveQuery } from 'dexie-react-hooks'
-import { useCallback, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { db } from '../db/db'
 import type { Sale } from '../db/types'
 import { downloadTextFile, toCsvSemicolon } from '../lib/analyticsExport'
+import { fetchFiscalSettings, updateFiscalSettings } from '../lib/fiscal/api'
+import { buildFecCsv, buildFneExport, downloadFneJson } from '../lib/fiscal/ciExport'
 import { formatFCFA } from '../lib/money'
+import { useSubscription } from '../context/SubscriptionContext'
 import { salePaymentAmounts } from '../lib/paymentDisplay'
 import { saleNetTTC } from '../lib/refundMath'
 import { saleLocalYmd } from '../lib/salesStats'
@@ -50,9 +53,24 @@ function endMsFromYmd(ymd: string): number | null {
 
 export function ComptabiliteView({ canManageCompta }: Props) {
   const toast = useToast()
+  const { organization } = useSubscription()
   const [fromYmd, setFromYmd] = useState(() => monthStartYmdNow())
   const [toYmd, setToYmd] = useState(() => localYmdNow())
   const [storeFilter, setStoreFilter] = useState<string>('all')
+  const [taxId, setTaxId] = useState('')
+  const [fiscalRegime, setFiscalRegime] = useState('REEL')
+
+  useEffect(() => {
+    let cancelled = false
+    void fetchFiscalSettings().then((settings) => {
+      if (cancelled || !settings) return
+      setTaxId(settings.taxId ?? '')
+      setFiscalRegime(settings.fiscalRegime || 'REEL')
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [organization?.organizationId])
 
   const stores = useLiveQuery(() => db.stores.orderBy('sortOrder').toArray(), [], []) ?? []
   const sales = useLiveQuery(() => db.sales.toArray(), [], []) ?? []
@@ -149,6 +167,39 @@ export function ComptabiliteView({ canManageCompta }: Props) {
     toast.success('Export comptable généré')
   }, [fromYmd, toYmd, storeFilter, stores, metrics.cash, metrics.bank, metrics.ht, metrics.tva, dailyRows, toast])
 
+  const exportFec = useCallback(() => {
+    const csv = buildFecCsv({ sales: filteredSales, fromYmd, toYmd })
+    downloadTextFile(`fec-${fromYmd}-${toYmd}.csv`, csv)
+    toast.success('Export FEC généré')
+  }, [filteredSales, fromYmd, toYmd, toast])
+
+  const exportFne = useCallback(() => {
+    const doc = buildFneExport({
+      sales: filteredSales,
+      fromYmd,
+      toYmd,
+      issuerName: organization?.name ?? 'Commerçant',
+      nif: taxId.trim() || 'NIF-A-RENSEIGNER',
+      regime: fiscalRegime,
+    })
+    downloadFneJson(doc, `fne-${fromYmd}-${toYmd}.json`)
+    toast.success('Export FNE (JSON) généré')
+  }, [filteredSales, fromYmd, toYmd, organization?.name, taxId, fiscalRegime, toast])
+
+  const saveFiscalSettings = useCallback(async () => {
+    try {
+      const updated = await updateFiscalSettings({
+        taxId: taxId.trim() || null,
+        fiscalRegime,
+      })
+      setTaxId(updated.taxId ?? '')
+      setFiscalRegime(updated.fiscalRegime || 'REEL')
+      toast.success('Paramètres fiscaux enregistrés')
+    } catch {
+      toast.error('Impossible d’enregistrer les paramètres fiscaux')
+    }
+  }, [taxId, fiscalRegime, toast])
+
   return (
     <div className="space-y-4 pb-6 sm:space-y-5">
       <PageHeader
@@ -156,14 +207,22 @@ export function ComptabiliteView({ canManageCompta }: Props) {
         title="Comptabilité"
         subtitle="Ventilation HT/TVA, synthèse des écritures et export comptable"
         actions={
-          <Button
-            variant="secondary"
-            iconLeft={<IconDownload />}
-            onClick={exportAccountingCsv}
-            className="w-full sm:w-auto"
-          >
-            Export comptable
-          </Button>
+          <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row">
+            <Button
+              variant="secondary"
+              iconLeft={<IconDownload />}
+              onClick={exportAccountingCsv}
+              className="w-full sm:w-auto"
+            >
+              Export comptable
+            </Button>
+            <Button variant="secondary" onClick={exportFec} className="w-full sm:w-auto">
+              Export FEC
+            </Button>
+            <Button variant="secondary" onClick={exportFne} className="w-full sm:w-auto">
+              Export FNE
+            </Button>
+          </div>
         }
       />
 
@@ -200,6 +259,29 @@ export function ComptabiliteView({ canManageCompta }: Props) {
                 ))}
               </Select>
             </Field>
+            {canManageCompta ? (
+              <>
+                <Field label="NIF (numéro d’identification fiscale)">
+                  <Input
+                    value={taxId}
+                    onChange={(e) => setTaxId(e.target.value)}
+                    placeholder="Ex. 1234567890"
+                  />
+                </Field>
+                <Field label="Régime fiscal">
+                  <Select value={fiscalRegime} onChange={(e) => setFiscalRegime(e.target.value)}>
+                    <option value="REEL">Réel</option>
+                    <option value="SIMPLIFIE">Simplifié</option>
+                    <option value="FORFAIT">Forfait</option>
+                  </Select>
+                </Field>
+                <div className="flex items-end md:col-span-3">
+                  <Button variant="secondary" onClick={() => void saveFiscalSettings()}>
+                    Enregistrer paramètres fiscaux
+                  </Button>
+                </div>
+              </>
+            ) : null}
           </div>
         </CardContent>
       </Card>

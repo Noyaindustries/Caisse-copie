@@ -1,7 +1,11 @@
 import { db } from '../db/db'
 import type { SyncQueueItem } from '../db/types'
+import { cloudSyncPushUrl, isCloudApiConfigured } from './apiUrl'
+import { buildOrgAuthHeaders } from './subscription/authHeaders'
 import { getOrganizationCredentials } from './subscription/store'
 import { setLastSyncTimestamp } from './syncMeta'
+import { pullCloudData } from './cloudPull'
+import { getOrCreateTerminalId } from './session'
 
 export type SyncResult = {
   processed: number
@@ -47,6 +51,7 @@ export async function enqueueStockSync(payload: {
     kind: 'stock',
     payload: JSON.stringify({
       type: 'stock_update',
+      terminalId: getOrCreateTerminalId(),
       ...payload,
       at: Date.now(),
     }),
@@ -55,7 +60,7 @@ export async function enqueueStockSync(payload: {
 }
 
 /**
- * Synchronise la file vers le cloud si `VITE_CLOUD_SYNC_URL` est défini et que le réseau répond.
+ * Synchronise la file vers le cloud via `POST /api/caisseci/sync` lorsque l’API est joignable.
  * La file n'est supprimée qu'après accusé de réception du serveur.
  */
 export async function flushSyncQueue(): Promise<SyncResult> {
@@ -69,12 +74,12 @@ export async function flushSyncQueue(): Promise<SyncResult> {
     .map((p) => parseSaleId(p.payload))
     .filter(Boolean) as string[]
 
-  const cloudUrl = import.meta.env.VITE_CLOUD_SYNC_URL?.trim()
+  const cloudUrl = cloudSyncPushUrl()
   const credentials = getOrganizationCredentials()
 
   const runtimeOnline = typeof navigator === 'undefined' ? true : navigator.onLine
 
-  if (cloudUrl && runtimeOnline && credentials?.licenseKey) {
+  if (isCloudApiConfigured() && runtimeOnline && credentials?.licenseKey) {
     try {
       const body = JSON.stringify({
         batchId: crypto.randomUUID(),
@@ -88,9 +93,11 @@ export async function flushSyncQueue(): Promise<SyncResult> {
       const res = await fetch(cloudUrl, {
         method: 'POST',
         headers: {
-          'Content-Type': 'application/json',
-          Accept: 'application/json',
-          'x-license-key': credentials.licenseKey,
+          ...buildOrgAuthHeaders({
+            'Content-Type': 'application/json',
+            Accept: 'application/json',
+            'x-terminal-id': getOrCreateTerminalId(),
+          }),
         },
         body,
         signal: ctrl.signal,
@@ -109,6 +116,7 @@ export async function flushSyncQueue(): Promise<SyncResult> {
         await db.sales.update(sid, { synced: true })
       }
       setLastSyncTimestamp(Date.now())
+      void pullCloudData().catch(() => undefined)
       return { processed: pending.length, mode: 'cloud' }
     } catch (e) {
       const msg =
@@ -121,7 +129,7 @@ export async function flushSyncQueue(): Promise<SyncResult> {
     }
   }
 
-  const reason = !cloudUrl
+  const reason = !isCloudApiConfigured()
     ? 'Synchronisation cloud non configurée : données conservées localement.'
     : !credentials?.licenseKey
       ? 'Licence absente : données conservées localement.'

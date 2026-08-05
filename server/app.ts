@@ -1,4 +1,8 @@
 import 'dotenv/config'
+import { initServerSentry } from './lib/sentry.js'
+
+initServerSentry()
+
 import cors from 'cors'
 import express from 'express'
 import { rateLimit } from 'express-rate-limit'
@@ -14,6 +18,9 @@ import {
 import { platformAdminRouter } from './routes/platformAdmin.js'
 import { uploadsRouter } from './routes/uploads.js'
 import { syncRouter } from './routes/sync.js'
+import { staffRouter } from './routes/staff.js'
+import { orgRouter } from './routes/org.js'
+import { fiscalRouter } from './routes/fiscal.js'
 import { webhookRouter } from './routes/webhooks.js'
 
 export const app = express()
@@ -50,7 +57,13 @@ app.use(
 
 const apiLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  limit: 300,
+  limit: 600,
+  standardHeaders: 'draft-8',
+  legacyHeaders: false,
+})
+const syncLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  limit: 120,
   standardHeaders: 'draft-8',
   legacyHeaders: false,
 })
@@ -68,11 +81,11 @@ app.use(
     '/api/billing/login',
     '/api/billing/attach',
     '/api/platform-admin/auth',
-    '/api/caisseci/sync',
     '/api/webhooks',
   ],
   sensitiveLimiter,
 )
+app.use(['/api/caisseci/sync', '/api/caisseci/sync/pull'], syncLimiter)
 app.post(
   '/api/billing/webhook',
   express.raw({ type: 'application/json' }),
@@ -92,11 +105,32 @@ app.post(
 app.use(express.json({ limit: '2mb' }))
 app.use(morgan('dev'))
 
-app.get('/health', (_req, res) => {
-  res.status(200).json({ ok: true })
+import { prisma } from './lib/prisma.js'
+
+const startedAt = Date.now()
+const APP_VERSION = process.env.npm_package_version ?? '1.0.0'
+
+app.get('/health', async (_req, res) => {
+  let dbOk = false
+  try {
+    await prisma.organization.count({ take: 1 })
+    dbOk = true
+  } catch {
+    dbOk = false
+  }
+  const ok = dbOk
+  res.status(ok ? 200 : 503).json({
+    ok,
+    version: APP_VERSION,
+    uptimeSec: Math.floor((Date.now() - startedAt) / 1000),
+    db: dbOk ? 'up' : 'down',
+  })
 })
 
 app.use('/api', syncRouter)
+app.use('/api', staffRouter)
+app.use('/api', orgRouter)
+app.use('/api', fiscalRouter)
 app.use('/api', webhookRouter)
 app.use('/api', billingRouter)
 app.use('/api', storefrontRouter)

@@ -15,6 +15,7 @@ import {
 } from '../lib/platformAdmin/api'
 import { getPlatformAdminSecret } from '../lib/platformAdmin/session'
 import { adminThemeClasses, useAdminTheme, type AdminThemeClasses } from '../lib/platformAdmin/theme'
+import { PaymentProvidersAdminPanel } from '../components/platformAdmin/PaymentProvidersAdminPanel'
 import type { PlanId, SubscriptionStatus } from '../lib/subscription/types'
 import { Badge, type BadgeTone } from '../ui/Badge'
 import { Button } from '../ui/Button'
@@ -26,10 +27,13 @@ import {
   IconDash,
   IconLogout,
   IconMenu,
+  IconMobile,
   IconSync,
   IconShield,
   IconStore,
 } from '../ui/icons'
+
+type AdminSection = 'organizations' | 'payments'
 
 const STATUS_OPTIONS: SubscriptionStatus[] = [
   'trialing',
@@ -313,8 +317,10 @@ export function PlatformAdminPage({ onExit }: Props) {
   const inputClass = theme.input
 
   const [configured, setConfigured] = useState<boolean | null>(null)
+  const [mfaRequired, setMfaRequired] = useState(false)
   const [authenticated, setAuthenticated] = useState(() => Boolean(getPlatformAdminSecret()))
   const [password, setPassword] = useState('')
+  const [totpCode, setTotpCode] = useState('')
   const [loginError, setLoginError] = useState<string | null>(null)
   const [loginBusy, setLoginBusy] = useState(false)
   const [sidebarOpen, setSidebarOpen] = useState(false)
@@ -332,10 +338,14 @@ export function PlatformAdminPage({ onExit }: Props) {
   const [extendDays, setExtendDays] = useState('14')
   const [editPlan, setEditPlan] = useState<PlanId>('starter')
   const [editStatus, setEditStatus] = useState<SubscriptionStatus>('trialing')
+  const [section, setSection] = useState<AdminSection>('organizations')
 
   useEffect(() => {
     void fetchPlatformAdminStatus()
-      .then((s) => setConfigured(s.configured))
+      .then((s) => {
+        setConfigured(s.configured)
+        setMfaRequired(Boolean(s.mfaRequired))
+      })
       .catch(() => setConfigured(false))
   }, [])
 
@@ -386,9 +396,10 @@ export function PlatformAdminPage({ onExit }: Props) {
     setLoginBusy(true)
     setLoginError(null)
     try {
-      await loginPlatformAdmin(password)
+      await loginPlatformAdmin(password, totpCode)
       setAuthenticated(true)
       setPassword('')
+      setTotpCode('')
     } catch (error) {
       setLoginError(error instanceof Error ? error.message : 'Connexion refusée')
     } finally {
@@ -487,6 +498,20 @@ export function PlatformAdminPage({ onExit }: Props) {
                   placeholder="Secret défini dans .env"
                 />
               </label>
+              {mfaRequired ? (
+                <label className="block text-left text-sm font-medium">
+                  Code MFA (6 chiffres)
+                  <input
+                    type="text"
+                    inputMode="numeric"
+                    autoComplete="one-time-code"
+                    value={totpCode}
+                    onChange={(e) => setTotpCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                    className={cn(inputClass, 'mt-1.5 font-mono tracking-widest')}
+                    placeholder="000000"
+                  />
+                </label>
+              ) : null}
               {loginError ? (
                 <p
                   className="rounded-lg bg-rose-50 px-3 py-2 text-sm text-rose-700 dark:bg-rose-950/50 dark:text-rose-300"
@@ -495,7 +520,15 @@ export function PlatformAdminPage({ onExit }: Props) {
                   {loginError}
                 </p>
               ) : null}
-              <Button type="submit" className="w-full" disabled={loginBusy || !password.trim()}>
+              <Button
+                type="submit"
+                className="w-full"
+                disabled={
+                  loginBusy ||
+                  !password.trim() ||
+                  (mfaRequired && totpCode.length !== 6)
+                }
+              >
                 {loginBusy ? 'Connexion…' : 'Accéder à la console'}
               </Button>
               <Button type="button" variant="ghost" className="w-full" onClick={onExit}>
@@ -550,16 +583,36 @@ export function PlatformAdminPage({ onExit }: Props) {
           </p>
           <button
             type="button"
+            onClick={() => {
+              setSection('organizations')
+              setSidebarOpen(false)
+            }}
             className={cn(
-              'flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-sm font-medium transition',
-              theme.navActive,
+              'mb-1 flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-sm font-medium transition',
+              section === 'organizations' ? theme.navActive : theme.navIdle,
             )}
           >
             <IconDash className="h-4 w-4" />
             Organisations
           </button>
+          <button
+            type="button"
+            onClick={() => {
+              setSection('payments')
+              setSidebarOpen(false)
+            }}
+            className={cn(
+              'flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-sm font-medium transition',
+              section === 'payments' ? theme.navActive : theme.navIdle,
+            )}
+          >
+            <IconMobile className="h-4 w-4" />
+            Wave & Orange
+          </button>
         </div>
 
+        {section === 'organizations' ? (
+        <>
         <div>
           <p className={cn('mb-2 px-2 text-[10px] font-bold uppercase tracking-widest', theme.subtle)}>
             Filtres
@@ -636,6 +689,8 @@ export function PlatformAdminPage({ onExit }: Props) {
               </div>
             </div>
           </div>
+        ) : null}
+        </>
         ) : null}
       </nav>
 
@@ -724,24 +779,38 @@ export function PlatformAdminPage({ onExit }: Props) {
               <IconMenu className="h-5 w-5" />
             </button>
             <div>
-              <h1 className="text-sm font-bold sm:text-base">Abonnements plateforme</h1>
-              <p className={cn('text-xs', theme.muted)}>{orgs.length} organisation(s)</p>
+              <h1 className="text-sm font-bold sm:text-base">
+                {section === 'payments'
+                  ? 'Wave & Orange Money'
+                  : 'Abonnements plateforme'}
+              </h1>
+              <p className={cn('text-xs', theme.muted)}>
+                {section === 'payments'
+                  ? 'Clés API paiement'
+                  : `${orgs.length} organisation(s)`}
+              </p>
             </div>
           </div>
-          <Button
-            type="button"
-            variant="secondary"
-            size="sm"
-            className="hidden sm:inline-flex"
-            iconLeft={<IconSync className="h-3.5 w-3.5" />}
-            onClick={() => void reload()}
-          >
-            Actualiser
-          </Button>
+          {section === 'organizations' ? (
+            <Button
+              type="button"
+              variant="secondary"
+              size="sm"
+              className="hidden sm:inline-flex"
+              iconLeft={<IconSync className="h-3.5 w-3.5" />}
+              onClick={() => void reload()}
+            >
+              Actualiser
+            </Button>
+          ) : null}
         </header>
 
         <div className="flex min-h-0 flex-1">
           <main className="min-w-0 flex-1 overflow-y-auto p-4 sm:p-6">
+            {section === 'payments' ? (
+              <PaymentProvidersAdminPanel theme={theme} inputClass={inputClass} />
+            ) : (
+              <>
             {loadError ? (
               <p className="mb-4 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-800 dark:border-rose-900 dark:bg-rose-950/40 dark:text-rose-300">
                 {loadError}
@@ -861,8 +930,11 @@ export function PlatformAdminPage({ onExit }: Props) {
                 />
               </CardContent>
             </Card>
+              </>
+            )}
           </main>
 
+          {section === 'organizations' ? (
           <aside
             className={cn(
               'hidden w-[380px] shrink-0 overflow-y-auto border-l xl:block',
@@ -907,6 +979,7 @@ export function PlatformAdminPage({ onExit }: Props) {
               }}
             />
           </aside>
+          ) : null}
         </div>
       </div>
     </div>

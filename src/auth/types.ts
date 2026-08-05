@@ -1,5 +1,5 @@
-/** Rôles : administrateur, gérant (magasin), caissier. */
-export type UserRole = 'admin' | 'gerant' | 'caissier'
+/** Rôles : administrateur, gérant (magasin), caissier, cuisinier. */
+export type UserRole = 'admin' | 'gerant' | 'caissier' | 'cuisinier'
 
 /** Droits granulaires (fusionnés rôle + overrides profil). */
 export interface StaffPermissions {

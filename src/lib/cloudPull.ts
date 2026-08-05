@@ -1,0 +1,110 @@
+import { apiUrl, isCloudApiConfigured } from './apiUrl'
+import { mergeCloudDeltas } from './cloudMerge'
+import { parseApiResponse } from './parseApiResponse'
+import { buildOrgAuthHeaders } from './subscription/authHeaders'
+import { getLastSyncTimestamp, setLastSyncTimestamp } from './syncMeta'
+import { importStorefrontOrdersFromPull } from './storefront/syncInbox'
+import type { UserRole } from '../auth/types'
+import { getOrCreateTerminalId } from './session'
+
+export type CloudPullResult = {
+  ok: boolean
+  staffCount: number
+  ordersImported: number
+  salesImported: number
+  stockMerged: number
+  mergeConflicts: number
+  error?: string
+}
+
+type PullResponse = {
+  ok: boolean
+  pulledAt: number
+  staff: Array<{
+    id: string
+    displayName: string
+    initials: string
+    role: UserRole
+    storeId: string | null
+    active: boolean
+    updatedAt: number
+  }>
+  storefrontOrders: Array<{
+    id: string
+    status: string
+    payload: unknown
+    createdAt: number
+    updatedAt: number
+  }>
+  sales: Array<{ saleId: string; sale: Record<string, unknown>; terminalId?: string }>
+  stockUpdates: Array<{
+    productId: string
+    storeId: string
+    stock: number
+    lowStockThreshold?: number
+    terminalId?: string
+    updatedAt: number
+  }>
+  integrations: Record<string, unknown>
+}
+
+export async function pullCloudData(): Promise<CloudPullResult> {
+  if (!isCloudApiConfigured()) {
+    return emptyResult('Cloud non configuré.')
+  }
+
+  const since = getLastSyncTimestamp() ?? 0
+  try {
+    const res = await fetch(apiUrl(`/caisseci/sync/pull?since=${since}`), {
+      headers: buildOrgAuthHeaders({
+        Accept: 'application/json',
+        'x-terminal-id': getOrCreateTerminalId(),
+      }),
+    })
+    const data = await parseApiResponse<PullResponse>(res)
+    const staffCount = await applyStaffFromCloud(data.staff)
+    const ordersImported = await importStorefrontOrdersFromPull(data.storefrontOrders)
+    const merge = await mergeCloudDeltas({
+      sales: data.sales ?? [],
+      stockUpdates: data.stockUpdates ?? [],
+    })
+    await applyIntegrationsFromCloud(data.integrations)
+    setLastSyncTimestamp(data.pulledAt)
+    return {
+      ok: true,
+      staffCount,
+      ordersImported,
+      salesImported: merge.salesImported,
+      stockMerged: merge.stockMerged,
+      mergeConflicts: merge.conflicts,
+    }
+  } catch (err) {
+    return emptyResult(err instanceof Error ? err.message : 'Pull cloud échoué')
+  }
+}
+
+function emptyResult(error: string): CloudPullResult {
+  return {
+    ok: false,
+    staffCount: 0,
+    ordersImported: 0,
+    salesImported: 0,
+    stockMerged: 0,
+    mergeConflicts: 0,
+    error,
+  }
+}
+
+async function applyStaffFromCloud(
+  staff: PullResponse['staff'],
+): Promise<number> {
+  if (staff.length === 0) return 0
+  const { mergeStaffFromCloud } = await import('../auth/profiles')
+  return mergeStaffFromCloud(staff)
+}
+
+async function applyIntegrationsFromCloud(config: Record<string, unknown>): Promise<void> {
+  if (Object.keys(config).length === 0) return
+  const { applyIntegrationConfigFromCloud } = await import('./integrationsConfig')
+  applyIntegrationConfigFromCloud(config)
+}

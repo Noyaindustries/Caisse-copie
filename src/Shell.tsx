@@ -54,7 +54,7 @@ import { DEFAULT_VAT_RATE_PCT, formatFCFA, totalsFromLinesTTC } from './lib/mone
 import { productImageSrc } from './lib/productImage'
 import { appendAuditEvent } from './lib/auditLog'
 import { logCartCancellation } from './lib/refundApply'
-import { SESSION_ID } from './lib/session'
+import { SESSION_ID, getOrCreateTerminalId } from './lib/session'
 import {
   cleanupStaleTerminalNodes,
   touchTerminalSyncTimestamp,
@@ -72,6 +72,7 @@ import {
   getLastSyncTimestamp,
 } from './lib/syncMeta'
 import { saleLocalYmd } from './lib/salesStats'
+import { useStorefrontAutoSync } from './hooks/useStorefrontAutoSync'
 import { flushSyncQueue } from './lib/sync'
 import {
   getDeviceConnectivityDemo,
@@ -205,6 +206,7 @@ export function Shell({ staff, online, onLogout }: Props) {
 
   const toast = useToast()
   const { canAccessView } = useSubscription()
+  useStorefrontAutoSync()
 
   const perms = useMemo(() => effectivePermissions(staff), [staff])
   const navSections = useMemo(() => {
@@ -274,7 +276,9 @@ export function Shell({ staff, online, onLogout }: Props) {
     () => defaultCheckoutPayment(),
   )
   const [checkoutBusy, setCheckoutBusy] = useState(false)
-  const [activeView, setActiveView] = useState<NavViewId>('caisse')
+  const [activeView, setActiveView] = useState<NavViewId>(() =>
+    staff.role === 'cuisinier' ? 'kitchen' : 'caisse',
+  )
   const [isFloatingCartOpen, setIsFloatingCartOpen] = useState(false)
   const [mobileCartPulse, setMobileCartPulse] = useState(false)
   const [receiptOpen, setReceiptOpen] = useState<
@@ -433,7 +437,13 @@ export function Shell({ staff, online, onLogout }: Props) {
 
   useEffect(() => {
     if (!allowedViews.has(activeView)) {
-      setActiveView('caisse')
+      const fallback: NavViewId =
+        staff.role === 'cuisinier' && allowedViews.has('kitchen')
+          ? 'kitchen'
+          : allowedViews.has('caisse')
+            ? 'caisse'
+            : ([...allowedViews][0] ?? 'caisse')
+      setActiveView(fallback)
     }
   }, [staff.role, activeView, allowedViews])
 
@@ -1173,6 +1183,7 @@ export function Shell({ staff, online, onLogout }: Props) {
             payload: JSON.stringify({
               type: 'sale_created',
               schemaVersion: 1,
+              terminalId: getOrCreateTerminalId(),
               saleId,
               sale: saleRecord,
             }),
@@ -1563,7 +1574,11 @@ export function Shell({ staff, online, onLogout }: Props) {
               {activeView === 'kitchen' ? (
                 <KitchenView
                   activeStoreId={activeStoreId}
-                  canManageKitchenActions={staff.role !== 'caissier'}
+                  canManageKitchenActions={
+                    staff.role === 'admin' ||
+                    staff.role === 'gerant' ||
+                    staff.role === 'cuisinier'
+                  }
                 />
               ) : null}
               {activeView === 'ticketsFactures' ? (

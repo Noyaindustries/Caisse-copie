@@ -12,9 +12,22 @@ import {
 } from '../lib/subscriptionPlans.js'
 import { MOBILE_MONEY_CHANNELS_CI } from '../lib/mobileMoneyChannels.js'
 import { mobileMoneyEnabled } from '../lib/cinetpay.js'
+import {
+  asOrgPaymentFields,
+  merchantPaymentCreds,
+  orgPaymentProvidersPublicStatus,
+  platformPaymentCreds,
+  updateOrganizationPaymentProviders,
+  type OrgPaymentProvidersUpdateInput,
+} from '../lib/orgPaymentCredentials.js'
+import { ensurePaymentConfigReady } from '../lib/paymentProviderSettings.js'
 import { waveEnabled } from '../lib/wave.js'
 import { runSubscriptionReminders } from '../lib/subscriptionReminders.js'
 import { getStripe, publicAppUrl, stripeConfigured } from '../lib/stripe.js'
+import {
+  subscriptionCancelUrl,
+  subscriptionSuccessUrl,
+} from '../lib/appUrls.js'
 import {
   hashOwnerPassword,
   isGmailAddress,
@@ -22,6 +35,8 @@ import {
   validateOwnerPassword,
   verifyOwnerPassword,
 } from '../lib/ownerAuth.js'
+import { resolveOrgFromRequest, readLicenseKey, readBearerToken } from '../lib/orgAuth.js'
+import { createOrgSession, revokeOrgSession } from '../lib/sessionTokens.js'
 
 export const billingRouter = Router()
 
@@ -90,7 +105,7 @@ function orgPayload(org: {
   currentPeriodEnd: Date | null
   billingPhone?: string | null
   smsRemindersEnabled?: boolean
-}) {
+}, sessionToken?: string) {
   const planId = parsePlanId(org.planId)
   const status = parseStatus(org.status)
   const usable = isSubscriptionUsable(
@@ -103,6 +118,7 @@ function orgPayload(org: {
     name: org.name,
     email: org.email,
     licenseKey: org.licenseKey,
+    sessionToken: sessionToken ?? undefined,
     storeCode: org.storeCode ?? null,
     planId,
     plan: SUBSCRIPTION_PLANS[planId],
@@ -118,13 +134,13 @@ function orgPayload(org: {
   }
 }
 
-function channelLabel(channelId: string): string {
-  return MOBILE_MONEY_CHANNELS_CI.find((c) => c.id === channelId)?.label ?? channelId
+async function orgPayloadWithSession(org: Parameters<typeof orgPayload>[0]) {
+  const sessionToken = await createOrgSession(org.id)
+  return orgPayload(org, sessionToken)
 }
 
-function readLicenseKey(req: Request): string | null {
-  const header = req.get('x-license-key')?.trim()
-  return header || null
+function channelLabel(channelId: string): string {
+  return MOBILE_MONEY_CHANNELS_CI.find((c) => c.id === channelId)?.label ?? channelId
 }
 
 async function findOrgByLicense(licenseKey: string) {
@@ -139,6 +155,15 @@ async function findOrgByStoreCode(storeCode: string) {
   const org = await prisma.organization.findUnique({ where: { storeCode: normalized } })
   if (!org) return null
   return ensureStoreCode(org)
+}
+
+async function requireBillingOrg(req: Request, res: Response) {
+  const org = await resolveOrgFromRequest(req)
+  if (!org) {
+    res.status(401).json({ error: 'Authentification requise.' })
+    return null
+  }
+  return org
 }
 
 billingRouter.get('/billing/plans', (_req, res) => {
@@ -203,7 +228,7 @@ billingRouter.post('/billing/register', async (req, res) => {
       },
     })
 
-    res.status(201).json(orgPayload(org))
+    res.status(201).json(await orgPayloadWithSession(org))
   } catch (err) {
     console.error('[billing/register]', err)
     if (
@@ -248,7 +273,7 @@ billingRouter.post('/billing/login', async (req, res) => {
     }
 
     const withCode = await ensureStoreCode(org)
-    res.json(orgPayload(withCode))
+    res.json(await orgPayloadWithSession(withCode))
   } catch (err) {
     console.error('[billing/login]', err)
     res.status(500).json({ error: 'Connexion impossible.' })
@@ -291,23 +316,27 @@ billingRouter.post('/billing/attach', async (req, res) => {
       return
     }
 
-    res.json(orgPayload(org))
+    res.json(await orgPayloadWithSession(org))
   } catch (err) {
     console.error('[billing/attach]', err)
     res.status(500).json({ error: 'Impossible de valider la licence.' })
   }
 })
 
+billingRouter.post('/billing/logout', async (req, res) => {
+  const token = readBearerToken(req)
+  if (token) {
+    await revokeOrgSession(token)
+  }
+  res.json({ ok: true })
+})
+
 billingRouter.get('/billing/status', async (req, res) => {
   try {
-    const licenseKey = readLicenseKey(req)
-    if (!licenseKey) {
-      res.status(401).json({ error: 'Clé de licence manquante.' })
-      return
-    }
-    const org = await findOrgByLicense(licenseKey)
+    await ensurePaymentConfigReady()
+    const org = await resolveOrgFromRequest(req)
     if (!org) {
-      res.status(404).json({ error: 'Licence introuvable.' })
+      res.status(401).json({ error: 'Authentification requise.' })
       return
     }
 
@@ -339,17 +368,8 @@ billingRouter.get('/billing/status', async (req, res) => {
 
 billingRouter.patch('/billing/settings', async (req, res) => {
   try {
-    const licenseKey = readLicenseKey(req)
-    if (!licenseKey) {
-      res.status(401).json({ error: 'Clé de licence manquante.' })
-      return
-    }
-
-    const org = await findOrgByLicense(licenseKey)
-    if (!org) {
-      res.status(404).json({ error: 'Licence introuvable.' })
-      return
-    }
+    const org = await requireBillingOrg(req, res)
+    if (!org) return
 
     const data: { billingPhone?: string | null; smsRemindersEnabled?: boolean } = {}
 
@@ -376,17 +396,8 @@ billingRouter.patch('/billing/settings', async (req, res) => {
 
 billingRouter.get('/billing/payments/history', async (req, res) => {
   try {
-    const licenseKey = readLicenseKey(req)
-    if (!licenseKey) {
-      res.status(401).json({ error: 'Clé de licence manquante.' })
-      return
-    }
-
-    const org = await findOrgByLicense(licenseKey)
-    if (!org) {
-      res.status(404).json({ error: 'Licence introuvable.' })
-      return
-    }
+    const org = await requireBillingOrg(req, res)
+    if (!org) return
 
     const payments = await prisma.mobileMoneyPayment.findMany({
       where: { organizationId: org.id },
@@ -418,26 +429,17 @@ billingRouter.get('/billing/payments/history', async (req, res) => {
 
 billingRouter.post('/billing/checkout', async (req, res) => {
   try {
-    const licenseKey = readLicenseKey(req)
     const planId = parsePlanId(
       typeof req.body?.planId === 'string' ? req.body.planId : undefined,
     )
-    if (!licenseKey) {
-      res.status(401).json({ error: 'Clé de licence manquante.' })
-      return
-    }
+    const org = await requireBillingOrg(req, res)
+    if (!org) return
 
     const stripe = getStripe()
     if (!stripe) {
       res.status(503).json({
         error: 'Paiement en ligne indisponible. Contactez le support pour activer votre plan.',
       })
-      return
-    }
-
-    const org = await findOrgByLicense(licenseKey)
-    if (!org) {
-      res.status(404).json({ error: 'Licence introuvable.' })
       return
     }
 
@@ -486,8 +488,8 @@ billingRouter.post('/billing/checkout', async (req, res) => {
         planId,
         licenseKey: org.licenseKey,
       },
-      success_url: `${baseUrl}/staff?subscription=success`,
-      cancel_url: `${baseUrl}/staff?subscription=cancel`,
+      success_url: subscriptionSuccessUrl(baseUrl),
+      cancel_url: subscriptionCancelUrl(baseUrl),
     })
 
     res.json({ url: session.url })
@@ -497,13 +499,59 @@ billingRouter.post('/billing/checkout', async (req, res) => {
   }
 })
 
+billingRouter.get('/billing/payment-providers', async (req, res) => {
+  try {
+    const org = await requireBillingOrg(req, res)
+    if (!org) return
+    res.json(orgPaymentProvidersPublicStatus(asOrgPaymentFields(org)))
+  } catch (err) {
+    console.error('[billing/payment-providers GET]', err)
+    res.status(500).json({ error: 'Impossible de charger la config paiement.' })
+  }
+})
+
+billingRouter.put('/billing/payment-providers', async (req, res) => {
+  try {
+    const org = await requireBillingOrg(req, res)
+    if (!org) return
+
+    const body = (req.body ?? {}) as Record<string, unknown>
+    const input: OrgPaymentProvidersUpdateInput = {}
+    const readSecret = (raw: unknown): string | null | undefined => {
+      if (raw === undefined) return undefined
+      if (raw === null) return null
+      if (typeof raw === 'string') return raw
+      return undefined
+    }
+    const waveApiKey = readSecret(body.waveApiKey)
+    if (waveApiKey !== undefined) input.waveApiKey = waveApiKey
+    const waveWebhookSecret = readSecret(body.waveWebhookSecret)
+    if (waveWebhookSecret !== undefined) input.waveWebhookSecret = waveWebhookSecret
+    const waveSigningSecret = readSecret(body.waveSigningSecret)
+    if (waveSigningSecret !== undefined) input.waveSigningSecret = waveSigningSecret
+    const cinetpayApiKey = readSecret(body.cinetpayApiKey)
+    if (cinetpayApiKey !== undefined) input.cinetpayApiKey = cinetpayApiKey
+    const cinetpaySiteId = readSecret(body.cinetpaySiteId)
+    if (cinetpaySiteId !== undefined) input.cinetpaySiteId = cinetpaySiteId
+    if (typeof body.waveDemoMode === 'boolean') input.waveDemoMode = body.waveDemoMode
+    if (typeof body.cinetpayDemoMode === 'boolean') {
+      input.cinetpayDemoMode = body.cinetpayDemoMode
+    }
+
+    const status = await updateOrganizationPaymentProviders(org.id, input)
+    res.json(status)
+  } catch (err) {
+    console.error('[billing/payment-providers PUT]', err)
+    const message =
+      err instanceof Error ? err.message : 'Enregistrement impossible.'
+    res.status(400).json({ error: message })
+  }
+})
+
 billingRouter.post('/billing/portal', async (req, res) => {
   try {
-    const licenseKey = readLicenseKey(req)
-    if (!licenseKey) {
-      res.status(401).json({ error: 'Clé de licence manquante.' })
-      return
-    }
+    const org = await requireBillingOrg(req, res)
+    if (!org) return
 
     const stripe = getStripe()
     if (!stripe) {
@@ -511,15 +559,14 @@ billingRouter.post('/billing/portal', async (req, res) => {
       return
     }
 
-    const org = await findOrgByLicense(licenseKey)
-    if (!org?.stripeCustomerId) {
+    if (!org.stripeCustomerId) {
       res.status(400).json({ error: 'Aucun abonnement Stripe associé.' })
       return
     }
 
     const session = await stripe.billingPortal.sessions.create({
       customer: org.stripeCustomerId,
-      return_url: `${publicAppUrl(req)}/staff`,
+      return_url: `${publicAppUrl(req)}/abonnement`,
     })
 
     res.json({ url: session.url })

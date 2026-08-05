@@ -1,36 +1,47 @@
 import type { StaffProfile } from './types'
+import { isCloudApiConfigured } from '../lib/apiUrl'
 
 /**
- * Profils démo — en production : API + politique mot de passe.
- * Connexion : même champ accepte le PIN ou le mot de passe si défini.
+ * Profils démo — disponibles uniquement en développement local.
  */
-const BUILTIN_STAFF_PROFILES: readonly StaffProfile[] = [
-  {
-    id: 'profile-caissier',
-    displayName: 'Awa Konaté',
-    initials: 'AK',
-    role: 'caissier',
-    pin: '1234',
-    password: 'caisse',
-  },
-  {
-    id: 'profile-gerant',
-    displayName: 'Koffi N’Guessan',
-    initials: 'KN',
-    role: 'gerant',
-    pin: '4321',
-    password: 'gerant2024',
-  },
-  {
-    id: 'profile-admin',
-    displayName: 'Kouadio Yao',
-    initials: 'KY',
-    role: 'admin',
-    pin: '5678',
-    password: 'admin',
-  },
-] as const
+const BUILTIN_STAFF_PROFILES: readonly StaffProfile[] = import.meta.env.DEV
+  ? ([
+      {
+        id: 'profile-caissier',
+        displayName: 'Awa Konaté',
+        initials: 'AK',
+        role: 'caissier',
+        pin: '1234',
+        password: 'caisse',
+      },
+      {
+        id: 'profile-gerant',
+        displayName: 'Koffi N’Guessan',
+        initials: 'KN',
+        role: 'gerant',
+        pin: '4321',
+        password: 'gerant2024',
+      },
+      {
+        id: 'profile-admin',
+        displayName: 'Kouadio Yao',
+        initials: 'KY',
+        role: 'admin',
+        pin: '5678',
+        password: 'admin',
+      },
+      {
+        id: 'profile-cuisinier',
+        displayName: 'Bamba Ouattara',
+        initials: 'BO',
+        role: 'cuisinier',
+        pin: '2468',
+        password: 'cuisine',
+      },
+    ] as const)
+  : []
 
+const CLOUD_STAFF_KEY = 'caisseci-cloud-staff-v1'
 const STORAGE_KEY = 'caisseci-custom-staff-profiles-v1'
 const PASSWORD_OVERRIDES_KEY = 'caisseci-staff-password-overrides-v1'
 const ORG_CREDENTIALS_KEY = 'caisseci-org-credentials-v1'
@@ -77,7 +88,10 @@ function isStaffProfile(value: unknown): value is StaffProfile {
     typeof v.displayName === 'string' &&
     typeof v.initials === 'string' &&
     (v.storeId === undefined || typeof v.storeId === 'string') &&
-    (v.role === 'admin' || v.role === 'gerant' || v.role === 'caissier') &&
+    (v.role === 'admin' ||
+      v.role === 'gerant' ||
+      v.role === 'caissier' ||
+      v.role === 'cuisinier') &&
     typeof v.pin === 'string' &&
     (v.password === undefined || typeof v.password === 'string') &&
     (v.active === undefined || typeof v.active === 'boolean')
@@ -137,11 +151,77 @@ function writePasswordOverrides(overrides: Record<string, string>): void {
 
 export function listStaffProfiles(): StaffProfile[] {
   const overrides = readPasswordOverrides()
-  return [...BUILTIN_STAFF_PROFILES, ...readCustomProfiles()].map((p) => ({
+  const cloud = readCloudStaffProfiles()
+  return [...BUILTIN_STAFF_PROFILES, ...cloud, ...readCustomProfiles()].map((p) => ({
     ...p,
     active: p.active !== false,
     password: overrides[p.id] ?? p.password,
   }))
+}
+
+function readCloudStaffProfiles(): StaffProfile[] {
+  if (typeof window === 'undefined') return []
+  try {
+    const raw = localStorage.getItem(organizationStorageKey(CLOUD_STAFF_KEY))
+    if (!raw) return []
+    const parsed = JSON.parse(raw) as unknown
+    if (!Array.isArray(parsed)) return []
+    return parsed.filter(isStaffProfile)
+  } catch {
+    return []
+  }
+}
+
+function writeCloudStaffProfiles(profiles: StaffProfile[]): void {
+  if (typeof window === 'undefined') return
+  localStorage.setItem(organizationStorageKey(CLOUD_STAFF_KEY), JSON.stringify(profiles))
+  window.dispatchEvent(new Event(CHANGE_EVENT))
+}
+
+export function mergeStaffFromCloud(
+  remote: Array<{
+    id: string
+    displayName: string
+    initials: string
+    role: StaffProfile['role']
+    storeId?: string | null
+    active: boolean
+  }>,
+): number {
+  const localCustom = readCustomProfiles()
+  const localPins = new Map(localCustom.map((p) => [p.id, p.pin]))
+  const merged: StaffProfile[] = remote.map((row) => ({
+    id: row.id,
+    displayName: row.displayName,
+    initials: row.initials,
+    role: row.role,
+    active: row.active,
+    ...(row.storeId ? { storeId: row.storeId } : {}),
+    pin: localPins.get(row.id) ?? '0000',
+  }))
+  writeCloudStaffProfiles(merged)
+  return merged.length
+}
+
+async function pushStaffToServer(
+  action: 'create' | 'update' | 'delete',
+  payload: Record<string, unknown>,
+): Promise<void> {
+  if (!isCloudApiConfigured()) return
+  try {
+    const { createRemoteStaff, updateRemoteStaff, deleteRemoteStaff } = await import(
+      '../lib/staff/api'
+    )
+    if (action === 'create') {
+      await createRemoteStaff(payload as Parameters<typeof createRemoteStaff>[0])
+    } else if (action === 'update') {
+      await updateRemoteStaff(String(payload.profileId), payload.patch as never)
+    } else {
+      await deleteRemoteStaff(String(payload.profileId))
+    }
+  } catch {
+    /* offline ou API indisponible */
+  }
 }
 
 /** Profils autorisés à se connecter (actifs uniquement). */
@@ -223,6 +303,14 @@ export function createStaffProfile(input: {
   const custom = readCustomProfiles()
   custom.push(created)
   writeCustomProfiles(custom)
+  void pushStaffToServer('create', {
+    profileId: created.id,
+    displayName: created.displayName,
+    role: created.role,
+    storeId: created.storeId,
+    pin: created.pin,
+    password: created.password,
+  })
   return created
 }
 
@@ -283,6 +371,17 @@ export function updateStaffProfile(
 
   custom[idx] = next
   writeCustomProfiles(custom)
+  void pushStaffToServer('update', {
+    profileId,
+    patch: {
+      displayName: next.displayName,
+      role: next.role,
+      storeId: next.storeId ?? null,
+      pin: patch.pin,
+      password: patch.password ?? undefined,
+      active: next.active,
+    },
+  })
   return profileById(profileId) ?? next
 }
 
@@ -316,6 +415,7 @@ export function deleteStaffProfile(profileId: string): void {
     delete overrides[profileId]
     writePasswordOverrides(overrides)
   }
+  void pushStaffToServer('delete', { profileId })
 }
 
 export function changeStaffPassword(input: {
@@ -352,7 +452,18 @@ export function profileById(id: string): StaffProfile | undefined {
 }
 
 export function roleLabel(role: StaffProfile['role']): string {
-  if (role === 'admin') return 'Administrateur'
-  if (role === 'gerant') return 'Gérant'
-  return 'Caissier'
+  switch (role) {
+    case 'admin':
+      return 'Administrateur'
+    case 'gerant':
+      return 'Gérant'
+    case 'caissier':
+      return 'Caissier'
+    case 'cuisinier':
+      return 'Cuisinier'
+    default: {
+      const _exhaustive: never = role
+      return _exhaustive
+    }
+  }
 }

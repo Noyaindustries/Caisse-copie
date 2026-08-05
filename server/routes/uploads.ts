@@ -5,13 +5,9 @@ import {
   uploadOrganizationProductImage,
 } from '../lib/blobStorage.js'
 import { prisma } from '../lib/prisma.js'
+import { requireOrg } from '../lib/orgAuth.js'
 
 export const uploadsRouter = Router()
-
-function readLicenseKey(req: Request): string | null {
-  const header = req.get('x-license-key')?.trim()
-  return header || null
-}
 
 const productImageSchema = z.object({
   productId: z.string().min(1).max(120),
@@ -29,18 +25,10 @@ uploadsRouter.post('/uploads/product-image', async (req, res) => {
       return
     }
 
-    const licenseKey = readLicenseKey(req)
-    if (!licenseKey) {
-      res.status(401).json({ error: 'Licence requise (en-tête x-license-key).' })
-      return
-    }
+    const org = await requireOrg(req, res)
+    if (!org) return
 
     const body = productImageSchema.parse(req.body)
-    const org = await prisma.organization.findUnique({ where: { licenseKey } })
-    if (!org) {
-      res.status(404).json({ error: 'Organisation introuvable.' })
-      return
-    }
 
     const url = await uploadOrganizationProductImage({
       organizationId: org.id,

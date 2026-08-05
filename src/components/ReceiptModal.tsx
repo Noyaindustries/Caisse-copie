@@ -1,15 +1,17 @@
-import { useCallback, useEffect, useMemo, useRef } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { OnlineOrder, Sale, TicketInvoice } from '../db/types'
+import { getAppSettings } from '../lib/appSettings'
 import { formatFCFA, vatSlicesFromLinesTTC } from '../lib/money'
 import {
   paymentMethodShortLabel,
   salePaymentAmounts,
 } from '../lib/paymentDisplay'
+import { printReceipt as printReceiptJob } from '../lib/printer/printReceipt'
 import { saleNetTTC } from '../lib/refundMath'
 import { SESSION_ID } from '../lib/session'
-import { getAppSettings } from '../lib/appSettings'
 import { Button } from '../ui/Button'
 import { Modal } from '../ui/Modal'
+import { useToast } from '../ui/Toast'
 import { IconPrinter } from '../ui/icons'
 
 export type ReceiptModalSource =
@@ -82,7 +84,9 @@ function onlineOrderStatusLabel(status: OnlineOrder['status']): string {
 }
 
 export function ReceiptModal({ source, autoPrint = false, onClose }: Props) {
+  const toast = useToast()
   const autoPrintedReceiptRef = useRef<string | null>(null)
+  const [printing, setPrinting] = useState(false)
   const isOnline = source.kind === 'onlineOrder'
   const isTicketInvoice = source.kind === 'ticketInvoice'
   const order = isOnline ? source.order : null
@@ -125,7 +129,7 @@ export function ReceiptModal({ source, autoPrint = false, onClose }: Props) {
       ? `Infinitecore Système · ${ticketInvoice?.kind === 'facture' ? 'Facture' : 'Ticket'}`
       : 'Infinitecore Système · Ticket de caisse'
 
-  const printReceipt = useCallback(() => {
+  const printViaBrowser = useCallback(() => {
     const printFrame = document.createElement('iframe')
     printFrame.style.position = 'fixed'
     printFrame.style.right = '0'
@@ -210,7 +214,29 @@ ${ticketInvoice.notes ? `<div><strong>Note :</strong> ${ticketInvoice.notes}</di
         printFrame.remove()
       }, 300)
     }, 300)
-  }, [dtLabel, sale, source.kind, tagline, ticketInvoice, vatSlices])
+  }, [dtLabel, sale, tagline, ticketInvoice, vatSlices])
+
+  const printReceipt = useCallback(async () => {
+    if (printing) return
+    setPrinting(true)
+    try {
+      const result = await printReceiptJob(source, {
+        openCashDrawer: amt.cash > 0,
+        browserFallback: printViaBrowser,
+      })
+      if (result.mode === 'escpos') {
+        toast.success('Ticket imprimé', result.message)
+      }
+    } catch (err) {
+      toast.error(
+        'Impression impossible',
+        err instanceof Error ? err.message : 'Erreur inconnue',
+      )
+      printViaBrowser()
+    } finally {
+      setPrinting(false)
+    }
+  }, [amt.cash, printing, printViaBrowser, source, toast])
 
   useEffect(() => {
     if (!autoPrint) return
@@ -219,7 +245,11 @@ ${ticketInvoice.notes ? `<div><strong>Note :</strong> ${ticketInvoice.notes}</di
     }
     autoPrintedReceiptRef.current = receiptKey
     const id = window.setTimeout(() => {
-      requestAnimationFrame(() => requestAnimationFrame(() => printReceipt()))
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          void printReceipt()
+        })
+      })
     }, 900)
     return () => clearTimeout(id)
   }, [autoPrint, printReceipt, receiptKey])
@@ -239,9 +269,10 @@ ${ticketInvoice.notes ? `<div><strong>Note :</strong> ${ticketInvoice.notes}</di
           <Button
             variant="primary"
             iconLeft={<IconPrinter />}
-            onClick={printReceipt}
+            disabled={printing}
+            onClick={() => void printReceipt()}
           >
-            Imprimer
+            {printing ? 'Impression…' : 'Imprimer'}
           </Button>
         </>
       }

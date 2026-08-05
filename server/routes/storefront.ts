@@ -2,7 +2,14 @@ import { randomUUID } from 'node:crypto'
 import { Router, type Request } from 'express'
 import { z } from 'zod'
 import { normalizeCiPhone } from '../lib/mobileMoneyChannels.js'
+import {
+  asOrgPaymentFields,
+  merchantPaymentCreds,
+  waveCredsEnabled,
+} from '../lib/orgPaymentCredentials.js'
+import { ensurePaymentConfigReady } from '../lib/paymentProviderSettings.js'
 import { prisma } from '../lib/prisma.js'
+import { resolveOrgFromRequest, requireActiveOrg } from '../lib/orgAuth.js'
 import { publicAppUrl } from '../lib/stripe.js'
 import {
   markStorefrontOrderPaid,
@@ -11,7 +18,6 @@ import {
 import {
   checkWaveCheckoutByReference,
   initWaveCheckout,
-  waveEnabled,
 } from '../lib/wave.js'
 import {
   isSubscriptionUsable,
@@ -102,11 +108,6 @@ const submitOrderSchema = z.object({
   deliveryFeeTTC: z.number().nonnegative().max(1_000_000).optional(),
 })
 
-function readLicenseKey(req: Request): string | null {
-  const header = req.get('x-license-key')?.trim()
-  return header || null
-}
-
 function storefrontPath(storeCode: string): string {
   return `/boutique/${encodeURIComponent(storeCode)}`
 }
@@ -134,6 +135,8 @@ storefrontRouter.get('/billing/storefront/:storeCode', async (req, res) => {
       org.currentPeriodEnd,
       org.trialEndsAt,
     )
+    await ensurePaymentConfigReady()
+    const merchantCreds = merchantPaymentCreds(asOrgPaymentFields(org))
     res.json({
       organizationId: org.id,
       name: org.name,
@@ -143,7 +146,7 @@ storefrontRouter.get('/billing/storefront/:storeCode', async (req, res) => {
       storefrontUrl: publicStorefrontUrl(req, org.storeCode),
       menuPublished: Boolean(org.storefrontMenu),
       publishedAt: org.storefrontPublishedAt?.toISOString() ?? null,
-      waveEnabled: waveEnabled(),
+      waveEnabled: waveCredsEnabled(merchantCreds),
     })
   } catch (err) {
     console.error('[storefront/info]', err)
@@ -270,8 +273,15 @@ storefrontRouter.post('/billing/storefront/:storeCode/orders', async (req, res) 
     }
 
     const isWavePayment = verifiedOrder.paymentMethod === 'wave'
-    if (isWavePayment && !waveEnabled()) {
-      res.status(503).json({ error: 'Paiement Wave indisponible pour cette boutique.' })
+    const merchantCreds = merchantPaymentCreds(asOrgPaymentFields(org))
+    if (isWavePayment) {
+      await ensurePaymentConfigReady()
+    }
+    if (isWavePayment && !waveCredsEnabled(merchantCreds)) {
+      res.status(503).json({
+        error:
+          'Paiement Wave indisponible : le commerçant doit configurer ses clés Wave (Intégrations).',
+      })
       return
     }
 
@@ -327,13 +337,16 @@ storefrontRouter.post('/billing/storefront/:storeCode/orders', async (req, res) 
     const successUrl = `${baseUrl}${boutiquePath}?order=${encodeURIComponent(externalId)}&payment=success`
     const errorUrl = `${baseUrl}${boutiquePath}?order=${encodeURIComponent(externalId)}&payment=cancel`
 
-    const waveInit = await initWaveCheckout({
-      transactionId: externalId,
-      amountFcfa,
-      successUrl,
-      errorUrl,
-      payerPhoneE164: phoneE164 ?? undefined,
-    })
+    const waveInit = await initWaveCheckout(
+      {
+        transactionId: externalId,
+        amountFcfa,
+        successUrl,
+        errorUrl,
+        payerPhoneE164: phoneE164 ?? undefined,
+      },
+      merchantCreds,
+    )
 
     await prisma.storefrontOrder.update({
       where: { externalId },
@@ -406,7 +419,10 @@ storefrontRouter.get(
         return
       }
 
-      const check = await checkWaveCheckoutByReference(externalId)
+      const check = await checkWaveCheckoutByReference(
+        externalId,
+        merchantPaymentCreds(asOrgPaymentFields(org)),
+      )
       if (check.status === 'ACCEPTED') {
         await markStorefrontOrderPaid(externalId, {
           waveSessionId: check.sessionId,
@@ -433,16 +449,8 @@ storefrontRouter.get(
 
 storefrontRouter.post('/billing/storefront/publish', async (req, res) => {
   try {
-    const licenseKey = readLicenseKey(req)
-    if (!licenseKey) {
-      res.status(401).json({ error: 'Clé de licence requise.' })
-      return
-    }
-    const org = await prisma.organization.findUnique({ where: { licenseKey } })
-    if (!org || !org.storeCode) {
-      res.status(404).json({ error: 'Organisation introuvable.' })
-      return
-    }
+    const org = await requireActiveOrg(req, res)
+    if (!org || !org.storeCode) return
     const menu = publishMenuSchema.parse(req.body)
     const publishedAt = new Date()
     await prisma.organization.update({
@@ -470,16 +478,8 @@ storefrontRouter.post('/billing/storefront/publish', async (req, res) => {
 
 storefrontRouter.get('/billing/storefront/orders/inbox', async (req, res) => {
   try {
-    const licenseKey = readLicenseKey(req)
-    if (!licenseKey) {
-      res.status(401).json({ error: 'Clé de licence requise.' })
-      return
-    }
-    const org = await prisma.organization.findUnique({ where: { licenseKey } })
-    if (!org) {
-      res.status(404).json({ error: 'Organisation introuvable.' })
-      return
-    }
+    const org = await requireActiveOrg(req, res)
+    if (!org) return
     const status =
       typeof req.query.status === 'string' && req.query.status.trim()
         ? req.query.status.trim()
@@ -506,16 +506,8 @@ storefrontRouter.get('/billing/storefront/orders/inbox', async (req, res) => {
 
 storefrontRouter.patch('/billing/storefront/orders/:externalId', async (req, res) => {
   try {
-    const licenseKey = readLicenseKey(req)
-    if (!licenseKey) {
-      res.status(401).json({ error: 'Clé de licence requise.' })
-      return
-    }
-    const org = await prisma.organization.findUnique({ where: { licenseKey } })
-    if (!org) {
-      res.status(404).json({ error: 'Organisation introuvable.' })
-      return
-    }
+    const org = await requireActiveOrg(req, res)
+    if (!org) return
     const nextStatus =
       typeof req.body?.status === 'string' ? req.body.status.trim() : ''
     if (!nextStatus) {

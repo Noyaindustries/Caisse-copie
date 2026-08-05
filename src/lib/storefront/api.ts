@@ -6,6 +6,7 @@ import type {
 import type { ProductWithStock, Promotion } from '../../db/types'
 import { apiUrl } from '../apiUrl'
 import { parseApiResponse } from '../parseApiResponse'
+import { buildOrgAuthHeaders } from '../subscription/authHeaders'
 
 async function parseJson<T>(res: Response): Promise<T> {
   return parseApiResponse<T>(res)
@@ -73,7 +74,7 @@ export async function verifyStorefrontOrderPayment(
 }
 
 export async function publishStorefrontMenu(
-  licenseKey: string,
+  _licenseKey: string,
   input: {
     storeId: string
     storeName: string
@@ -83,10 +84,7 @@ export async function publishStorefrontMenu(
 ): Promise<{ storefrontUrl: string; productCount: number; publishedAt: string }> {
   const res = await fetch(apiUrl('/billing/storefront/publish'), {
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'x-license-key': licenseKey,
-    },
+    headers: buildOrgAuthHeaders({ 'Content-Type': 'application/json' }),
     body: JSON.stringify({
       storeId: input.storeId,
       storeName: input.storeName,
@@ -123,18 +121,18 @@ export async function publishStorefrontMenu(
 }
 
 export async function fetchStorefrontInbox(
-  licenseKey: string,
+  _licenseKey: string,
   status = 'pending',
 ): Promise<{ orders: Array<Record<string, unknown> & { id: string; createdAt: number; status: string }> }> {
   const q = new URLSearchParams({ status })
   const res = await fetch(apiUrl(`/billing/storefront/orders/inbox?${q}`), {
-    headers: { 'x-license-key': licenseKey },
+    headers: buildOrgAuthHeaders(),
   })
   return parseJson(res)
 }
 
 export async function patchStorefrontOrderStatus(
-  licenseKey: string,
+  _licenseKey: string,
   externalId: string,
   status: string,
 ): Promise<void> {
@@ -142,10 +140,7 @@ export async function patchStorefrontOrderStatus(
     apiUrl(`/billing/storefront/orders/${encodeURIComponent(externalId)}`),
     {
       method: 'PATCH',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-license-key': licenseKey,
-      },
+      headers: buildOrgAuthHeaders({ 'Content-Type': 'application/json' }),
       body: JSON.stringify({ status }),
     },
   )

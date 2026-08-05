@@ -60,6 +60,24 @@ app.get(/.*/, (_req, res) => {
 const server = app.listen(port, () => {
   console.log(`CaisseCI fullstack en écoute sur http://localhost:${port}`)
   startSubscriptionReminderScheduler()
+  void import('./lib/paymentProviderSettings.js')
+    .then(({ refreshPaymentProviderSettings }) => refreshPaymentProviderSettings())
+    .then((cfg) => {
+      const wave = cfg.waveApiKey ? 'Wave OK' : cfg.waveDemoMode ? 'Wave démo' : 'Wave off'
+      const orange =
+        cfg.cinetpayApiKey && cfg.cinetpaySiteId
+          ? 'Orange/CinetPay OK'
+          : cfg.cinetpayDemoMode
+            ? 'Orange/CinetPay démo'
+            : 'Orange/CinetPay off'
+      console.log(`Paiements MM : ${wave} · ${orange}`)
+    })
+    .catch((err) => {
+      console.warn(
+        '[payment-providers] Init :',
+        err instanceof Error ? err.message : err,
+      )
+    })
 })
 
 const shutdown = async () => {

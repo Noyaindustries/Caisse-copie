@@ -263,4 +263,76 @@ export function setDeviceConnectivityDemo(config: DeviceConnectivityDemo): void 
   writeBoolKey(KEY_DEVICE_KDS_SCREENS, config.kitchenScreens)
   writeBoolKey(KEY_DEVICE_CASH_DRAWER, config.cashDrawer)
   writeBoolKey(KEY_DEVICE_PAYMENT_TERMINALS, config.paymentTerminals)
+  void saveIntegrationConfigToServer(getIntegrationConfigSnapshot()).catch(() => undefined)
+}
+
+function getIntegrationConfigSnapshot(): Record<string, unknown> {
+  return {
+    compta: isComptaModuleDemoOn(),
+    ecom: isEcomModuleDemoOn(),
+    delivery: isDeliveryModuleDemoOn(),
+    kitchen: isKitchenModuleDemoOn(),
+    deliveryProvider: getDeliveryProviderDemo(),
+    deliveryWebhook: getDeliveryWebhookDemo(),
+    kitchenStation: getKitchenStationDemo(),
+    onlinePlatforms: getConnectedPlatformsDemo(),
+    onlineSyncMode: getOnlineSyncModeDemo(),
+    devices: getDeviceConnectivityDemo(),
+  }
+}
+
+export function applyIntegrationConfigFromCloud(config: Record<string, unknown>): void {
+  if (typeof config.compta === 'boolean') setComptaModuleDemo(config.compta)
+  if (typeof config.ecom === 'boolean') setEcomModuleDemo(config.ecom)
+  if (typeof config.delivery === 'boolean') setDeliveryModuleDemo(config.delivery)
+  if (typeof config.kitchen === 'boolean') setKitchenModuleDemo(config.kitchen)
+  if (typeof config.deliveryProvider === 'string') {
+    setDeliveryProviderDemo(config.deliveryProvider)
+  }
+  if (typeof config.deliveryWebhook === 'string') {
+    setDeliveryWebhookDemo(config.deliveryWebhook)
+  }
+  if (typeof config.kitchenStation === 'string') {
+    setKitchenStationDemo(config.kitchenStation)
+  }
+  if (Array.isArray(config.onlinePlatforms)) {
+    const allowed = new Set<ConnectedPlatform>([
+      'shopify',
+      'glovo',
+      'ubereats',
+      'jumia',
+      'whatsapp',
+    ])
+    setConnectedPlatformsDemo(
+      config.onlinePlatforms.filter(
+        (v): v is ConnectedPlatform =>
+          typeof v === 'string' && allowed.has(v as ConnectedPlatform),
+      ),
+    )
+  }
+  if (typeof config.onlineSyncMode === 'string') {
+    setOnlineSyncModeDemo(config.onlineSyncMode === 'pull' ? 'pull' : 'webhook')
+  }
+  if (typeof config.devices === 'object' && config.devices !== null) {
+    const devices = config.devices as Partial<DeviceConnectivityDemo>
+    setDeviceConnectivityDemo({
+      orderTerminals: devices.orderTerminals ?? DEFAULT_DEVICE_CONNECTIVITY.orderTerminals,
+      receiptPrinters: devices.receiptPrinters ?? DEFAULT_DEVICE_CONNECTIVITY.receiptPrinters,
+      kitchenScreens: devices.kitchenScreens ?? DEFAULT_DEVICE_CONNECTIVITY.kitchenScreens,
+      cashDrawer: devices.cashDrawer ?? DEFAULT_DEVICE_CONNECTIVITY.cashDrawer,
+      paymentTerminals: devices.paymentTerminals ?? DEFAULT_DEVICE_CONNECTIVITY.paymentTerminals,
+    })
+  }
+}
+
+async function saveIntegrationConfigToServer(
+  config: Record<string, unknown>,
+): Promise<void> {
+  const { buildOrgAuthHeaders } = await import('./subscription/authHeaders')
+  const { apiUrl } = await import('./apiUrl')
+  await fetch(apiUrl('/org/integrations'), {
+    method: 'PUT',
+    headers: buildOrgAuthHeaders({ 'Content-Type': 'application/json' }),
+    body: JSON.stringify({ config }),
+  })
 }

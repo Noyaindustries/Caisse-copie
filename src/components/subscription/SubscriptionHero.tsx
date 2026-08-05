@@ -24,6 +24,7 @@ type Props = {
   stripePortalEnabled: boolean
   portalBusy: boolean
   publishBusy: boolean
+  lastPublishedAt: string | null
   canPublish: boolean
   onRefresh: () => void
   onPortal: () => void
@@ -101,6 +102,7 @@ export function SubscriptionHero({
   stripePortalEnabled,
   portalBusy,
   publishBusy,
+  lastPublishedAt,
   canPublish,
   onRefresh,
   onPortal,
@@ -281,8 +283,12 @@ export function SubscriptionHero({
                 </div>
                 <p className="mt-2 truncate font-mono text-sm text-white">{boutiqueLink}</p>
                 <p className="mt-2 text-xs leading-relaxed text-[#f5e6c0]/80">
-                  Partagez le lien ou le QR code. Publiez le menu après chaque mise
-                  à jour du catalogue.
+                  Catalogue et promotions synchronisés automatiquement avec la
+                  boutique en ligne
+                  {lastPublishedAt
+                    ? ` · dernière publication ${formatDate(lastPublishedAt)}`
+                    : ''}
+                  .
                 </p>
                 <div className="mt-4 flex flex-wrap gap-2">
                   <Button
@@ -302,7 +308,7 @@ export function SubscriptionHero({
                     disabled={!canPublish || publishBusy}
                     onClick={onPublish}
                   >
-                    {publishBusy ? 'Publication…' : 'Publier le menu'}
+                    {publishBusy ? 'Publication…' : 'Republier maintenant'}
                   </Button>
                 </div>
               </div>

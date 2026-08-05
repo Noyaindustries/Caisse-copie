@@ -1,4 +1,8 @@
 import { createHmac, timingSafeEqual } from 'node:crypto'
+import {
+  platformPaymentCreds,
+  type PaymentProviderCreds,
+} from './orgPaymentCredentials.js'
 import { buildWaveOpenUrl } from './waveCheckoutPage.js'
 
 const WAVE_API_BASE = 'https://api.wave.com/v1'
@@ -16,9 +20,7 @@ export type WaveCheckoutSession = {
 
 export type WaveInitResult = {
   sessionId: string
-  /** URL à ouvrir côté client (page Wave ou passerelle d’ouverture) */
   paymentUrl: string
-  /** URL officielle Wave (pay.wave.com) quand session API réelle */
   launchUrl: string | null
   demo: boolean
 }
@@ -36,41 +38,51 @@ export type WaveWebhookEvent = {
   data: WaveCheckoutSession
 }
 
-export function waveApiKeyConfigured(): boolean {
-  return Boolean(process.env.WAVE_API_KEY?.trim())
+function defaultCreds(): PaymentProviderCreds {
+  return platformPaymentCreds()
 }
 
-export function waveDemoMode(): boolean {
-  if (process.env.NODE_ENV === 'production') return false
-  return process.env.WAVE_DEMO_MODE === 'true' || process.env.WAVE_DEMO_MODE === '1'
+export function waveApiKeyConfigured(
+  creds: PaymentProviderCreds = defaultCreds(),
+): boolean {
+  return Boolean(creds.waveApiKey)
 }
 
-/** Wave CI direct — clé API ou mode démo local. */
-export function waveEnabled(): boolean {
-  return waveApiKeyConfigured() || waveDemoMode()
+export function waveDemoMode(
+  creds: PaymentProviderCreds = defaultCreds(),
+): boolean {
+  return creds.waveDemoMode
 }
 
-function apiKey(): string {
-  const key = process.env.WAVE_API_KEY?.trim()
-  if (!key) throw new Error('WAVE_API_KEY manquant')
+export function waveEnabled(
+  creds: PaymentProviderCreds = defaultCreds(),
+): boolean {
+  return waveApiKeyConfigured(creds) || waveDemoMode(creds)
+}
+
+export function waveWebhookSecretConfigured(
+  creds: PaymentProviderCreds = defaultCreds(),
+): boolean {
+  return Boolean(creds.waveWebhookSecret)
+}
+
+function requireApiKey(creds: PaymentProviderCreds): string {
+  const key = creds.waveApiKey
+  if (!key) {
+    throw new Error(
+      'Clé Wave manquante. Configurez-la pour cet abonnement (Intégrations) ou en console /admin.',
+    )
+  }
   return key
 }
 
-function signingSecret(): string | null {
-  const secret = process.env.WAVE_SIGNING_SECRET?.trim()
-  return secret || null
-}
-
-function webhookSecret(): string | null {
-  const secret = process.env.WAVE_WEBHOOK_SECRET?.trim()
-  return secret || null
-}
-
-function buildWaveSignature(body: string): string | null {
-  const secret = signingSecret()
-  if (!secret) return null
+function buildWaveSignature(
+  body: string,
+  signingSecret: string | null,
+): string | null {
+  if (!signingSecret) return null
   const timestamp = Math.floor(Date.now() / 1000).toString()
-  const signature = createHmac('sha256', secret)
+  const signature = createHmac('sha256', signingSecret)
     .update(timestamp + body)
     .digest('hex')
   return `t=${timestamp},v1=${signature}`
@@ -78,10 +90,11 @@ function buildWaveSignature(body: string): string | null {
 
 async function waveFetch<T>(
   path: string,
+  creds: PaymentProviderCreds,
   init: RequestInit & { body?: string } = {},
 ): Promise<T> {
   const headers: Record<string, string> = {
-    Authorization: `Bearer ${apiKey()}`,
+    Authorization: `Bearer ${requireApiKey(creds)}`,
     Accept: 'application/json',
     ...(init.headers as Record<string, string> | undefined),
   }
@@ -89,10 +102,10 @@ async function waveFetch<T>(
   const body = init.body
   if (body) {
     headers['Content-Type'] = 'application/json'
-    const waveSignature = buildWaveSignature(body)
+    const waveSignature = buildWaveSignature(body, creds.waveSigningSecret)
     if (waveSignature) headers['Wave-Signature'] = waveSignature
   } else if (init.method === 'GET') {
-    const waveSignature = buildWaveSignature('')
+    const waveSignature = buildWaveSignature('', creds.waveSigningSecret)
     if (waveSignature) headers['Wave-Signature'] = waveSignature
   }
 
@@ -129,14 +142,17 @@ function mapWaveStatus(session: WaveCheckoutSession): WaveCheckResult['status'] 
   return 'UNKNOWN'
 }
 
-export async function initWaveCheckout(input: {
-  transactionId: string
-  amountFcfa: number
-  successUrl: string
-  errorUrl: string
-  payerPhoneE164?: string
-}): Promise<WaveInitResult> {
-  if (waveDemoMode() && !waveApiKeyConfigured()) {
+export async function initWaveCheckout(
+  input: {
+    transactionId: string
+    amountFcfa: number
+    successUrl: string
+    errorUrl: string
+    payerPhoneE164?: string
+  },
+  creds: PaymentProviderCreds = defaultCreds(),
+): Promise<WaveInitResult> {
+  if (waveDemoMode(creds) && !waveApiKeyConfigured(creds)) {
     const base = process.env.APP_URL?.trim() || 'http://localhost:4000'
     return {
       sessionId: `demo-${input.transactionId}`,
@@ -159,10 +175,11 @@ export async function initWaveCheckout(input: {
   }
 
   const body = JSON.stringify(payload)
-  const session = await waveFetch<WaveCheckoutSession>('/checkout/sessions', {
-    method: 'POST',
-    body,
-  })
+  const session = await waveFetch<WaveCheckoutSession>(
+    '/checkout/sessions',
+    creds,
+    { method: 'POST', body },
+  )
 
   if (!session.wave_launch_url || !session.id) {
     throw new Error('Réponse Wave invalide : session de paiement incomplète')
@@ -178,8 +195,9 @@ export async function initWaveCheckout(input: {
 
 export async function checkWaveCheckoutByReference(
   clientReference: string,
+  creds: PaymentProviderCreds = defaultCreds(),
 ): Promise<WaveCheckResult> {
-  if (waveDemoMode() && !waveApiKeyConfigured()) {
+  if (waveDemoMode(creds) && !waveApiKeyConfigured(creds)) {
     return {
       status: 'PENDING',
       sessionId: null,
@@ -190,6 +208,7 @@ export async function checkWaveCheckoutByReference(
 
   const sessions = await waveFetch<{ result?: WaveCheckoutSession[] }>(
     `/checkout/sessions/search?client_reference=${encodeURIComponent(clientReference)}`,
+    creds,
     { method: 'GET' },
   )
 
@@ -213,8 +232,9 @@ export async function checkWaveCheckoutByReference(
 
 export async function checkWaveCheckoutBySessionId(
   sessionId: string,
+  creds: PaymentProviderCreds = defaultCreds(),
 ): Promise<WaveCheckResult> {
-  if (waveDemoMode() && !waveApiKeyConfigured()) {
+  if (waveDemoMode(creds) && !waveApiKeyConfigured(creds)) {
     return {
       status: 'PENDING',
       sessionId,
@@ -225,6 +245,7 @@ export async function checkWaveCheckoutBySessionId(
 
   const session = await waveFetch<WaveCheckoutSession>(
     `/checkout/sessions/${encodeURIComponent(sessionId)}`,
+    creds,
     { method: 'GET' },
   )
 
@@ -239,9 +260,9 @@ export async function checkWaveCheckoutBySessionId(
 export function verifyWaveWebhookSignature(
   rawBody: string | Buffer,
   signatureHeader: string | undefined,
+  webhookSecret: string | null = defaultCreds().waveWebhookSecret,
 ): boolean {
-  const secret = webhookSecret()
-  if (!secret || !signatureHeader) return false
+  if (!webhookSecret || !signatureHeader) return false
 
   const body = typeof rawBody === 'string' ? rawBody : rawBody.toString('utf8')
   const parts = signatureHeader.split(',')
@@ -259,7 +280,7 @@ export function verifyWaveWebhookSignature(
     .filter((p) => p.startsWith('v1='))
     .map((p) => p.slice(3))
 
-  const expected = createHmac('sha256', secret)
+  const expected = createHmac('sha256', webhookSecret)
     .update(timestamp + body)
     .digest('hex')
 

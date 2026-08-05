@@ -16,6 +16,16 @@ import {
   requirePlatformAdmin,
   verifyPlatformAdminSecret,
 } from '../lib/platformAdminAuth.js'
+import {
+  platformAdminMfaConfigured,
+  verifyPlatformAdminTotp,
+} from '../lib/platformAdminMfa.js'
+import {
+  getPaymentProvidersPublicStatus,
+  refreshPaymentProviderSettings,
+  updatePaymentProviderSettings,
+  type PaymentProvidersUpdateInput,
+} from '../lib/paymentProviderSettings.js'
 import { prisma } from '../lib/prisma.js'
 import { SUBSCRIPTION_PLANS, type PlanId, type SubscriptionStatus } from '../lib/subscriptionPlans.js'
 import { runSubscriptionReminders } from '../lib/subscriptionReminders.js'
@@ -23,7 +33,10 @@ import { runSubscriptionReminders } from '../lib/subscriptionReminders.js'
 export const platformAdminRouter = Router()
 
 platformAdminRouter.get('/platform-admin/status', (_req, res) => {
-  res.json({ configured: platformAdminConfigured() })
+  res.json({
+    configured: platformAdminConfigured(),
+    mfaRequired: platformAdminMfaConfigured(),
+  })
 })
 
 platformAdminRouter.post('/platform-admin/auth', (req, res) => {
@@ -36,12 +49,19 @@ platformAdminRouter.post('/platform-admin/auth', (req, res) => {
   }
 
   const secret = typeof req.body?.secret === 'string' ? req.body.secret : ''
+  const totpCode = typeof req.body?.totpCode === 'string' ? req.body.totpCode : ''
+
   if (!verifyPlatformAdminSecret(secret)) {
     res.status(401).json({ ok: false, error: 'Mot de passe incorrect.' })
     return
   }
 
-  res.json({ ok: true })
+  if (platformAdminMfaConfigured() && !verifyPlatformAdminTotp(totpCode)) {
+    res.status(401).json({ ok: false, error: 'Code MFA invalide ou expiré.' })
+    return
+  }
+
+  res.json({ ok: true, mfaRequired: platformAdminMfaConfigured() })
 })
 
 platformAdminRouter.use('/platform-admin', requirePlatformAdmin)
@@ -166,4 +186,48 @@ platformAdminRouter.post('/platform-admin/reminders', async (req, res) => {
     typeof req.body?.organizationId === 'string' ? req.body.organizationId : undefined
   const result = await runSubscriptionReminders(organizationId)
   res.json(result)
+})
+
+platformAdminRouter.get('/platform-admin/payment-providers', async (_req, res) => {
+  await refreshPaymentProviderSettings()
+  res.json(getPaymentProvidersPublicStatus())
+})
+
+platformAdminRouter.put('/platform-admin/payment-providers', async (req, res) => {
+  try {
+    const body = (req.body ?? {}) as Record<string, unknown>
+    const input: PaymentProvidersUpdateInput = {}
+
+    const readSecret = (raw: unknown): string | null | undefined => {
+      if (raw === undefined) return undefined
+      if (raw === null) return null
+      if (typeof raw === 'string') return raw
+      return undefined
+    }
+
+    const waveApiKey = readSecret(body.waveApiKey)
+    if (waveApiKey !== undefined) input.waveApiKey = waveApiKey
+    const waveWebhookSecret = readSecret(body.waveWebhookSecret)
+    if (waveWebhookSecret !== undefined) input.waveWebhookSecret = waveWebhookSecret
+    const waveSigningSecret = readSecret(body.waveSigningSecret)
+    if (waveSigningSecret !== undefined) input.waveSigningSecret = waveSigningSecret
+    const cinetpayApiKey = readSecret(body.cinetpayApiKey)
+    if (cinetpayApiKey !== undefined) input.cinetpayApiKey = cinetpayApiKey
+    const cinetpaySiteId = readSecret(body.cinetpaySiteId)
+    if (cinetpaySiteId !== undefined) input.cinetpaySiteId = cinetpaySiteId
+
+    if (typeof body.waveDemoMode === 'boolean') {
+      input.waveDemoMode = body.waveDemoMode
+    }
+    if (typeof body.cinetpayDemoMode === 'boolean') {
+      input.cinetpayDemoMode = body.cinetpayDemoMode
+    }
+
+    const status = await updatePaymentProviderSettings(input)
+    res.json(status)
+  } catch (error) {
+    const message =
+      error instanceof Error ? error.message : 'Enregistrement des clés impossible.'
+    res.status(400).json({ error: message })
+  }
 })

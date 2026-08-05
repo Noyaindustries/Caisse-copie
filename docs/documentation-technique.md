@@ -203,7 +203,10 @@ Opérateurs CI : Orange Money, Wave, MTN MoMo, Moov.
 
 ## 8. API REST
 
-Base : `/api` (proxy Vite → `:4000` en dev).
+Base : `/api` (proxy Vite → `:4000` en dev ; même origine en prod monolithe).
+
+Construction des URLs côté client : `src/lib/apiUrl.ts` (`apiUrl()`, `isCloudApiConfigured()`).
+Si le frontend est hébergé séparément, définir `VITE_API_BASE_URL` au build.
 
 ### Billing
 
@@ -213,20 +216,27 @@ Base : `/api` (proxy Vite → `:4000` en dev).
 | POST | `/billing/register` | Créer organisation |
 | POST | `/billing/login` | Connexion gérant |
 | POST | `/billing/attach` | Rejoindre magasin par code |
-| GET | `/billing/status` | État abonnement (`x-license-key`) |
+| POST | `/billing/logout` | Révoquer la session Bearer |
+| GET | `/billing/status` | État abonnement (Bearer ou `x-license-key`) |
 | PATCH | `/billing/settings` | SMS, téléphone facturation |
 | GET | `/billing/payments/history` | Historique paiements |
 | POST | `/billing/checkout` | Session Stripe Checkout |
 | POST | `/billing/portal` | Portail client Stripe |
+| GET | `/billing/payment-providers` | Config Wave/CinetPay boutique (org) |
+| PUT | `/billing/payment-providers` | Enregistrer clés paiement boutique |
 
-### Mobile money
+### Mobile money & Wave
 
 | Méthode | Route | Description |
 |---------|-------|-------------|
 | GET | `/billing/mobile-money/channels` | Opérateurs disponibles |
-| POST | `/billing/mobile-money/checkout` | Initier paiement CinetPay |
+| POST | `/billing/mobile-money/checkout` | Initier paiement abonnement |
 | GET | `/billing/mobile-money/verify/:id` | Vérifier statut transaction |
-| GET | `/billing/mobile-money/demo` | Page simulation (dev) |
+| GET | `/billing/mobile-money/demo` | Page simulation CinetPay (dev) |
+| GET | `/billing/wave/open/:transactionId` | Redirection checkout Wave |
+| GET | `/billing/wave/demo` | Page simulation Wave (dev) |
+| POST | `/billing/wave/webhook` | Webhook Wave (abonnement + boutique) |
+| POST | `/billing/cinetpay/notify` | Notification CinetPay |
 
 ### Boutique en ligne
 
@@ -235,15 +245,40 @@ Base : `/api` (proxy Vite → `:4000` en dev).
 | GET | `/billing/storefront/:storeCode` | Infos magasin public |
 | GET | `/billing/storefront/:storeCode/menu` | Catalogue publié |
 | POST | `/billing/storefront/:storeCode/orders` | Passer commande |
-| POST | `/billing/storefront/publish` | Publier menu (`x-license-key`) |
+| POST | `/billing/storefront/publish` | Publier menu (abonnement actif requis) |
 | GET | `/billing/storefront/orders/inbox` | Boîte commandes gérant |
 | PATCH | `/billing/storefront/orders/:id` | Mettre à jour statut |
 
-### Sync & webhooks
+### Organisation, staff, fiscal
 
 | Méthode | Route | Description |
 |---------|-------|-------------|
-| POST | `/caisseci/sync` | Réception lot sync ventes/stocks |
+| GET | `/org/backup` | Export sauvegarde organisation |
+| GET/PUT | `/org/integrations` | Config intégrations cloud |
+| GET/POST/PATCH/DELETE | `/org/staff` | Gestion personnel (abonnement actif pour écriture) |
+| POST | `/org/staff/verify` | Vérification PIN caissier |
+| GET/PATCH | `/org/fiscal/settings` | Paramètres fiscaux |
+| GET | `/org/fiscal/fec` | Export FEC |
+
+### Admin plateforme (`x-platform-admin-secret`)
+
+| Méthode | Route | Description |
+|---------|-------|-------------|
+| GET | `/platform-admin/status` | État de la console |
+| POST | `/platform-admin/auth` | Authentification opérateur |
+| GET | `/platform-admin/stats` | Statistiques SaaS |
+| GET/PATCH | `/platform-admin/organizations` | Gestion organisations |
+| POST | `/platform-admin/reminders` | Déclencher rappels SMS |
+| GET/PUT | `/platform-admin/payment-providers` | Clés Wave/CinetPay **plateforme** |
+
+### Sync, uploads & webhooks
+
+| Méthode | Route | Description |
+|---------|-------|-------------|
+| POST | `/caisseci/sync` | Réception lot sync ventes/stocks (abonnement actif) |
+| GET | `/caisseci/sync/pull` | Téléchargement deltas cloud (abonnement actif) |
+| GET | `/uploads/status` | État stockage Blob |
+| POST | `/uploads/product-image` | Upload photo produit |
 | POST | `/webhooks/orders` | Commandes partenaires |
 | POST | `/webhooks/caisseci` | Webhook historique |
 | POST | `/webhooks/sms` | Accusés SMS |
@@ -264,9 +299,12 @@ Schéma : `prisma/schema.prisma`.
 
 | Modèle | Rôle |
 |--------|------|
-| `Organization` | Compte entreprise, plan, licence, code magasin |
-| `MobileMoneyPayment` | Transactions CinetPay |
+| `Organization` | Compte entreprise, plan, licence, code magasin, clés paiement boutique |
+| `PlatformPaymentConfig` | Singleton — clés Wave/CinetPay **plateforme** (abonnements SaaS) |
+| `MobileMoneyPayment` | Transactions abonnement (Wave direct, CinetPay, démo) |
 | `StorefrontOrder` | Commandes boutique en ligne |
+| `StaffMember` | Personnel caisse synchronisé |
+| `OrgIntegration` | Config intégrations par organisation |
 | `SubscriptionReminderLog` | SMS rappels J-3 / J-1 |
 | `SyncBatch` / `SyncItem` | Lots synchronisation cloud |
 | `WebhookEvent` | Événements entrants |
@@ -301,9 +339,21 @@ Le seed initial est chargé par `ensureSeed()` au démarrage.
 
 ## 11. Synchronisation cloud
 
-Variable : `VITE_CLOUD_SYNC_URL` → `POST /api/caisseci/sync`.
+Client : `src/lib/sync.ts` (push) et `src/lib/cloudPull.ts` (pull).
 
-Payload :
+| Opération | Route | Helper client |
+|-----------|-------|---------------|
+| Push file locale | `POST /api/caisseci/sync` | `cloudSyncPushUrl()` |
+| Pull deltas | `GET /api/caisseci/sync/pull?since=<ts>` | `apiUrl('/caisseci/sync/pull')` |
+
+**Configuration :**
+
+- **Dev fullstack** (`npm run dev:full`) : aucune variable requise — proxy Vite `/api` → `:4000`.
+- **Prod monolithe Render** : idem, chemins relatifs `/api`.
+- **Frontend séparé** : `VITE_API_BASE_URL=https://votre-api.onrender.com` au build.
+- **Legacy** : `VITE_CLOUD_SYNC_URL` (URL complète push) — déconseillé, conservé pour compatibilité.
+
+Payload push :
 
 ```json
 {
@@ -315,7 +365,7 @@ Payload :
 }
 ```
 
-Sans URL configurée, la file est vidée en mode démo (latence simulée).
+Sans API joignable, la file reste en local (aucune perte de données).
 
 ---
 
@@ -350,22 +400,27 @@ Logique checkout : `src/lib/checkoutPayment.ts`, `src/components/CartPanel.tsx`.
 |----------|-------------|-------------|
 | `DATABASE_URL` | Prod | URI MongoDB |
 | `PORT` | Non | Port serveur (défaut 4000) |
-| `APP_URL` | Prod paiements | URL publique HTTPS |
+| `APP_URL` | Prod paiements | URL publique HTTPS (retours Stripe/Wave) |
+| `VITE_API_BASE_URL` | Split frontend/API | URL backend sans `/api` (build Vite) |
+| `VITE_CLOUD_SYNC_URL` | Non | Legacy — URL complète push sync |
+| `SESSION_TTL_DAYS` | Non | Durée sessions Bearer (défaut 30) |
+| `WEBHOOK_TOKEN` | Prod webhooks | Secret en-tête `x-webhook-token` |
 | `STRIPE_SECRET_KEY` | Optionnel | Clé secrète Stripe |
-| `STRIPE_WEBHOOK_SECRET` | Optionnel | Signature webhooks |
+| `STRIPE_WEBHOOK_SECRET` | Optionnel | Signature webhooks Stripe |
 | `STRIPE_CURRENCY` | Non | Défaut `xof` |
-| `CINETPAY_API_KEY` | Optionnel | API CinetPay |
-| `CINETPAY_SITE_ID` | Optionnel | Site CinetPay |
+| `CINETPAY_API_KEY` | Optionnel | API CinetPay (repli env) |
+| `CINETPAY_SITE_ID` | Optionnel | Site CinetPay (repli env) |
 | `CINETPAY_DEMO_MODE` | Non | `true` = simulation locale |
-| `WAVE_API_KEY` | Optionnel | API Business Wave CI |
+| `WAVE_API_KEY` | Optionnel | API Business Wave CI (repli env) |
 | `WAVE_WEBHOOK_SECRET` | Optionnel | Secret webhook Wave |
+| `WAVE_SIGNING_SECRET` | Optionnel | Signature requêtes Wave |
 | `WAVE_DEMO_MODE` | Non | Simulation sans clé Wave |
 | `BLOB_READ_WRITE_TOKEN` | Optionnel | Vercel Blob — photos catalogue |
 | `PLATFORM_ADMIN_SECRET` | Optionnel | Console `/admin` |
 | `SMS_PROVIDER_URL` | Optionnel | Endpoint envoi SMS |
 | `SMS_PROVIDER_TOKEN` | Optionnel | Token SMS |
+| `VITE_SMS_WEBHOOK_URL` | Non | Override URL webhook SMS client |
 | `SUBSCRIPTION_REMINDER_INTERVAL_HOURS` | Non | Planificateur rappels (défaut 6) |
-| `VITE_CLOUD_SYNC_URL` | Non | URL sync côté client |
 
 ---
 
@@ -408,24 +463,45 @@ npm run dev:full
 
 ## 16. Déploiement
 
-### Build
+### Option A — Render fullstack (recommandé)
+
+Un seul service web sert l’API Express **et** le build Vite (`dist/`).
 
 ```bash
 npm run build
 NODE_ENV=production npm start
 ```
 
+Blueprint : `render.yaml`. Health check : `GET /health`.
+Aucune variable `VITE_API_BASE_URL` requise.
+
+**Inclus :** scheduler rappels abonnement, webhooks raw body, fichiers statiques.
+
+### Option B — Frontend Vercel + API séparée
+
+| Composant | Hébergement | Configuration |
+|-----------|-------------|---------------|
+| SPA React | Vercel (`vercel.json`) | `VITE_API_BASE_URL` au build |
+| API Express | Render / Railway / VPS | `APP_URL` = URL du frontend |
+
+`vercel.json` réécrit `/api/*` vers `api/index.ts` (serverless Express).
+**Limitations Vercel :** pas de scheduler intégré (cron externe pour rappels SMS) ; cold starts MongoDB.
+
 ### Checklist production
 
 1. `DATABASE_URL` MongoDB Atlas configuré
-2. `APP_URL` en HTTPS (obligatoire Stripe / CinetPay)
-3. Webhooks Stripe et CinetPay pointant vers `/api/billing/webhook` et `/api/billing/cinetpay/notify`
+2. `APP_URL` en HTTPS (obligatoire Stripe / Wave / CinetPay)
+3. Webhooks : Stripe → `/api/billing/webhook` ; Wave → `/api/billing/wave/webhook` ; CinetPay → `/api/billing/cinetpay/notify`
 4. `prisma db push` ou migration sur la base cible
-5. Health check : `GET /health`
+5. Clés paiement plateforme dans `/admin` → Wave & Orange
+6. Health check : `GET /health`
 
-### Hébergement
+### Paiements : deux niveaux
 
-Compatible Render, Railway, VPS, etc. Un seul service web suffit (API + fichiers statiques `dist/`).
+| Niveau | UI | Usage |
+|--------|-----|-------|
+| **Plateforme** | `/admin` | Commerçants paient l’abonnement CaisseCI |
+| **Boutique** | Intégrations → Wave & Orange | Clients paient le commerçant en ligne |
 
 ---
 

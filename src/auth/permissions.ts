@@ -53,6 +53,23 @@ export const ROLE_DEFAULT_PERMISSIONS: Record<UserRole, StaffPermissions> = {
     canManageIntegrations: false,
     canConfigureAppSettings: false,
   },
+  cuisinier: {
+    maxDiscountPct: 0,
+    canViewDashboard: false,
+    canViewAnalytique: false,
+    canViewJournalReport: false,
+    canManageCatalogFull: false,
+    canEditPrices: false,
+    canManageStocks: false,
+    canDailyClosure: false,
+    canProcessRefunds: false,
+    canSwitchStore: false,
+    canManagePersonnel: false,
+    canViewTeamPointage: false,
+    canConfigureStoresAdmin: false,
+    canManageIntegrations: false,
+    canConfigureAppSettings: false,
+  },
 }
 
 export function effectivePermissions(profile: StaffProfile): StaffPermissions {

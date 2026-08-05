@@ -1,4 +1,5 @@
 import type { NextFunction, Request, Response } from 'express'
+import { safeCompareSecret } from './sessionTokens.js'
 
 const HEADER = 'x-platform-admin-secret'
 
@@ -9,7 +10,7 @@ export function platformAdminConfigured(): boolean {
 export function verifyPlatformAdminSecret(secret: string): boolean {
   const expected = process.env.PLATFORM_ADMIN_SECRET?.trim()
   if (!expected || !secret.trim()) return false
-  return secret.trim() === expected
+  return safeCompareSecret(secret.trim(), expected)
 }
 
 export function requirePlatformAdmin(

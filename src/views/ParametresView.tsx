@@ -22,6 +22,16 @@ import {
   setKitchenStationDemo,
   type DeviceConnectivityDemo,
 } from '../lib/integrationsConfig'
+import { printToplinkTestPage } from '../lib/printer/printReceipt'
+import {
+  connectToplinkPrinter,
+  disconnectToplinkPrinter,
+  getToplinkPrinterMeta,
+  isToplinkPrinterLinked,
+  isWebSerialSupported,
+  reconnectToplinkPrinter,
+  type ToplinkPrinterMeta,
+} from '../lib/printer/toplinkSerial'
 import {
   getOrCreateTerminalId,
   getTerminalLabel,
@@ -67,8 +77,19 @@ export function ParametresView({
   const [ecomOn, setEcomOn] = useState(() => isEcomModuleDemoOn())
   const [deliveryOn, setDeliveryOn] = useState(() => isDeliveryModuleDemoOn())
   const [kitchenOn, setKitchenOn] = useState(() => isKitchenModuleDemoOn())
+  const [printerMeta, setPrinterMeta] = useState<ToplinkPrinterMeta>(() =>
+    getToplinkPrinterMeta(),
+  )
+  const [printerBusy, setPrinterBusy] = useState(false)
+  const webSerialOk = isWebSerialSupported()
 
   const terminalId = useMemo(() => getOrCreateTerminalId(), [])
+
+  useEffect(() => {
+    void reconnectToplinkPrinter().then((ok) => {
+      if (ok) setPrinterMeta(getToplinkPrinterMeta())
+    })
+  }, [])
 
   const tabs = useMemo(
     () => [
@@ -375,41 +396,168 @@ export function ParametresView({
       ) : null}
 
       {tab === 'peripheriques' ? (
-        <Card>
-          <CardContent className="space-y-3">
-            <h3 className="text-[14px] font-semibold text-ink">Périphériques connectés</h3>
-            <p className="text-[12px] text-ink-subtle">
-              Configuration locale de ce poste (imprimante, tiroir-caisse, TPE, écran cuisine).
-            </p>
-            <div className="grid gap-2 sm:grid-cols-2">
-              {(
-                [
-                  { key: 'orderTerminals', label: 'Bornes commande' },
-                  { key: 'receiptPrinters', label: 'Imprimantes tickets' },
-                  { key: 'kitchenScreens', label: 'Écrans cuisine (KDS)' },
-                  { key: 'cashDrawer', label: 'Tiroir-caisse' },
-                  { key: 'paymentTerminals', label: 'Terminaux paiement (TPE)' },
-                ] as const
-              ).map((item) => (
-                <label
-                  key={item.key}
-                  className="flex items-center justify-between rounded-lg border border-border/70 px-3 py-2.5"
+        <div className="space-y-3">
+          <Card>
+            <CardContent className="space-y-3">
+              <div className="flex flex-wrap items-start justify-between gap-2">
+                <div>
+                  <h3 className="text-[14px] font-semibold text-ink">
+                    Toplink TL-R120
+                  </h3>
+                  <p className="mt-1 text-[12px] text-ink-subtle">
+                    Imprimante thermique 80 mm ESC/POS (USB / série). Chrome ou Edge
+                    recommandé pour l’envoi direct via Web Serial.
+                  </p>
+                </div>
+                <Badge
+                  tone={
+                    isToplinkPrinterLinked() && printerMeta.connectedAt
+                      ? 'success'
+                      : 'neutral'
+                  }
                 >
-                  <span className="text-[12px] font-medium text-ink">{item.label}</span>
-                  <Switch
-                    checked={deviceConnectivity[item.key]}
-                    onChange={(e) =>
-                      setDeviceConnectivity((prev) => ({
-                        ...prev,
-                        [item.key]: e.target.checked,
-                      }))
-                    }
-                  />
-                </label>
-              ))}
-            </div>
-          </CardContent>
-        </Card>
+                  {isToplinkPrinterLinked() && printerMeta.connectedAt
+                    ? 'Liée'
+                    : 'Non liée'}
+                </Badge>
+              </div>
+
+              {!webSerialOk ? (
+                <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-[12px] text-amber-900">
+                  Web Serial indisponible sur ce navigateur. Installez le pilote Windows
+                  de la TL-R120 et choisissez-la dans le dialogue d’impression, ou
+                  ouvrez CaisseCI dans Chrome / Edge.
+                </p>
+              ) : null}
+
+              <dl className="grid gap-1 text-[12px] text-ink-muted sm:grid-cols-2">
+                <div>
+                  <dt className="text-ink-subtle">Modèle</dt>
+                  <dd className="font-medium text-ink">{printerMeta.model}</dd>
+                </div>
+                <div>
+                  <dt className="text-ink-subtle">Libellé</dt>
+                  <dd className="font-medium text-ink">{printerMeta.label}</dd>
+                </div>
+                <div>
+                  <dt className="text-ink-subtle">Dernière utilisation</dt>
+                  <dd className="font-medium text-ink">
+                    {printerMeta.lastUsedAt
+                      ? new Date(printerMeta.lastUsedAt).toLocaleString('fr-FR')
+                      : '—'}
+                  </dd>
+                </div>
+              </dl>
+
+              <div className="flex flex-wrap gap-2">
+                <Button
+                  variant="primary"
+                  disabled={printerBusy || !webSerialOk}
+                  onClick={() => {
+                    setPrinterBusy(true)
+                    void connectToplinkPrinter()
+                      .then((meta) => {
+                        setPrinterMeta(meta)
+                        toast.success(
+                          'Imprimante liée',
+                          'Toplink TL-R120 prête pour les tickets.',
+                        )
+                      })
+                      .catch((err) =>
+                        toast.error(
+                          'Connexion impossible',
+                          err instanceof Error ? err.message : 'Erreur',
+                        ),
+                      )
+                      .finally(() => setPrinterBusy(false))
+                  }}
+                >
+                  Connecter USB
+                </Button>
+                <Button
+                  variant="secondary"
+                  disabled={printerBusy || !webSerialOk}
+                  onClick={() => {
+                    setPrinterBusy(true)
+                    void printToplinkTestPage()
+                      .then((msg) => {
+                        setPrinterMeta(getToplinkPrinterMeta())
+                        toast.success('Test OK', msg)
+                      })
+                      .catch((err) =>
+                        toast.error(
+                          'Test échoué',
+                          err instanceof Error ? err.message : 'Erreur',
+                        ),
+                      )
+                      .finally(() => setPrinterBusy(false))
+                  }}
+                >
+                  Page de test
+                </Button>
+                <Button
+                  variant="ghost"
+                  disabled={printerBusy || !printerMeta.connectedAt}
+                  onClick={() => {
+                    setPrinterBusy(true)
+                    void disconnectToplinkPrinter()
+                      .then(() => {
+                        setPrinterMeta(getToplinkPrinterMeta())
+                        toast.success('Imprimante déconnectée')
+                      })
+                      .finally(() => setPrinterBusy(false))
+                  }}
+                >
+                  Déconnecter
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardContent className="space-y-3">
+              <h3 className="text-[14px] font-semibold text-ink">
+                Périphériques connectés
+              </h3>
+              <p className="text-[12px] text-ink-subtle">
+                Activez les modules locaux de ce poste (imprimante, tiroir-caisse, TPE,
+                écran cuisine).
+              </p>
+              <div className="grid gap-2 sm:grid-cols-2">
+                {(
+                  [
+                    { key: 'orderTerminals', label: 'Bornes commande' },
+                    { key: 'receiptPrinters', label: 'Imprimantes tickets' },
+                    { key: 'kitchenScreens', label: 'Écrans cuisine (KDS)' },
+                    { key: 'cashDrawer', label: 'Tiroir-caisse (via TL-R120)' },
+                    {
+                      key: 'paymentTerminals',
+                      label: 'Terminaux paiement (TPE)',
+                    },
+                  ] as const
+                ).map((item) => (
+                  <label
+                    key={item.key}
+                    className="flex items-center justify-between rounded-lg border border-border/70 px-3 py-2.5"
+                  >
+                    <span className="text-[12px] font-medium text-ink">
+                      {item.label}
+                    </span>
+                    <Switch
+                      checked={deviceConnectivity[item.key]}
+                      onChange={(e) =>
+                        setDeviceConnectivity((prev) => ({
+                          ...prev,
+                          [item.key]: e.target.checked,
+                        }))
+                      }
+                    />
+                  </label>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+        </div>
       ) : null}
 
       {tab === 'modules' ? (

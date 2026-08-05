@@ -285,6 +285,18 @@ const NAV_SECTIONS_CAISSIER: readonly NavSection[] = [
   },
 ]
 
+/** Cuisinier : écran cuisine (KDS) + pointage. */
+const NAV_SECTIONS_CUISINIER: readonly NavSection[] = [
+  {
+    title: 'Production',
+    items: [{ id: 'kitchen', label: 'Cuisine' }],
+  },
+  {
+    title: 'Temps',
+    items: [{ id: 'pointage', label: 'Pointage' }],
+  },
+]
+
 /** Gérant : comme l’admin sauf personnel, création de magasins (onglet) et intégrations. */
 const NAV_SECTIONS_GERANT: readonly NavSection[] = [
   NAV_SECTIONS[0],
@@ -306,9 +318,20 @@ const NAV_SECTIONS_GERANT: readonly NavSection[] = [
 ] as const
 
 export function navSectionsForRole(role: UserRole): readonly NavSection[] {
-  if (role === 'caissier') return NAV_SECTIONS_CAISSIER
-  if (role === 'gerant') return NAV_SECTIONS_GERANT
-  return NAV_SECTIONS
+  switch (role) {
+    case 'caissier':
+      return NAV_SECTIONS_CAISSIER
+    case 'cuisinier':
+      return NAV_SECTIONS_CUISINIER
+    case 'gerant':
+      return NAV_SECTIONS_GERANT
+    case 'admin':
+      return NAV_SECTIONS
+    default: {
+      const _exhaustive: never = role
+      return _exhaustive
+    }
+  }
 }
 
 export function flattenedNavViewIds(
