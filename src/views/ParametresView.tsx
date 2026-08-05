@@ -405,9 +405,9 @@ export function ParametresView({
                     Toplink TL-R120
                   </h3>
                   <p className="mt-1 text-[12px] text-ink-subtle">
-                    Imprimante thermique 80 mm ESC/POS (USB / série). Chrome ou Edge
-                    sur <strong>localhost</strong> ou HTTPS. La machine doit apparaître
-                    comme port COM (pas seulement « USB Printing Support »).
+                    Imprimante thermique 80 mm ESC/POS. Pour « Connecter USB », Windows
+                    doit exposer un <strong>port COM</strong> (Chrome / Edge, localhost
+                    ou HTTPS).
                   </p>
                 </div>
                 <Badge
@@ -425,17 +425,40 @@ export function ParametresView({
 
               {!webSerialOk ? (
                 <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-[12px] text-amber-900">
-                  Web Serial indisponible sur ce navigateur. Installez le pilote Windows
-                  de la TL-R120 et choisissez-la dans le dialogue d’impression, ou
-                  ouvrez CaisseCI dans Chrome / Edge.
+                  Web Serial indisponible sur ce navigateur. Ouvrez Caisse CI dans
+                  Chrome / Edge, ou imprimez via le dialogue Windows (pilote
+                  « Printer POS-80 »).
                 </p>
               ) : (
-                <p className="rounded-lg border border-border/70 bg-surface-sunken/60 px-3 py-2 text-[12px] text-ink-muted">
-                  Si l’impression ne part pas : 1) branchez et allumez la TL-R120,
-                  2) fermez tout logiciel qui utilise le port COM, 3) cliquez
-                  « Connecter USB » puis « Page de test ». Baud détecté :{' '}
-                  {printerMeta.baudRate ?? 9600}.
-                </p>
+                <div className="space-y-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-[12px] text-amber-950">
+                  <p className="font-medium">Si l’ordinateur ne détecte pas la TL-R120</p>
+                  <ol className="list-decimal space-y-1 pl-4 text-amber-900">
+                    <li>
+                      Gestionnaire de périphériques → cherchez{' '}
+                      <strong>Ports (COM et LPT)</strong>. Il faut un port du type
+                      COM3, COM4…
+                    </li>
+                    <li>
+                      Si vous voyez seulement <strong>Printer POS-80</strong> ou
+                      « USB Printing Support » (sans COM), le mode USB actuel n’est
+                      pas compatible Web Serial : installez le pilote vendeur en mode{' '}
+                      <strong>USB Virtual COM / série</strong>, ou basculez le mode
+                      USB via l’utilitaire / DIP switch de l’imprimante.
+                    </li>
+                    <li>
+                      Essayez un autre câble USB (données, pas charge seule), un
+                      autre port USB direct (pas un hub), imprimante allumée avec
+                      papier.
+                    </li>
+                    <li>
+                      En attendant le COM : les tickets peuvent passer par le
+                      dialogue d’impression Windows (choisir « Printer POS-80 »).
+                    </li>
+                  </ol>
+                  <p className="text-amber-900">
+                    Baud détecté après liaison : {printerMeta.baudRate ?? 9600}.
+                  </p>
+                </div>
               )}
 
               <dl className="grid gap-1 text-[12px] text-ink-muted sm:grid-cols-2">

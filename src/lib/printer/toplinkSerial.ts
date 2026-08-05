@@ -222,7 +222,19 @@ export async function connectToplinkPrinter(): Promise<ToplinkPrinterMeta> {
   await closePortQuietly(activePort)
   activePort = null
 
-  const port = await navigator.serial.requestPort()
+  let port: SerialPortLike
+  try {
+    port = await navigator.serial.requestPort()
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err)
+    if (/no port selected|not allowed|user cancelled|canceled/i.test(message)) {
+      throw new Error(
+        'Aucun port série sélectionné. Si la liste est vide : Windows n’expose pas de port COM pour la TL-R120 (souvent seulement « Printer POS-80 » / USB Printing). Installez le pilote POS-80 pour imprimer via Windows, ou un mode USB Virtual COM pour « Connecter USB ».',
+      )
+    }
+    throw err instanceof Error ? err : new Error(message)
+  }
+
   const { baudRate } = await ensurePortOpen(port, readMeta().baudRate ?? 9600)
   activePort = port
   return writeMeta({
