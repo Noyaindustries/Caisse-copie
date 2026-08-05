@@ -2,6 +2,10 @@ import type { StaffProfile } from './types'
 import { isCloudApiConfigured } from '../lib/apiUrl'
 import { clientEnv } from '../lib/clientEnv'
 
+/** Profil admin créé automatiquement à l’inscription (prod) — PIN initial. */
+export const OWNER_PROFILE_ID = 'profile-owner'
+export const DEFAULT_OWNER_PIN = '1234'
+
 /**
  * Profils démo — disponibles uniquement en développement local.
  */
@@ -198,10 +202,44 @@ export function mergeStaffFromCloud(
     role: row.role,
     active: row.active,
     ...(row.storeId ? { storeId: row.storeId } : {}),
-    pin: localPins.get(row.id) ?? '0000',
+    pin:
+      localPins.get(row.id) ??
+      (row.id === OWNER_PROFILE_ID ? DEFAULT_OWNER_PIN : '0000'),
   }))
   writeCloudStaffProfiles(merged)
   return merged.length
+}
+
+/**
+ * Crée le premier admin local si aucun profil actif (évite l’impasse en production
+ * où les profils démo sont désactivés et Personnel n’est accessible qu’après login).
+ */
+export function ensureOwnerAdminProfile(orgName: string): StaffProfile | null {
+  if (typeof window === 'undefined') return null
+  if (listActiveStaffProfiles().length > 0) return null
+
+  const rawName = orgName.trim()
+  const displayName =
+    rawName.length >= 3 ? rawName.slice(0, 80) : 'Administrateur'
+  const created: StaffProfile = {
+    id: OWNER_PROFILE_ID,
+    displayName,
+    initials: computeInitials(displayName),
+    role: 'admin',
+    active: true,
+    pin: DEFAULT_OWNER_PIN,
+  }
+
+  const custom = readCustomProfiles().filter((p) => p.id !== OWNER_PROFILE_ID)
+  custom.push(created)
+  writeCustomProfiles(custom)
+  void pushStaffToServer('create', {
+    profileId: created.id,
+    displayName: created.displayName,
+    role: created.role,
+    pin: created.pin,
+  })
+  return created
 }
 
 async function pushStaffToServer(

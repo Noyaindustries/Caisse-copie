@@ -1,11 +1,14 @@
 import { useEffect, useMemo, useState } from 'react'
 import { profileSecretMatches } from '../auth/permissions'
 import {
+  DEFAULT_OWNER_PIN,
+  ensureOwnerAdminProfile,
   listActiveStaffProfiles,
   roleLabel,
   subscribeStaffProfiles,
 } from '../auth/profiles'
 import type { StaffAuthMethod, StaffProfile } from '../auth/types'
+import { useSubscription } from '../context/SubscriptionContext'
 import { db } from '../db/db'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { BRAND_NAME } from '../brand'
@@ -23,6 +26,7 @@ const MAX_FAILED_ATTEMPTS = 5
 const LOCKOUT_MS = 30_000
 
 export function LoginScreen({ onSuccess }: Props) {
+  const { organization } = useSubscription()
   const [profiles, setProfiles] = useState<StaffProfile[]>(() =>
     listActiveStaffProfiles(),
   )
@@ -33,8 +37,18 @@ export function LoginScreen({ onSuccess }: Props) {
   const [failedAttempts, setFailedAttempts] = useState(0)
   const [lockedUntil, setLockedUntil] = useState(0)
   const [now, setNow] = useState(() => Date.now())
+  const [bootstrappedOwner, setBootstrappedOwner] = useState(false)
   const stores = useLiveQuery(() => db.stores.orderBy('sortOrder').toArray(), [], []) ?? []
   const storeNameById = new Map(stores.map((store) => [store.id, store.name]))
+
+  useEffect(() => {
+    if (listActiveStaffProfiles().length > 0) return
+    const created = ensureOwnerAdminProfile(organization?.name ?? 'Administrateur')
+    if (created) {
+      setBootstrappedOwner(true)
+      setProfiles(listActiveStaffProfiles())
+    }
+  }, [organization?.name])
 
   useEffect(() => {
     return subscribeStaffProfiles(() => {
@@ -150,6 +164,13 @@ export function LoginScreen({ onSuccess }: Props) {
                 ? `Saisissez votre PIN${selected.password ? ' ou mot de passe' : ''}.`
                 : 'Sélectionnez votre profil pour continuer.'}
             </p>
+            {bootstrappedOwner && !selected ? (
+              <p className="mt-2 rounded-lg bg-amber-50 px-3 py-2 text-[12px] text-amber-900">
+                Premier accès : connectez-vous avec le PIN{' '}
+                <span className="font-mono font-semibold">{DEFAULT_OWNER_PIN}</span>
+                , puis changez-le dans Personnel.
+              </p>
+            ) : null}
           </div>
 
           {!selected ? (

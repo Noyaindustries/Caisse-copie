@@ -43,10 +43,19 @@ staffRouter.get('/org/staff', async (req, res) => {
   const org = await requireOrg(req, res)
   if (!org) return
 
-  const rows = await prisma.staffMember.findMany({
+  let rows = await prisma.staffMember.findMany({
     where: { organizationId: org.id, revokedAt: null },
     orderBy: { displayName: 'asc' },
   })
+
+  if (rows.length === 0) {
+    const { ensureOwnerStaffMember } = await import('../lib/ensureOwnerStaff.js')
+    await ensureOwnerStaffMember(org)
+    rows = await prisma.staffMember.findMany({
+      where: { organizationId: org.id, revokedAt: null },
+      orderBy: { displayName: 'asc' },
+    })
+  }
 
   res.json({
     staff: rows.map(serializeStaff),

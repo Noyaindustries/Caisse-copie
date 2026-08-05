@@ -226,6 +226,9 @@ billingRouter.post('/billing/register', async (req, res) => {
       },
     })
 
+    const { ensureOwnerStaffMember } = await import('../lib/ensureOwnerStaff.js')
+    await ensureOwnerStaffMember(org, { ownerPassword: password })
+
     res.status(201).json(await orgPayloadWithSession(org))
   } catch (err) {
     console.error('[billing/register]', err)
