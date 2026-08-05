@@ -6,7 +6,7 @@ Guide d’utilisation pour les gérants, caissiers et administrateurs.
 
 ## 1. Vue d’ensemble
 
-**CaisseCI** (Infinitecore Système) est une caisse enregistreuse et une plateforme de gestion magasin **offline-first**, adaptée aux commerces en Côte d’Ivoire.
+**Caisse CI** est une caisse enregistreuse et une plateforme de gestion magasin **offline-first**, adaptée aux commerces en Côte d’Ivoire.
 
 ### Ce que l’application couvre
 
@@ -407,7 +407,7 @@ CaisseCI est une **PWA** installable et s’adapte aux petits écrans :
 
 ## 18. Support
 
-Pour toute question commerciale ou technique, contactez **Infinitecore Système**.
+Pour toute question commerciale ou technique, contactez **Caisse CI**.
 
 Documentation technique (développeurs) : [documentation-technique.md](documentation-technique.md)  
 Référence modules : [documentation-modules.md](documentation-modules.md)

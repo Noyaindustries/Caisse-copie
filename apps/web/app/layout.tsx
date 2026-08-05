@@ -13,11 +13,11 @@ import Providers from './providers'
 
 export const metadata: Metadata = {
   metadataBase: new URL(process.env.APP_URL ?? 'http://localhost:3000'),
-  title: 'CaisseCI — Caisse POS & abonnement | Infinitecore Système',
+  title: 'Caisse CI — Caisse POS & abonnement',
   description:
-    'CaisseCI — caisse POS offline-first pour la Côte d’Ivoire. Mobile money, multi-postes, essai gratuit 1 mois. Orange Money, Wave, MTN MoMo.',
+    'Caisse CI — caisse POS offline-first pour la Côte d’Ivoire. Mobile money, multi-postes, essai gratuit 1 mois. Orange Money, Wave, MTN MoMo.',
   openGraph: {
-    title: 'CaisseCI — Caisse POS & abonnement',
+    title: 'Caisse CI — Caisse POS & abonnement',
     description:
       'Vendez hors ligne, payez en mobile money, gérez vos équipes. Essai gratuit 1 mois.',
     type: 'website',
@@ -30,7 +30,7 @@ export const metadata: Metadata = {
   icons: {
     icon: [
       { url: '/branding/logo-circle.svg', type: 'image/svg+xml' },
-      { url: '/branding/digitalpro-solutions-logo.png', type: 'image/png' },
+      { url: '/branding/caisse-ci-logo.png', type: 'image/png' },
     ],
   },
 }

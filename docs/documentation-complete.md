@@ -1,6 +1,6 @@
 # CaisseCI — Documentation complète
 
-**Infinitecore Système** — Caisse enregistreuse et gestion magasin **offline-first**, adaptée aux commerces en Côte d’Ivoire.
+**Caisse CI** — Caisse enregistreuse et gestion magasin **offline-first**, adaptée aux commerces en Côte d’Ivoire.
 
 ---
 
@@ -75,4 +75,4 @@ API : http://localhost:4000 — App : http://localhost:5173
 ## Support
 
 Voir [documentation-utilisateur.md](documentation-utilisateur.md) et [documentation-modules.md](documentation-modules.md).  
-Contact : **Infinitecore Système**.
+Contact : **Caisse CI**.

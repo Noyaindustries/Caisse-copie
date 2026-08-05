@@ -1,6 +1,6 @@
 # Documentation CaisseCI
 
-Index de la documentation de l’application **Infinitecore Système**.
+Index de la documentation de l’application **Caisse CI**.
 
 ## Par où commencer ?
 

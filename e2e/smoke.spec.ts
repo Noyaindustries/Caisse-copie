@@ -3,7 +3,7 @@ import { test, expect } from '@playwright/test'
 test.describe('Site commercial', () => {
   test('affiche la page d’accueil', async ({ page }) => {
     await page.goto('/')
-    await expect(page).toHaveTitle(/CaisseCI|Infinitecore/i)
+    await expect(page).toHaveTitle(/Caisse\s*CI/i)
   })
 
   test('navigue vers les tarifs', async ({ page }) => {

@@ -129,7 +129,7 @@ export function SiteBrandingAdminPanel({ theme, inputClass }: Props) {
       <Card className={theme.card}>
         <CardHeader
           title="Logo page d’accueil"
-          subtitle="Remplace le logo Infinitecore sur le site marketing (/)"
+          subtitle="Remplace le logo Caisse CI sur le site marketing (/)"
         />
         <CardContent className="space-y-5">
           <div className="flex flex-wrap items-center gap-4">

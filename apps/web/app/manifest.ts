@@ -2,8 +2,8 @@ import type { MetadataRoute } from 'next'
 
 export default function manifest(): MetadataRoute.Manifest {
   return {
-    name: 'Digitalpro Solutions — Point de vente',
-    short_name: 'Digitalpro Solutions',
+    name: 'Caisse CI — Point de vente',
+    short_name: 'Caisse CI',
     description:
       'Caisse enregistreuse hors ligne pour commerces en Côte d’Ivoire',
     theme_color: '#003399',
@@ -22,7 +22,7 @@ export default function manifest(): MetadataRoute.Manifest {
         purpose: 'any',
       },
       {
-        src: '/branding/digitalpro-solutions-logo.png',
+        src: '/branding/caisse-ci-logo.png',
         sizes: '512x512',
         type: 'image/png',
         purpose: 'maskable',

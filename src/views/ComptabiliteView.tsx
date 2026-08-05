@@ -151,7 +151,7 @@ export function ComptabiliteView({ canManageCompta }: Props) {
 
   const exportAccountingCsv = useCallback(() => {
     const rows: string[][] = [
-      ['Export comptable Infinitecore Système'],
+      ['Export comptable Caisse CI'],
       ['Période', `${fromYmd} -> ${toYmd}`],
       ['Magasin', storeFilter === 'all' ? 'Tous' : (stores.find((s) => s.id === storeFilter)?.name ?? storeFilter)],
       [],

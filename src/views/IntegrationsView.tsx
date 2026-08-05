@@ -579,7 +579,7 @@ export function IntegrationsView() {
                   'Notifications push rupture & seuils',
                   'Validation workflow remises (PIN gérant)',
                   'État file synchronisation cloud & retry manuel',
-                  'Authentification alignée sur les profils Infinitecore Système',
+                  'Authentification alignée sur les profils Caisse CI',
                 ].map((it) => (
                   <li key={it} className="flex items-start gap-2">
                     <IconCheck className="mt-0.5 h-3.5 w-3.5 shrink-0 text-emerald-600" />

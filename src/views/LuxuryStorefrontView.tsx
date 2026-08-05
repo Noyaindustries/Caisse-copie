@@ -1828,7 +1828,7 @@ export function LuxuryStorefrontView({
           </div>
 
           <div className="mt-4 border-t border-stone-200 pt-3 text-[11px] text-stone-500">
-            <p>Propulsé par CaisseCI · {BRAND_NAME}</p>
+            <p>Propulsé par {BRAND_NAME}</p>
           </div>
         </footer>
       </div>

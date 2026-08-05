@@ -205,7 +205,7 @@ export function AnalytiqueView() {
 
   const exportSummaryCsv = useCallback(() => {
     const rows: string[][] = [
-      ['Rapport analytique Infinitecore Système'],
+      ['Rapport analytique Caisse CI'],
       ['Période', periodLabel],
       ['CA net TTC', String(caPeriod)],
       ['Tickets', String(tickets)],
@@ -267,7 +267,7 @@ export function AnalytiqueView() {
 
   const exportWebOrdersCsv = useCallback(() => {
     const rows: string[][] = [
-      ['Analytique — commandes web Infinitecore Système'],
+      ['Analytique — commandes web Caisse CI'],
       ['Période (date de création)', periodLabel],
       ['Commandes créées', String(webStats.created)],
       ['En attente (état actuel)', String(webStats.pending)],
