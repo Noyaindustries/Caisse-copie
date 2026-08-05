@@ -7,6 +7,10 @@ import {
   salePaymentAmounts,
 } from '../lib/paymentDisplay'
 import { printReceipt as printReceiptJob } from '../lib/printer/printReceipt'
+import {
+  getReceiptBusinessName,
+  receiptDocumentLabel,
+} from '../lib/receiptBusinessName'
 import { saleNetTTC } from '../lib/refundMath'
 import { SESSION_ID } from '../lib/session'
 import { Button } from '../ui/Button'
@@ -123,11 +127,14 @@ export function ReceiptModal({ source, autoPrint = false, onClose }: Props) {
         ? 'Facture'
         : 'Reçu'
       : 'Reçu de vente'
-  const tagline = isOnline
-    ? 'Infinitecore Système · Commande web'
+  const businessName = getReceiptBusinessName()
+  const documentLabel = isOnline
+    ? receiptDocumentLabel('onlineOrder')
     : isTicketInvoice
-      ? `Infinitecore Système · ${ticketInvoice?.kind === 'facture' ? 'Facture' : 'Ticket'}`
-      : 'Infinitecore Système · Ticket de caisse'
+      ? receiptDocumentLabel(
+          ticketInvoice?.kind === 'facture' ? 'facture' : 'ticket',
+        )
+      : receiptDocumentLabel('sale')
 
   const printViaBrowser = useCallback(() => {
     const printFrame = document.createElement('iframe')
@@ -184,12 +191,13 @@ ${ticketInvoice.notes ? `<div><strong>Note :</strong> ${ticketInvoice.notes}</di
   <body>
     <section id="print-receipt">
       <div style="text-align:center;border-bottom:1px dashed #999;padding-bottom:8px;">
-        <div style="font-size:11px;font-weight:700;letter-spacing:.08em;">${tagline}</div>
+        <div style="font-size:18px;font-weight:700;">${businessName}</div>
+        <div style="font-size:11px;font-weight:600;letter-spacing:.06em;margin-top:4px;color:#444;">${documentLabel}</div>
         <div style="font-size:12px;color:#555;margin-top:4px;">${dtLabel}</div>
         <div style="font-size:11px;color:#555;margin-top:2px;">Session #${SESSION_ID}</div>
         <div style="font-size:12px;margin-top:4px;"><strong>Réf.</strong> ${receiptRef}</div>
         ${sale.cashierDisplayName ? `<div style="font-size:12px;">Caissier : ${sale.cashierDisplayName}</div>` : ''}
-        ${sale.storeName ? `<div style="font-size:12px;">Point de vente : ${sale.storeName}</div>` : ''}
+        ${sale.storeName && sale.storeName.trim() !== businessName ? `<div style="font-size:12px;">Point de vente : ${sale.storeName}</div>` : ''}
         ${sale.tableName ? `<div style="font-size:12px;">Table : ${sale.tableName}</div>` : ''}
         ${clientBlock}
       </div>
@@ -214,7 +222,7 @@ ${ticketInvoice.notes ? `<div><strong>Note :</strong> ${ticketInvoice.notes}</di
         printFrame.remove()
       }, 300)
     }, 300)
-  }, [dtLabel, sale, tagline, ticketInvoice, vatSlices])
+  }, [businessName, documentLabel, dtLabel, sale, ticketInvoice, vatSlices])
 
   const printReceipt = useCallback(async () => {
     if (printing) return
@@ -226,10 +234,12 @@ ${ticketInvoice.notes ? `<div><strong>Note :</strong> ${ticketInvoice.notes}</di
       })
       if (result.mode === 'escpos') {
         toast.success('Ticket imprimé', result.message)
+      } else {
+        toast.info('Impression navigateur', result.message)
       }
     } catch (err) {
       toast.error(
-        'Impression impossible',
+        'Impression Toplink',
         err instanceof Error ? err.message : 'Erreur inconnue',
       )
       printViaBrowser()
@@ -279,8 +289,11 @@ ${ticketInvoice.notes ? `<div><strong>Note :</strong> ${ticketInvoice.notes}</di
     >
       <div id="print-receipt" className="space-y-4 text-zinc-800">
         <header className="border-b border-dashed border-zinc-200 pb-3 text-center">
-          <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-zinc-700">
-            {tagline}
+          <p className="text-lg font-bold tracking-tight text-zinc-900">
+            {businessName}
+          </p>
+          <p className="mt-1 text-[10px] font-bold uppercase tracking-[0.18em] text-zinc-500">
+            {documentLabel}
           </p>
           <p className="mt-1.5 font-mono-nums text-[12px] text-zinc-500">{dtLabel}</p>
           <p className="mt-1 font-mono-nums text-[10px] text-zinc-500">
@@ -355,7 +368,7 @@ ${ticketInvoice.notes ? `<div><strong>Note :</strong> ${ticketInvoice.notes}</di
               </span>
             </p>
           ) : null}
-          {sale.storeName ? (
+          {sale.storeName && sale.storeName.trim() !== businessName ? (
             <p className="text-[11px] text-zinc-600">
               Point de vente :{' '}
               <span className="font-semibold text-zinc-800">

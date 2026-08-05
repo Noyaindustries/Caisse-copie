@@ -134,11 +134,13 @@ export function SubscriptionView() {
 
 
 
-  const boutiqueLink = subscription?.storeCode
+  const boutiqueKey =
+    subscription?.storefrontKey ||
+    subscription?.storeSlug ||
+    subscription?.storeCode ||
+    null
 
-    ? storefrontUrl(subscription.storeCode)
-
-    : null
+  const boutiqueLink = boutiqueKey ? storefrontUrl(boutiqueKey) : null
 
 
 

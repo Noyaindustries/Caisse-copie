@@ -6,6 +6,7 @@ import {
   salePaymentAmounts,
 } from '../paymentDisplay'
 import { saleNetTTC } from '../refundMath'
+import { getReceiptBusinessName, receiptDocumentLabel } from '../receiptBusinessName'
 import { SESSION_ID } from '../session'
 import {
   centerLine,
@@ -65,14 +66,14 @@ function resolveSale(source: ReceiptPrintSource): {
   sale: Sale
   order: OnlineOrder | null
   ticketInvoice: TicketInvoice | null
-  tagline: string
+  documentLabel: string
 } {
   if (source.kind === 'sale') {
     return {
       sale: source.sale,
       order: null,
       ticketInvoice: null,
-      tagline: 'Infinitecore Systeme · Ticket de caisse',
+      documentLabel: receiptDocumentLabel('sale'),
     }
   }
   if (source.kind === 'onlineOrder') {
@@ -80,16 +81,16 @@ function resolveSale(source: ReceiptPrintSource): {
       sale: syntheticSaleFromOnlineOrder(source.order),
       order: source.order,
       ticketInvoice: null,
-      tagline: 'Infinitecore Systeme · Commande web',
+      documentLabel: receiptDocumentLabel('onlineOrder'),
     }
   }
   return {
     sale: syntheticSaleFromTicketInvoice(source.ticketInvoice),
     order: null,
     ticketInvoice: source.ticketInvoice,
-    tagline: `Infinitecore Systeme · ${
-      source.ticketInvoice.kind === 'facture' ? 'Facture' : 'Ticket'
-    }`,
+    documentLabel: receiptDocumentLabel(
+      source.ticketInvoice.kind === 'facture' ? 'facture' : 'ticket',
+    ),
   }
 }
 
@@ -100,7 +101,8 @@ export function buildEscPosReceipt(
   source: ReceiptPrintSource,
   options?: { openCashDrawer?: boolean },
 ): Uint8Array {
-  const { sale, order, ticketInvoice, tagline } = resolveSale(source)
+  const { sale, order, ticketInvoice, documentLabel } = resolveSale(source)
+  const businessName = getReceiptBusinessName()
   const dtLabel = new Date(sale.createdAt).toLocaleString('fr-FR', {
     dateStyle: 'medium',
     timeStyle: 'short',
@@ -120,10 +122,10 @@ export function buildEscPosReceipt(
     cmdAlign('center'),
     cmdBold(true),
     cmdDoubleSize(true),
-    textLine('CaisseCI'),
+    textLine(businessName),
     cmdDoubleSize(false),
     cmdBold(false),
-    textLine(tagline),
+    textLine(documentLabel),
     textLine(dtLabel),
     textLine(`Session #${SESSION_ID}`),
     textLine(`Ref. ${receiptRef}`),
@@ -132,7 +134,7 @@ export function buildEscPosReceipt(
   if (sale.cashierDisplayName) {
     chunks.push(textLine(`Caissier : ${sale.cashierDisplayName}`))
   }
-  if (sale.storeName) {
+  if (sale.storeName && sale.storeName.trim() !== businessName) {
     chunks.push(textLine(`Magasin : ${sale.storeName}`))
   }
   if (sale.tableName) {

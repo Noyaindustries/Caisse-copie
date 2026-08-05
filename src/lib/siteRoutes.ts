@@ -52,15 +52,26 @@ export function parseStorefrontCode(pathname: string): string | null {
   return decodeURIComponent(segment)
 }
 
-export function storefrontPath(storeCode: string): string {
-  return `${ROUTES.storefrontBase}/${encodeURIComponent(storeCode.trim().toUpperCase())}`
+/**
+ * Chemin boutique public.
+ * - slug entreprise (ex. restaurant-le-palmier) : conservé en minuscules
+ * - code MAG-XXXX (legacy) : normalisé en majuscules
+ */
+export function storefrontPath(slugOrCode: string): string {
+  const raw = slugOrCode.trim()
+  if (!raw) return ROUTES.storefrontBase
+  if (/^MAG-?[A-Z0-9]+$/i.test(raw.replace(/\s/g, ''))) {
+    const code = raw.replace(/\s/g, '').toUpperCase().replace(/^MAG(?!-)/, 'MAG-')
+    return `${ROUTES.storefrontBase}/${encodeURIComponent(code)}`
+  }
+  return `${ROUTES.storefrontBase}/${encodeURIComponent(raw.toLowerCase())}`
 }
 
-export function storefrontUrl(storeCode: string, origin?: string): string {
+export function storefrontUrl(slugOrCode: string, origin?: string): string {
   const base =
     origin ??
     (typeof globalThis.window !== 'undefined' ? globalThis.window.location.origin : '')
-  return `${base.replace(/\/$/, '')}${storefrontPath(storeCode)}`
+  return `${base.replace(/\/$/, '')}${storefrontPath(slugOrCode)}`
 }
 
 export function isStaffPath(pathname?: string): boolean {

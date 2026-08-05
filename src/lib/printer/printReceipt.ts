@@ -6,6 +6,7 @@ import {
 } from './receiptEscPos'
 import {
   connectToplinkPrinter,
+  isToplinkPrinterLinked,
   isWebSerialSupported,
   reconnectToplinkPrinter,
   sendRawToToplinkPrinter,
@@ -36,6 +37,8 @@ export async function printReceipt(
   const openCashDrawer =
     options?.openCashDrawer === true && devices.cashDrawer
 
+  let toplinkError: Error | null = null
+
   if (!options?.preferBrowser && isWebSerialSupported()) {
     try {
       const ready = await reconnectToplinkPrinter()
@@ -47,14 +50,29 @@ export async function printReceipt(
           message: 'Ticket envoyé à l’imprimante Toplink TL-R120.',
         }
       }
-    } catch {
-      /* bascule navigateur */
+      if (isToplinkPrinterLinked()) {
+        toplinkError = new Error(
+          'Imprimante marquée comme liée mais le port USB est inaccessible. Reconnectez-la (Paramètres → Périphériques → Connecter USB).',
+        )
+      }
+    } catch (err) {
+      toplinkError =
+        err instanceof Error
+          ? err
+          : new Error('Échec d’envoi vers la Toplink TL-R120.')
     }
   }
 
   if (options?.browserFallback) {
     options.browserFallback()
   }
+
+  if (toplinkError) {
+    throw new Error(
+      `${toplinkError.message} Repli : dialogue d’impression Windows.`,
+    )
+  }
+
   return {
     mode: 'browser',
     message:
@@ -65,7 +83,7 @@ export async function printReceipt(
 export async function printToplinkTestPage(): Promise<string> {
   if (!isWebSerialSupported()) {
     throw new Error(
-      'Web Serial requis (Chrome ou Edge). Sinon, installez le pilote Windows de la TL-R120.',
+      'Web Serial requis (Chrome ou Edge sur localhost/HTTPS). Sinon, installez le pilote Windows de la TL-R120.',
     )
   }
   const ready = await reconnectToplinkPrinter()

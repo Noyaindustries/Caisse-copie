@@ -48,7 +48,11 @@ function StorefrontQrCodeContent({ url, storeCode, storeName }: Props) {
       })
       const anchor = document.createElement('a')
       anchor.href = dataUrl
-      anchor.download = `boutique-${storeCode.replace(/\s+/g, '-')}.png`
+      anchor.download = `boutique-${(storeName ?? storeCode)
+        .trim()
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, '-')
+        .replace(/^-+|-+$/g, '') || storeCode}.png`
       anchor.click()
     } catch {
       setError('Téléchargement impossible')
@@ -76,7 +80,8 @@ function StorefrontQrCodeContent({ url, storeCode, storeName }: Props) {
         Télécharger PNG
       </Button>
       <p className="max-w-[168px] text-center text-[10px] leading-snug text-slate-500">
-        Scannez pour ouvrir le menu · {storeCode}
+        Scannez pour ouvrir le menu
+        {storeName ? ` · ${storeName}` : ` · ${storeCode}`}
       </p>
     </div>
   )

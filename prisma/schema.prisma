@@ -48,6 +48,8 @@ model Organization {
   passwordHash          String?
   licenseKey            String                    @unique
   storeCode             String?                   @unique
+  /** Segment d’URL boutique public (nom d’entreprise slugifié). */
+  storeSlug             String?                   @unique
   planId                String                    @default("starter")
   status                String                    @default("trialing")
   stripeCustomerId      String?

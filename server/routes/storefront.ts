@@ -25,6 +25,11 @@ import {
   type SubscriptionStatus,
 } from '../lib/subscriptionPlans.js'
 import { normalizeStoreCode } from './billing.js'
+import {
+  ensureStorefrontIdentity,
+  normalizeStoreSlug,
+  storefrontPublicKey,
+} from '../lib/storeSlug.js'
 
 export const storefrontRouter = Router()
 
@@ -185,18 +190,41 @@ const submitOrderSchema = z.object({
   deliveryFeeTTC: z.number().nonnegative().max(1_000_000).optional(),
 })
 
-function storefrontPath(storeCode: string): string {
-  return `/boutique/${encodeURIComponent(storeCode)}`
+function storefrontPath(key: string): string {
+  return `/boutique/${encodeURIComponent(key)}`
 }
 
-function publicStorefrontUrl(req: Request, storeCode: string): string {
-  return `${publicAppUrl(req)}${storefrontPath(storeCode)}`
+function publicStorefrontUrl(
+  req: Request,
+  org: { storeSlug?: string | null; storeCode: string },
+): string {
+  const key = storefrontPublicKey(org) ?? org.storeCode
+  return `${publicAppUrl(req)}${storefrontPath(key)}`
 }
 
 async function findOrgByStoreCodeParam(raw: string) {
-  const normalized = normalizeStoreCode(raw)
+  const trimmed = decodeURIComponent(String(raw ?? '')).trim()
+  if (!trimmed) return null
+
+  const slug = normalizeStoreSlug(trimmed)
+  if (slug) {
+    const bySlug = await prisma.organization.findFirst({
+      where: { storeSlug: slug },
+    })
+    if (bySlug) {
+      await ensureStorefrontIdentity(bySlug)
+      return prisma.organization.findUniqueOrThrow({ where: { id: bySlug.id } })
+    }
+  }
+
+  const normalized = normalizeStoreCode(trimmed)
   if (!normalized) return null
-  return prisma.organization.findUnique({ where: { storeCode: normalized } })
+  const byCode = await prisma.organization.findUnique({
+    where: { storeCode: normalized },
+  })
+  if (!byCode) return null
+  await ensureStorefrontIdentity(byCode)
+  return prisma.organization.findUniqueOrThrow({ where: { id: byCode.id } })
 }
 
 storefrontRouter.get('/billing/storefront/branding', async (req, res) => {
@@ -212,8 +240,9 @@ storefrontRouter.get('/billing/storefront/branding', async (req, res) => {
       storeName: typeof menu?.storeName === 'string' ? menu.storeName : org.name,
       menuPublished: Boolean(org.storefrontMenu),
       publishedAt: org.storefrontPublishedAt?.toISOString() ?? null,
-      storefrontUrl: publicStorefrontUrl(req, org.storeCode),
+      storefrontUrl: publicStorefrontUrl(req, org),
       storeCode: org.storeCode,
+      storeSlug: org.storeSlug ?? null,
     })
   } catch (err) {
     console.error('[storefront/branding-get]', err)
@@ -262,7 +291,10 @@ storefrontRouter.patch('/billing/storefront/branding', async (req, res) => {
       ok: true,
       branding: branding ?? {},
       publishedAt: existingMenu ? publishedAt.toISOString() : null,
-      storefrontUrl: publicStorefrontUrl(req, org.storeCode),
+      storefrontUrl: publicStorefrontUrl(req, {
+        storeSlug: org.storeSlug,
+        storeCode: org.storeCode ?? '',
+      }),
     })
   } catch (err) {
     if (err instanceof z.ZodError) {
@@ -299,9 +331,13 @@ storefrontRouter.get('/billing/storefront/:storeCode', async (req, res) => {
       organizationId: org.id,
       name: org.name,
       storeCode: org.storeCode,
+      storeSlug: org.storeSlug ?? null,
       usable,
       planId: parsePlanId(org.planId),
-      storefrontUrl: publicStorefrontUrl(req, org.storeCode),
+      storefrontUrl: publicStorefrontUrl(req, {
+        storeSlug: org.storeSlug,
+        storeCode: org.storeCode ?? '',
+      }),
       menuPublished: Boolean(org.storefrontMenu),
       publishedAt: org.storefrontPublishedAt?.toISOString() ?? null,
       waveEnabled: waveCredsEnabled(merchantCreds),
@@ -466,6 +502,7 @@ storefrontRouter.post('/billing/storefront/:storeCode/orders', async (req, res) 
         ? (org.storefrontMenu as { storeName: string }).storeName
         : org.name,
       storeCode: org.storeCode,
+      storeSlug: org.storeSlug ?? null,
       source: 'public_storefront',
       status: initialStatus,
       paymentStatus: isWavePayment ? 'awaiting' : 'not_required',
@@ -475,7 +512,7 @@ storefrontRouter.post('/billing/storefront/:storeCode/orders', async (req, res) 
     await prisma.storefrontOrder.create({
       data: {
         organizationId: org.id,
-        storeCode: org.storeCode,
+        storeCode: org.storeCode!,
         externalId,
         status: initialStatus,
         payload,
@@ -492,7 +529,12 @@ storefrontRouter.post('/billing/storefront/:storeCode/orders', async (req, res) 
     }
 
     const baseUrl = publicAppUrl(req)
-    const boutiquePath = storefrontPath(org.storeCode)
+    const boutiqueKey =
+      storefrontPublicKey({
+        storeSlug: org.storeSlug,
+        storeCode: org.storeCode,
+      }) ?? org.storeCode ?? ''
+    const boutiquePath = storefrontPath(boutiqueKey)
     const successUrl = `${baseUrl}${boutiquePath}?order=${encodeURIComponent(externalId)}&payment=success`
     const errorUrl = `${baseUrl}${boutiquePath}?order=${encodeURIComponent(externalId)}&payment=cancel`
 
@@ -627,7 +669,10 @@ storefrontRouter.post('/billing/storefront/publish', async (req, res) => {
     res.json({
       ok: true,
       publishedAt: publishedAt.toISOString(),
-      storefrontUrl: publicStorefrontUrl(req, org.storeCode),
+      storefrontUrl: publicStorefrontUrl(req, {
+        storeSlug: org.storeSlug,
+        storeCode: org.storeCode ?? '',
+      }),
       productCount: menu.products.length,
     })
   } catch (err) {

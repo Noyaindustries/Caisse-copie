@@ -23,6 +23,14 @@ app.use('/branding', express.static(publicBrandingPath))
 const server = app.listen(port, () => {
   console.log(`CaisseCI API en écoute sur http://localhost:${port}`)
   startSubscriptionReminderScheduler()
+  void import('./lib/storeSlug.js')
+    .then(({ backfillMissingStoreSlugs }) => backfillMissingStoreSlugs())
+    .then((n) => {
+      if (n > 0) console.log(`[store-slug] ${n} boutique(s) mises à jour (nom d’entreprise).`)
+    })
+    .catch((err) => {
+      console.warn('[store-slug] Backfill :', err instanceof Error ? err.message : err)
+    })
   void import('./lib/paymentProviderSettings.js')
     .then(({ refreshPaymentProviderSettings }) => refreshPaymentProviderSettings())
     .then((cfg) => {

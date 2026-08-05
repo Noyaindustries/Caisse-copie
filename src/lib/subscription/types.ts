@@ -24,6 +24,10 @@ export type SubscriptionSnapshot = {
   licenseKey: string
   sessionToken?: string
   storeCode: string | null
+  /** Segment URL boutique (nom d’entreprise slugifié). */
+  storeSlug?: string | null
+  /** Clé préférée pour /boutique/... (slug ou code). */
+  storefrontKey?: string | null
   planId: PlanId
   plan: PlanDefinition
   status: SubscriptionStatus
@@ -72,4 +76,6 @@ export type OrganizationCredentials = {
   organizationId: string
   name: string
   storeCode?: string | null
+  storeSlug?: string | null
+  storefrontKey?: string | null
 }

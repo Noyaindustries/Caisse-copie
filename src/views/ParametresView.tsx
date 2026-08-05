@@ -406,7 +406,8 @@ export function ParametresView({
                   </h3>
                   <p className="mt-1 text-[12px] text-ink-subtle">
                     Imprimante thermique 80 mm ESC/POS (USB / série). Chrome ou Edge
-                    recommandé pour l’envoi direct via Web Serial.
+                    sur <strong>localhost</strong> ou HTTPS. La machine doit apparaître
+                    comme port COM (pas seulement « USB Printing Support »).
                   </p>
                 </div>
                 <Badge
@@ -428,7 +429,14 @@ export function ParametresView({
                   de la TL-R120 et choisissez-la dans le dialogue d’impression, ou
                   ouvrez CaisseCI dans Chrome / Edge.
                 </p>
-              ) : null}
+              ) : (
+                <p className="rounded-lg border border-border/70 bg-surface-sunken/60 px-3 py-2 text-[12px] text-ink-muted">
+                  Si l’impression ne part pas : 1) branchez et allumez la TL-R120,
+                  2) fermez tout logiciel qui utilise le port COM, 3) cliquez
+                  « Connecter USB » puis « Page de test ». Baud détecté :{' '}
+                  {printerMeta.baudRate ?? 9600}.
+                </p>
+              )}
 
               <dl className="grid gap-1 text-[12px] text-ink-muted sm:grid-cols-2">
                 <div>

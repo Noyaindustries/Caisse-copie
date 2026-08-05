@@ -271,7 +271,7 @@ export function SubscriptionHero({
           </div>
         </div>
 
-        {boutiqueLink && subscription.storeCode ? (
+        {boutiqueLink && (subscription.storeSlug || subscription.storeCode) ? (
           <div className="mt-4 rounded-2xl border border-[rgba(232,199,106,0.28)] bg-[rgba(184,146,46,0.12)] p-5 backdrop-blur-md">
             <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
               <div className="min-w-0 flex-1">
@@ -314,7 +314,12 @@ export function SubscriptionHero({
               </div>
               <StorefrontQrCode
                 url={boutiqueLink}
-                storeCode={subscription.storeCode}
+                storeCode={
+                  subscription.storeSlug ||
+                  subscription.storeCode ||
+                  subscription.storefrontKey ||
+                  'boutique'
+                }
                 storeName={subscription.name}
               />
             </div>

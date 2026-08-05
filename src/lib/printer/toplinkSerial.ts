@@ -1,16 +1,26 @@
 const PRINTER_META_KEY = 'caisseci-toplink-printer-meta'
 
+/** Débits courants pour thermiques ESC/POS USB-série. */
+const BAUD_CANDIDATES = [9600, 115200, 38400, 57600] as const
+
 export type ToplinkPrinterMeta = {
   model: 'TL-R120'
   connectedAt: number | null
   lastUsedAt: number | null
   label: string
+  baudRate?: number
 }
 
 type SerialPortLike = {
   readable: ReadableStream<Uint8Array> | null
   writable: WritableStream<Uint8Array> | null
-  open: (options: { baudRate: number }) => Promise<void>
+  open: (options: {
+    baudRate: number
+    dataBits?: 7 | 8
+    stopBits?: 1 | 2
+    parity?: 'none' | 'even' | 'odd'
+    flowControl?: 'none' | 'hardware'
+  }) => Promise<void>
   close: () => Promise<void>
   getInfo?: () => { usbVendorId?: number; usbProductId?: number }
 }
@@ -30,6 +40,7 @@ declare global {
 
 let activePort: SerialPortLike | null = null
 let openPromise: Promise<SerialPortLike> | null = null
+let discardAbort: AbortController | null = null
 
 function readMeta(): ToplinkPrinterMeta {
   try {
@@ -40,6 +51,7 @@ function readMeta(): ToplinkPrinterMeta {
         connectedAt: null,
         lastUsedAt: null,
         label: 'Toplink TL-R120',
+        baudRate: 9600,
       }
     }
     const parsed = JSON.parse(raw) as Partial<ToplinkPrinterMeta>
@@ -53,6 +65,10 @@ function readMeta(): ToplinkPrinterMeta {
         typeof parsed.label === 'string' && parsed.label.trim()
           ? parsed.label.trim()
           : 'Toplink TL-R120',
+      baudRate:
+        typeof parsed.baudRate === 'number' && parsed.baudRate > 0
+          ? parsed.baudRate
+          : 9600,
     }
   } catch {
     return {
@@ -60,6 +76,7 @@ function readMeta(): ToplinkPrinterMeta {
       connectedAt: null,
       lastUsedAt: null,
       label: 'Toplink TL-R120',
+      baudRate: 9600,
     }
   }
 }
@@ -86,10 +103,110 @@ export function isToplinkPrinterLinked(): boolean {
   return activePort != null || Boolean(readMeta().connectedAt)
 }
 
-async function ensurePortOpen(port: SerialPortLike): Promise<SerialPortLike> {
-  if (port.writable) return port
-  await port.open({ baudRate: 9600 })
-  return port
+function stopDiscardReader(): void {
+  discardAbort?.abort()
+  discardAbort = null
+}
+
+/**
+ * Vide le flux readable pour éviter que le buffer USB se sature
+ * (sinon les écritures bloquent ou échouent silencieusement).
+ */
+function startDiscardReader(port: SerialPortLike): void {
+  stopDiscardReader()
+  if (!port.readable) return
+  const abort = new AbortController()
+  discardAbort = abort
+  const reader = port.readable.getReader()
+  void (async () => {
+    try {
+      while (!abort.signal.aborted) {
+        const { done } = await reader.read()
+        if (done) break
+      }
+    } catch {
+      /* port fermé / annulé */
+    } finally {
+      try {
+        reader.releaseLock()
+      } catch {
+        /* ignore */
+      }
+    }
+  })()
+}
+
+async function closePortQuietly(port: SerialPortLike | null): Promise<void> {
+  if (!port) return
+  stopDiscardReader()
+  try {
+    await port.close()
+  } catch {
+    /* déjà fermé */
+  }
+}
+
+async function openPortAtBaud(
+  port: SerialPortLike,
+  baudRate: number,
+): Promise<void> {
+  if (port.writable) {
+    startDiscardReader(port)
+    return
+  }
+  try {
+    await port.open({
+      baudRate,
+      dataBits: 8,
+      stopBits: 1,
+      parity: 'none',
+      flowControl: 'none',
+    })
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err)
+    // Port déjà ouvert dans cet onglet / session — réutiliser.
+    if (/already open/i.test(message) && port.writable) {
+      startDiscardReader(port)
+      return
+    }
+    throw err
+  }
+  startDiscardReader(port)
+}
+
+async function ensurePortOpen(
+  port: SerialPortLike,
+  preferredBaud?: number,
+): Promise<{ port: SerialPortLike; baudRate: number }> {
+  if (port.writable) {
+    startDiscardReader(port)
+    return { port, baudRate: preferredBaud ?? readMeta().baudRate ?? 9600 }
+  }
+
+  const order = [
+    preferredBaud,
+    ...BAUD_CANDIDATES,
+  ].filter((b): b is number => typeof b === 'number' && b > 0)
+
+  const tried = new Set<number>()
+  let lastError: unknown
+  for (const baud of order) {
+    if (tried.has(baud)) continue
+    tried.add(baud)
+    try {
+      await openPortAtBaud(port, baud)
+      return { port, baudRate: baud }
+    } catch (err) {
+      lastError = err
+      await closePortQuietly(port)
+    }
+  }
+
+  const detail =
+    lastError instanceof Error ? lastError.message : 'ouverture impossible'
+  throw new Error(
+    `Impossible d’ouvrir le port USB (${detail}). Vérifiez que la TL-R120 est branchée, allumée, et qu’aucun autre logiciel (pilote Windows, autre onglet) ne l’utilise.`,
+  )
 }
 
 /**
@@ -99,51 +216,80 @@ async function ensurePortOpen(port: SerialPortLike): Promise<SerialPortLike> {
 export async function connectToplinkPrinter(): Promise<ToplinkPrinterMeta> {
   if (!navigator.serial) {
     throw new Error(
-      'Web Serial indisponible. Utilisez Chrome ou Edge, ou imprimez via le pilote Windows.',
+      'Web Serial indisponible. Utilisez Chrome ou Edge sur http://localhost ou HTTPS.',
     )
   }
+  await closePortQuietly(activePort)
+  activePort = null
+
   const port = await navigator.serial.requestPort()
-  await ensurePortOpen(port)
+  const { baudRate } = await ensurePortOpen(port, readMeta().baudRate ?? 9600)
   activePort = port
   return writeMeta({
     connectedAt: Date.now(),
     lastUsedAt: Date.now(),
-    label: 'Toplink TL-R120 (USB / série)',
+    baudRate,
+    label: `Toplink TL-R120 (USB · ${baudRate} bauds)`,
   })
 }
 
 /** Réutilise un port déjà autorisé par le navigateur. */
 export async function reconnectToplinkPrinter(): Promise<boolean> {
   if (!navigator.serial) return false
-  if (activePort?.writable) return true
+  if (activePort?.writable) {
+    startDiscardReader(activePort)
+    return true
+  }
   const ports = await navigator.serial.getPorts()
-  const port = ports[0]
-  if (!port) return false
-  await ensurePortOpen(port)
-  activePort = port
-  writeMeta({ lastUsedAt: Date.now(), connectedAt: Date.now() })
-  return true
+  if (ports.length === 0) return false
+
+  const preferredBaud = readMeta().baudRate ?? 9600
+  let lastError: unknown
+  for (const port of ports) {
+    try {
+      const opened = await ensurePortOpen(port, preferredBaud)
+      activePort = opened.port
+      writeMeta({
+        lastUsedAt: Date.now(),
+        connectedAt: Date.now(),
+        baudRate: opened.baudRate,
+      })
+      return true
+    } catch (err) {
+      lastError = err
+      activePort = null
+    }
+  }
+
+  if (lastError) {
+    console.warn('[toplink] reconnect:', lastError)
+  }
+  return false
 }
 
 export async function disconnectToplinkPrinter(): Promise<void> {
-  if (activePort) {
-    try {
-      await activePort.close()
-    } catch {
-      /* déjà fermé */
-    }
-  }
+  await closePortQuietly(activePort)
   activePort = null
   writeMeta({ connectedAt: null })
+}
+
+async function writeInChunks(
+  writer: WritableStreamDefaultWriter<Uint8Array>,
+  data: Uint8Array,
+): Promise<void> {
+  const CHUNK = 256
+  for (let offset = 0; offset < data.length; offset += CHUNK) {
+    await writer.ready
+    await writer.write(data.subarray(offset, offset + CHUNK))
+  }
+  await writer.ready
 }
 
 /**
  * Envoie des octets ESC/POS sur un port déjà autorisé.
  * Ne demande pas de nouveau sélecteur de port (pour l’impression vente).
  */
-export async function sendRawToToplinkPrinter(
-  data: Uint8Array,
-): Promise<void> {
+export async function sendRawToToplinkPrinter(data: Uint8Array): Promise<void> {
   if (openPromise) {
     await openPromise
   }
@@ -152,11 +298,12 @@ export async function sendRawToToplinkPrinter(
     const ok = await reconnectToplinkPrinter()
     if (!ok || !activePort?.writable) {
       throw new Error(
-        'Imprimante Toplink non connectée. Liez-la dans Paramètres → Périphériques.',
+        'Imprimante Toplink non connectée. Cliquez « Connecter USB » dans Paramètres → Périphériques (Chrome / Edge).',
       )
     }
     return activePort
   })()
+
   try {
     const port = await openPromise
     if (!port.writable) {
@@ -164,11 +311,20 @@ export async function sendRawToToplinkPrinter(
     }
     const writer = port.writable.getWriter()
     try {
-      await writer.write(data)
+      await writeInChunks(writer, data)
       writeMeta({ lastUsedAt: Date.now() })
     } finally {
-      writer.releaseLock()
+      try {
+        writer.releaseLock()
+      } catch {
+        /* ignore */
+      }
     }
+  } catch (err) {
+    // Port corrompu → forcer une reconnexion au prochain essai.
+    await closePortQuietly(activePort)
+    activePort = null
+    throw err
   } finally {
     openPromise = null
   }

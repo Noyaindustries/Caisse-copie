@@ -35,6 +35,11 @@ import {
 } from '../lib/ownerAuth.js'
 import { resolveOrgFromRequest, readBearerToken } from '../lib/orgAuth.js'
 import { createOrgSession, revokeOrgSession } from '../lib/sessionTokens.js'
+import {
+  allocateUniqueStoreSlug,
+  ensureStorefrontIdentity,
+  storefrontPublicKey,
+} from '../lib/storeSlug.js'
 
 export const billingRouter = Router()
 
@@ -61,16 +66,18 @@ export function normalizeStoreCode(input: string): string {
   return `MAG-${raw}`
 }
 
-type OrgWithStoreCode = Organization & { storeCode: string }
+type OrgWithStoreCode = Organization & { storeCode: string; storeSlug: string }
 
 async function ensureStoreCode(org: Organization): Promise<OrgWithStoreCode> {
-  if (org.storeCode) return { ...org, storeCode: org.storeCode }
-  const storeCode = await generateStoreCode()
-  const updated = await prisma.organization.update({
+  const identity = await ensureStorefrontIdentity(org)
+  const fresh = await prisma.organization.findUniqueOrThrow({
     where: { id: org.id },
-    data: { storeCode },
   })
-  return { ...updated, storeCode }
+  return {
+    ...fresh,
+    storeCode: identity.storeCode,
+    storeSlug: identity.storeSlug,
+  }
 }
 
 function parsePlanId(value: string | undefined): PlanId {
@@ -97,6 +104,7 @@ function orgPayload(org: {
   email: string
   licenseKey: string
   storeCode?: string | null
+  storeSlug?: string | null
   planId: string
   status: string
   trialEndsAt: Date | null
@@ -111,13 +119,18 @@ function orgPayload(org: {
     org.currentPeriodEnd,
     org.trialEndsAt,
   )
+  const storeSlug = org.storeSlug?.trim() || null
+  const storeCode = org.storeCode ?? null
   return {
     organizationId: org.id,
     name: org.name,
     email: org.email,
     licenseKey: org.licenseKey,
     sessionToken: sessionToken ?? undefined,
-    storeCode: org.storeCode ?? null,
+    storeCode,
+    storeSlug,
+    /** Clé d’URL boutique (nom d’entreprise) — préférer à storeCode côté client. */
+    storefrontKey: storefrontPublicKey({ storeSlug, storeCode }),
     planId,
     plan: SUBSCRIPTION_PLANS[planId],
     status,
@@ -212,6 +225,7 @@ billingRouter.post('/billing/register', async (req, res) => {
     const trialEndsAt = new Date()
     trialEndsAt.setDate(trialEndsAt.getDate() + TRIAL_DAYS)
     const storeCode = await generateStoreCode()
+    const storeSlug = await allocateUniqueStoreSlug(name, { storeCode })
 
     const org = await prisma.organization.create({
       data: {
@@ -220,6 +234,7 @@ billingRouter.post('/billing/register', async (req, res) => {
         passwordHash: hashOwnerPassword(password),
         licenseKey: generateLicenseKey(),
         storeCode,
+        storeSlug,
         planId,
         status: 'trialing',
         trialEndsAt,

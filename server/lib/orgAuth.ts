@@ -3,18 +3,20 @@ import type { Organization } from '@prisma/client'
 import { prisma } from './prisma.js'
 import { resolveOrgIdFromSessionToken } from './sessionTokens.js'
 import { assertSubscriptionActive } from './quotaEnforcement.js'
+import { ensureStorefrontIdentity } from './storeSlug.js'
 
-type OrgWithStoreCode = Organization & { storeCode: string }
+type OrgWithStoreCode = Organization & { storeCode: string; storeSlug: string }
 
 async function ensureStoreCode(org: Organization): Promise<OrgWithStoreCode> {
-  if (org.storeCode) return { ...org, storeCode: org.storeCode }
-  const suffix = Math.random().toString(16).slice(2, 6).toUpperCase()
-  const storeCode = `MAG-${suffix}`
-  const updated = await prisma.organization.update({
+  const identity = await ensureStorefrontIdentity(org)
+  const fresh = await prisma.organization.findUniqueOrThrow({
     where: { id: org.id },
-    data: { storeCode },
   })
-  return { ...updated, storeCode: updated.storeCode ?? storeCode }
+  return {
+    ...fresh,
+    storeCode: identity.storeCode,
+    storeSlug: identity.storeSlug,
+  }
 }
 
 export function readBearerToken(req: Request): string | null {

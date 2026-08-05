@@ -649,7 +649,10 @@ mobileMoneyRouter.post('/billing/wave/demo/:transactionId/accept', async (req, r
         : {}
     const storeCode =
       typeof payload.storeCode === 'string' ? payload.storeCode : order.storeCode
-    const returnUrl = `${publicAppUrl(req)}/boutique/${encodeURIComponent(storeCode)}?order=${encodeURIComponent(transactionId)}&payment=success`
+    const storeSlug =
+      typeof payload.storeSlug === 'string' ? payload.storeSlug.trim() : ''
+    const boutiqueKey = storeSlug || storeCode
+    const returnUrl = `${publicAppUrl(req)}/boutique/${encodeURIComponent(boutiqueKey)}?order=${encodeURIComponent(transactionId)}&payment=success`
     res.redirect(returnUrl)
     return
   }
@@ -694,8 +697,11 @@ mobileMoneyRouter.post('/billing/wave/demo/:transactionId/refuse', async (req, r
         : {}
     const storeCode =
       typeof payload.storeCode === 'string' ? payload.storeCode : order.storeCode
+    const storeSlug =
+      typeof payload.storeSlug === 'string' ? payload.storeSlug.trim() : ''
+    const boutiqueKey = storeSlug || storeCode
     res.redirect(
-      `${publicAppUrl(req)}/boutique/${encodeURIComponent(storeCode)}?order=${encodeURIComponent(transactionId)}&payment=cancel`,
+      `${publicAppUrl(req)}/boutique/${encodeURIComponent(boutiqueKey)}?order=${encodeURIComponent(transactionId)}&payment=cancel`,
     )
     return
   }
