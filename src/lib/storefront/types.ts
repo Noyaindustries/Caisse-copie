@@ -58,6 +58,26 @@ export type PublicStorefrontOrderInput = {
 
 const HEX_COLOR_RE = /^#[0-9A-Fa-f]{6}$/
 
+/** HTTPS court ; data URL logo/bannière ≤ ~500 Ko ≈ 700k–1,5M caractères. */
+const MAX_REMOTE_IMAGE_URL = 2_000
+const MAX_DATA_IMAGE_URL = 1_500_000
+
+function normalizeStorefrontImageUrl(raw: string): string | undefined {
+  const value = raw.trim()
+  if (!value) return undefined
+  if (value.startsWith('data:image/')) {
+    return value.length <= MAX_DATA_IMAGE_URL ? value : undefined
+  }
+  if (
+    /^https?:\/\//i.test(value) ||
+    value.startsWith('/uploads/') ||
+    value.startsWith('/branding/')
+  ) {
+    return value.length <= MAX_REMOTE_IMAGE_URL ? value : undefined
+  }
+  return undefined
+}
+
 export function normalizeStorefrontBranding(
   input: unknown,
 ): StorefrontBranding | undefined {
@@ -70,11 +90,11 @@ export function normalizeStorefrontBranding(
     if (shopName) branding.shopName = shopName
   }
   if (typeof raw.logoUrl === 'string') {
-    const logoUrl = raw.logoUrl.trim().slice(0, 2_000)
+    const logoUrl = normalizeStorefrontImageUrl(raw.logoUrl)
     if (logoUrl) branding.logoUrl = logoUrl
   }
   if (typeof raw.bannerUrl === 'string') {
-    const bannerUrl = raw.bannerUrl.trim().slice(0, 2_000)
+    const bannerUrl = normalizeStorefrontImageUrl(raw.bannerUrl)
     if (bannerUrl) branding.bannerUrl = bannerUrl
   }
   if (typeof raw.welcomeMessage === 'string') {

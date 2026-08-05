@@ -63,6 +63,14 @@ export function SiteBrandingAdminPanel({ theme, inputClass }: Props) {
 
   const handleUpload = async (file: File | null) => {
     if (!file) return
+    if (!file.type.startsWith('image/')) {
+      setMessage('Choisissez une image (PNG, JPEG, WebP ou GIF).')
+      return
+    }
+    if (file.size > 500 * 1024) {
+      setMessage('Image trop volumineuse (max 500 Ko).')
+      return
+    }
     setBusy(true)
     setMessage(null)
     try {

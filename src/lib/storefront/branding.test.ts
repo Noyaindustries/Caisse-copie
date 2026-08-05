@@ -39,6 +39,22 @@ describe('normalizeStorefrontBranding', () => {
       normalizeStorefrontBranding({ primaryColor: 'red' }),
     ).toBeUndefined()
   })
+
+  it('conserve une data URL logo longue (pas de troncature à 2k)', () => {
+    const payload = 'A'.repeat(12_000)
+    const logoUrl = `data:image/png;base64,${payload}`
+    expect(
+      normalizeStorefrontBranding({ logoUrl })?.logoUrl,
+    ).toBe(logoUrl)
+  })
+
+  it('accepte une URL https courte', () => {
+    expect(
+      normalizeStorefrontBranding({
+        logoUrl: 'https://example.com/logo.png',
+      })?.logoUrl,
+    ).toBe('https://example.com/logo.png')
+  })
 })
 
 describe('storefrontDisplayName / accent', () => {

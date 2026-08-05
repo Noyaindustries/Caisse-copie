@@ -33,6 +33,7 @@ import type {
   StorefrontPaymentMethod,
 } from '../lib/storefront/types'
 import {
+  normalizeStorefrontBranding,
   storefrontAccentColor,
   storefrontDisplayName,
 } from '../lib/storefront/types'
@@ -176,7 +177,7 @@ export function LuxuryStorefrontView({
       }
     : storeCtx?.activeStore
   const isPublicStorefront = Boolean(publicStorefront)
-  const branding = publicStorefront?.branding
+  const branding = normalizeStorefrontBranding(publicStorefront?.branding)
   const shopTitle = storefrontDisplayName(
     branding,
     publicStorefront?.storeName ?? activeStore?.name ?? BRAND_NAME,
@@ -855,7 +856,10 @@ export function LuxuryStorefrontView({
               <img
                 src={logoUrl}
                 alt=""
-                className="h-10 w-10 shrink-0 rounded-full border border-stone-200 object-cover"
+                className="h-10 w-10 shrink-0 rounded-full border border-stone-200 object-cover bg-white"
+                onError={(e) => {
+                  e.currentTarget.style.display = 'none'
+                }}
               />
             ) : (
               <BrandLogo size="md" alt="" ring="gold" />
@@ -911,7 +915,10 @@ export function LuxuryStorefrontView({
             <img
               src={logoUrl}
               alt=""
-              className="mb-4 h-16 w-16 rounded-full border-2 border-stone-200 object-cover shadow-lg sm:h-20 sm:w-20"
+              className="mb-4 h-16 w-16 rounded-full border-2 border-stone-200 object-cover shadow-lg bg-white sm:h-20 sm:w-20"
+              onError={(e) => {
+                e.currentTarget.style.display = 'none'
+              }}
             />
           ) : null}
           <h1 className="max-w-2xl font-display text-4xl font-bold tracking-tight text-balance text-stone-900 sm:text-5xl lg:text-6xl">
@@ -1731,7 +1738,10 @@ export function LuxuryStorefrontView({
                 <img
                   src={logoUrl}
                   alt={shopTitle}
-                  className="h-16 w-16 rounded-2xl object-cover ring-1 ring-stone-200"
+                  className="h-16 w-16 rounded-2xl object-cover ring-1 ring-stone-200 bg-white"
+                  onError={(e) => {
+                    e.currentTarget.style.display = 'none'
+                  }}
                 />
               ) : (
                 <BrandLogo size="xl" alt={BRAND_NAME} ring="gold" />

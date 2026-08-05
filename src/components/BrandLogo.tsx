@@ -1,4 +1,7 @@
-import { BRAND_NAME } from '../brand'
+'use client'
+
+import { useEffect, useState } from 'react'
+import { BRAND_LOGO_SRC, BRAND_NAME } from '../brand'
 import { useSiteBranding } from '../context/SiteBrandingContext'
 import { cn } from '../ui/cn'
 
@@ -29,13 +32,24 @@ export function BrandLogo({
   src,
 }: BrandLogoProps) {
   const { logoSrc, brandName } = useSiteBranding()
-  const resolvedSrc = src?.trim() || logoSrc
+  const preferredSrc = src?.trim() || logoSrc
+  const [resolvedSrc, setResolvedSrc] = useState(preferredSrc || BRAND_LOGO_SRC)
   const resolvedAlt = alt ?? (brandName || BRAND_NAME)
+
+  useEffect(() => {
+    setResolvedSrc(preferredSrc || BRAND_LOGO_SRC)
+  }, [preferredSrc])
 
   return (
     <img
+      key={resolvedSrc}
       src={resolvedSrc}
       alt={resolvedAlt}
+      onError={() => {
+        if (resolvedSrc !== BRAND_LOGO_SRC) {
+          setResolvedSrc(BRAND_LOGO_SRC)
+        }
+      }}
       className={cn(
         'shrink-0 rounded-full object-contain bg-white',
         SIZES[size],

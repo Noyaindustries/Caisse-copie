@@ -102,7 +102,8 @@ app.post(
   express.raw({ type: 'application/json' }),
   handleWaveWebhook,
 )
-app.use(express.json({ limit: '2mb' }))
+// Logos / bannières en data URL (≤ 500 Ko fichier ≈ 0,7 Mo base64) + marge.
+app.use(express.json({ limit: '4mb' }))
 app.use(morgan('dev'))
 
 import { prisma } from './lib/prisma.js'

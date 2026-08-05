@@ -9,19 +9,31 @@ const ALLOWED_CONTENT_TYPES = new Set([
   'image/gif',
 ])
 
+/** Certains OS / navigateurs envoient `image/jpg` au lieu de `image/jpeg`. */
+function normalizeImageContentType(raw: string): string {
+  const lower = raw.toLowerCase()
+  if (lower === 'image/jpg' || lower === 'image/pjpeg') return 'image/jpeg'
+  return lower
+}
+
 export function isBlobStorageConfigured(): boolean {
   return Boolean(process.env.BLOB_READ_WRITE_TOKEN?.trim())
 }
 
-export function parseImageDataUrl(dataUrl: string): { contentType: string; buffer: Buffer } {
-  const match = /^data:(image\/[a-z0-9.+-]+);base64,([a-z0-9+/=\s]+)$/i.exec(dataUrl.trim())
+export function parseImageDataUrl(dataUrl: string): {
+  contentType: string
+  buffer: Buffer
+} {
+  const match = /^data:(image\/[a-z0-9.+-]+);base64,([a-z0-9+/=\s]+)$/i.exec(
+    dataUrl.trim(),
+  )
   if (!match) {
-    throw new Error('Format dâ€™image invalide (data URL attendue).')
+    throw new Error("Format d'image invalide (data URL attendue).")
   }
 
-  const contentType = match[1]!.toLowerCase()
+  const contentType = normalizeImageContentType(match[1]!)
   if (!ALLOWED_CONTENT_TYPES.has(contentType)) {
-    throw new Error('Type dâ€™image non supportÃ© (JPEG, PNG, WebP ou GIF).')
+    throw new Error("Type d'image non supporté (JPEG, PNG, WebP ou GIF).")
   }
 
   const buffer = Buffer.from(match[2]!.replace(/\s/g, ''), 'base64')
@@ -57,7 +69,7 @@ export async function uploadOrganizationProductImage(params: {
 }): Promise<string> {
   const token = process.env.BLOB_READ_WRITE_TOKEN?.trim()
   if (!token) {
-    throw new Error('Stockage Vercel Blob non configurÃ©.')
+    throw new Error('Stockage Vercel Blob non configuré.')
   }
 
   const { contentType, buffer } = parseImageDataUrl(params.dataUrl)
@@ -81,7 +93,7 @@ export async function uploadOrganizationAsset(params: {
 }): Promise<string> {
   const token = process.env.BLOB_READ_WRITE_TOKEN?.trim()
   if (!token) {
-    throw new Error('Stockage Vercel Blob non configurÃ©.')
+    throw new Error('Stockage Vercel Blob non configuré.')
   }
 
   const { contentType, buffer } = parseImageDataUrl(params.dataUrl)
