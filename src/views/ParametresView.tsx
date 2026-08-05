@@ -22,7 +22,11 @@ import {
   setKitchenStationDemo,
   type DeviceConnectivityDemo,
 } from '../lib/integrationsConfig'
-import { printToplinkTestPage } from '../lib/printer/printReceipt'
+import {
+  CASH_DRAWER_WINDOWS_HINT,
+  kickCashDrawer,
+  printToplinkTestPage,
+} from '../lib/printer/printReceipt'
 import {
   connectToplinkPrinter,
   disconnectToplinkPrinter,
@@ -273,7 +277,9 @@ export function ParametresView({
               <div>
                 <p className="text-[13px] font-medium text-ink">Impression auto après vente</p>
                 <p className="text-[11px] text-ink-subtle">
-                  Ouvre et imprime le ticket dès l’encaissement (si imprimante activée).
+                  Dès l’encaissement, ouvre le ticket et le dialogue d’impression
+                  Windows (choisir POS-80). Nécessite « Imprimantes tickets » activé
+                  dans Périphériques.
                 </p>
               </div>
               <Switch
@@ -527,6 +533,30 @@ export function ParametresView({
                   Page de test
                 </Button>
                 <Button
+                  variant="secondary"
+                  disabled={printerBusy}
+                  onClick={() => {
+                    setPrinterBusy(true)
+                    void kickCashDrawer()
+                      .then((ok) => {
+                        if (ok) {
+                          toast.success('Tiroir', 'Commande d’ouverture envoyée.')
+                          return
+                        }
+                        toast.warning('Tiroir non ouvert', CASH_DRAWER_WINDOWS_HINT)
+                      })
+                      .catch((err) =>
+                        toast.error(
+                          'Tiroir',
+                          err instanceof Error ? err.message : 'Erreur',
+                        ),
+                      )
+                      .finally(() => setPrinterBusy(false))
+                  }}
+                >
+                  Ouvrir le tiroir
+                </Button>
+                <Button
                   variant="ghost"
                   disabled={printerBusy || !printerMeta.connectedAt}
                   onClick={() => {
@@ -542,6 +572,12 @@ export function ParametresView({
                   Déconnecter
                 </Button>
               </div>
+              <p className="text-[11px] text-ink-subtle">
+                Le tiroir branché en RJ11 sur l’imprimante ne s’ouvre que via ESC/POS
+                (port COM) ou via l’option « ouvrir le tiroir » dans les préférences
+                Windows de <strong>POS-80</strong>. L’impression PDF/GDI seule ne
+                déclenche pas le tiroir.
+              </p>
             </CardContent>
           </Card>
 
@@ -560,7 +596,7 @@ export function ParametresView({
                     { key: 'orderTerminals', label: 'Bornes commande' },
                     { key: 'receiptPrinters', label: 'Imprimantes tickets' },
                     { key: 'kitchenScreens', label: 'Écrans cuisine (KDS)' },
-                    { key: 'cashDrawer', label: 'Tiroir-caisse (via TL-R120)' },
+                    { key: 'cashDrawer', label: 'Tiroir-caisse (RJ11 via imprimante)' },
                     {
                       key: 'paymentTerminals',
                       label: 'Terminaux paiement (TPE)',

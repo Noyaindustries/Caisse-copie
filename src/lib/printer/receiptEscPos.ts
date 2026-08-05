@@ -241,10 +241,16 @@ export function buildEscPosReceipt(
     cmdAlign('center'),
     cmdFeed(1),
     textLine(centerLine(footer)),
-    textLine(centerLine('Toplink TL-R120 · ESC/POS')),
-    cmdFeed(3),
-    cmdCut(),
+    textLine(centerLine('Caisse CI · ESC/POS')),
+    cmdFeed(2),
   )
+
+  // Pulse tiroir avant la coupe (plus fiable sur certains clones POS-80).
+  if (options?.openCashDrawer) {
+    chunks.push(cmdOpenCashDrawer())
+  }
+
+  chunks.push(cmdFeed(2), cmdCut())
 
   if (options?.openCashDrawer) {
     chunks.push(cmdOpenCashDrawer())

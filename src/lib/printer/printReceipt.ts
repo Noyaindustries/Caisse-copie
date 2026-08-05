@@ -1,4 +1,5 @@
 import { getDeviceConnectivityDemo } from '../integrationsConfig'
+import { cmdInit, cmdOpenCashDrawer, concatBytes } from './escpos'
 import {
   buildEscPosReceipt,
   buildEscPosTestPage,
@@ -6,7 +7,6 @@ import {
 } from './receiptEscPos'
 import {
   connectToplinkPrinter,
-  isToplinkPrinterLinked,
   isWebSerialSupported,
   reconnectToplinkPrinter,
   sendRawToToplinkPrinter,
@@ -15,11 +15,43 @@ import {
 export type PrintReceiptResult = {
   mode: 'escpos' | 'browser'
   message: string
+  drawerOpened?: boolean
+}
+
+/** True si un port ESC/POS Toplink est réellement ouvert / reconnectable. */
+export async function isToplinkEscPosReady(): Promise<boolean> {
+  if (!isWebSerialSupported()) return false
+  try {
+    return await reconnectToplinkPrinter()
+  } catch {
+    return false
+  }
 }
 
 /**
+ * Envoie uniquement la commande d’ouverture tiroir (ESC/POS).
+ * Nécessite un port COM / Web Serial — inactif avec le seul pilote Windows GDI.
+ */
+export async function kickCashDrawer(): Promise<boolean> {
+  if (!isWebSerialSupported()) return false
+  try {
+    const ready = await reconnectToplinkPrinter()
+    if (!ready) return false
+    await sendRawToToplinkPrinter(
+      concatBytes(cmdInit(), cmdOpenCashDrawer(), cmdOpenCashDrawer()),
+    )
+    return true
+  } catch {
+    return false
+  }
+}
+
+export const CASH_DRAWER_WINDOWS_HINT =
+  'Tiroir via Windows : Paramètres → Imprimantes → POS-80 → Préférences d’impression → ouvrir le tiroir avant/après impression (broche 2). Ou branchez en mode USB Virtual COM pour l’ESC/POS.'
+
+/**
  * Impression ticket : Toplink TL-R120 (ESC/POS via Web Serial) si déjà liée,
- * sinon dialogue d’impression navigateur (pilote Windows).
+ * sinon dialogue d’impression navigateur (pilote Windows POS-80).
  */
 export async function printReceipt(
   source: ReceiptPrintSource,
@@ -34,26 +66,28 @@ export async function printReceipt(
     throw new Error('Les imprimantes tickets sont désactivées dans Paramètres.')
   }
 
-  const openCashDrawer =
-    options?.openCashDrawer === true && devices.cashDrawer
+  const wantDrawer =
+    options?.openCashDrawer === true &&
+    (devices.cashDrawer || devices.receiptPrinters)
 
   let toplinkError: Error | null = null
+  let drawerOpened = false
 
   if (!options?.preferBrowser && isWebSerialSupported()) {
     try {
       const ready = await reconnectToplinkPrinter()
       if (ready) {
-        const payload = buildEscPosReceipt(source, { openCashDrawer })
+        const payload = buildEscPosReceipt(source, {
+          openCashDrawer: wantDrawer,
+        })
         await sendRawToToplinkPrinter(payload)
         return {
           mode: 'escpos',
-          message: 'Ticket envoyé à l’imprimante Toplink TL-R120.',
+          message: wantDrawer
+            ? 'Ticket envoyé à l’imprimante (tiroir déclenché).'
+            : 'Ticket envoyé à l’imprimante Toplink TL-R120.',
+          drawerOpened: wantDrawer,
         }
-      }
-      if (isToplinkPrinterLinked()) {
-        toplinkError = new Error(
-          'Imprimante marquée comme liée mais le port USB est inaccessible. Reconnectez-la (Paramètres → Périphériques → Connecter USB).',
-        )
       }
     } catch (err) {
       toplinkError =
@@ -63,20 +97,40 @@ export async function printReceipt(
     }
   }
 
+  // Impression Windows : tenter quand même le pulse ESC/POS si un COM existe.
+  if (wantDrawer) {
+    drawerOpened = await kickCashDrawer()
+  }
+
   if (options?.browserFallback) {
     options.browserFallback()
+    const parts: string[] = [
+      'Impression via le pilote Windows (POS-80).',
+    ]
+    if (wantDrawer && !drawerOpened) {
+      parts.push(CASH_DRAWER_WINDOWS_HINT)
+    } else if (wantDrawer && drawerOpened) {
+      parts.push('Tiroir ouvert via ESC/POS.')
+    }
+    if (toplinkError) {
+      parts.unshift(toplinkError.message)
+    }
+    return {
+      mode: 'browser',
+      message: parts.join(' '),
+      drawerOpened,
+    }
   }
 
   if (toplinkError) {
-    throw new Error(
-      `${toplinkError.message} Repli : dialogue d’impression Windows.`,
-    )
+    throw toplinkError
   }
 
   return {
     mode: 'browser',
     message:
       'Impression via le pilote Windows / dialogue navigateur. Pour l’ESC/POS direct, liez la TL-R120 dans Paramètres → Périphériques (Chrome / Edge).',
+    drawerOpened,
   }
 }
 

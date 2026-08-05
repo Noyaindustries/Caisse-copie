@@ -1195,12 +1195,13 @@ export function Shell({ staff, online, onLogout }: Props) {
       setReceiptOpen({
         type: 'sale',
         sale: saleRecord,
-        autoPrint: deviceConnectivity.receiptPrinters && autoPrintReceiptAfterSale,
+        // Impression dès validation dès que le module imprimantes tickets est actif.
+        autoPrint: deviceConnectivity.receiptPrinters,
       })
       if (!deviceConnectivity.receiptPrinters) {
         toast.info(
           'Imprimante ticket désactivée',
-          'Le reçu reste consultable à l’écran.',
+          'Activez « Imprimantes tickets » dans Paramètres → Périphériques.',
         )
       }
       setCart([])

@@ -6,7 +6,11 @@ import {
   paymentMethodShortLabel,
   salePaymentAmounts,
 } from '../lib/paymentDisplay'
-import { printReceipt as printReceiptJob } from '../lib/printer/printReceipt'
+import {
+  printReceipt as printReceiptJob,
+  isToplinkEscPosReady,
+  CASH_DRAWER_WINDOWS_HINT,
+} from '../lib/printer/printReceipt'
 import {
   getReceiptBusinessName,
   receiptDocumentLabel,
@@ -138,11 +142,14 @@ export function ReceiptModal({ source, autoPrint = false, onClose }: Props) {
 
   const printViaBrowser = useCallback(() => {
     const printFrame = document.createElement('iframe')
+    printFrame.setAttribute('title', 'Impression ticket')
     printFrame.style.position = 'fixed'
     printFrame.style.right = '0'
     printFrame.style.bottom = '0'
-    printFrame.style.width = '0'
-    printFrame.style.height = '0'
+    printFrame.style.width = '1px'
+    printFrame.style.height = '1px'
+    printFrame.style.opacity = '0'
+    printFrame.style.pointerEvents = 'none'
     printFrame.style.border = '0'
     printFrame.setAttribute('aria-hidden', 'true')
     document.body.appendChild(printFrame)
@@ -175,8 +182,7 @@ ${ticketInvoice.customerPhone ? `<div><strong>Tél. :</strong> ${ticketInvoice.c
 ${ticketInvoice.notes ? `<div><strong>Note :</strong> ${ticketInvoice.notes}</div>` : ''}
 </div>`
       : ''
-    frameWindow.document.open()
-    frameWindow.document.write(`<!doctype html>
+    const html = `<!doctype html>
 <html lang="fr">
   <head>
     <meta charset="utf-8" />
@@ -186,6 +192,7 @@ ${ticketInvoice.notes ? `<div><strong>Note :</strong> ${ticketInvoice.notes}</di
       html, body { background: #fff; color: #111; font-family: Arial, sans-serif; }
       body { margin: 0; padding: 8mm; }
       .row { display:flex; justify-content:space-between; font-size:12px; }
+      @page { margin: 4mm; size: 80mm auto; }
     </style>
   </head>
   <body>
@@ -213,33 +220,48 @@ ${ticketInvoice.notes ? `<div><strong>Note :</strong> ${ticketInvoice.notes}</di
       </div>
     </section>
   </body>
-</html>`)
+</html>`
+
+    const triggerPrint = () => {
+      try {
+        frameWindow.focus()
+        frameWindow.print()
+      } finally {
+        window.setTimeout(() => {
+          printFrame.remove()
+        }, 1500)
+      }
+    }
+
+    printFrame.addEventListener('load', () => {
+      window.setTimeout(triggerPrint, 50)
+    })
+    frameWindow.document.open()
+    frameWindow.document.write(html)
     frameWindow.document.close()
-    frameWindow.focus()
-    window.setTimeout(() => {
-      frameWindow.print()
-      window.setTimeout(() => {
-        printFrame.remove()
-      }, 300)
-    }, 300)
   }, [businessName, documentLabel, dtLabel, sale, ticketInvoice, vatSlices])
 
   const printReceipt = useCallback(async () => {
     if (printing) return
     setPrinting(true)
     try {
+      const escposReady = await isToplinkEscPosReady()
       const result = await printReceiptJob(source, {
         openCashDrawer: amt.cash > 0,
+        preferBrowser: !escposReady,
         browserFallback: printViaBrowser,
       })
       if (result.mode === 'escpos') {
         toast.success('Ticket imprimé', result.message)
       } else {
-        toast.info('Impression navigateur', result.message)
+        toast.info('Impression', 'Choisissez POS-80 puis Imprimer.')
+        if (amt.cash > 0 && result.drawerOpened === false) {
+          toast.warning('Tiroir-caisse', CASH_DRAWER_WINDOWS_HINT)
+        }
       }
     } catch (err) {
       toast.error(
-        'Impression Toplink',
+        'Impression',
         err instanceof Error ? err.message : 'Erreur inconnue',
       )
       printViaBrowser()
@@ -254,13 +276,10 @@ ${ticketInvoice.notes ? `<div><strong>Note :</strong> ${ticketInvoice.notes}</di
       return
     }
     autoPrintedReceiptRef.current = receiptKey
+    // Court délai pour laisser le modal se monter, sans perdre le geste utilisateur.
     const id = window.setTimeout(() => {
-      requestAnimationFrame(() => {
-        requestAnimationFrame(() => {
-          void printReceipt()
-        })
-      })
-    }, 900)
+      void printReceipt()
+    }, 120)
     return () => clearTimeout(id)
   }, [autoPrint, printReceipt, receiptKey])
 

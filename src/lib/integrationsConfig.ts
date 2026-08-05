@@ -210,7 +210,7 @@ const DEFAULT_DEVICE_CONNECTIVITY: DeviceConnectivityDemo = {
   orderTerminals: true,
   receiptPrinters: true,
   kitchenScreens: true,
-  cashDrawer: false,
+  cashDrawer: true,
   paymentTerminals: false,
 }
 

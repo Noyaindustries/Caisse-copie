@@ -63,9 +63,12 @@ export function cmdCut(): Uint8Array {
   return new Uint8Array([GS, 0x56, 0x41, 0x03])
 }
 
-/** Ouverture tiroir-caisse sur port RJ11 (pin 2). */
+/** Ouverture tiroir-caisse RJ11 — pulse pin 2 puis pin 5 (compatibilité clones POS). */
 export function cmdOpenCashDrawer(): Uint8Array {
-  return new Uint8Array([ESC, 0x70, 0x00, 0x19, 0xfa])
+  return concatBytes(
+    new Uint8Array([ESC, 0x70, 0x00, 0x19, 0xfa]),
+    new Uint8Array([ESC, 0x70, 0x01, 0x19, 0xfa]),
+  )
 }
 
 export function textLine(text: string, eol = true): Uint8Array {
