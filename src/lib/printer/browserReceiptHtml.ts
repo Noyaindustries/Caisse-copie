@@ -21,7 +21,7 @@ function toPrintable(value: string): string {
     .replace(/\p{M}/gu, '')
     .replace(/[œŒ]/g, (m) => (m === 'œ' ? 'oe' : 'OE'))
     .replace(/[æÆ]/g, (m) => (m === 'æ' ? 'ae' : 'AE'))
-    .replace(/[€]/g, 'FCFA')
+    .replace(/[€]/g, 'F')
     .replace(/[’‘]/g, "'")
     .replace(/[“”]/g, '"')
     .replace(/[–—]/g, '-')
@@ -29,10 +29,15 @@ function toPrintable(value: string): string {
     .trim()
 }
 
-function line(label: string, value: string): string {
+/** Montants courts pour 58 mm (evite la coupe a droite). */
+function formatPrintMoney(amount: number): string {
+  return toPrintable(formatFCFA(amount).replace(/\s*FCFA$/i, 'F'))
+}
+
+function line(label: string, value: string, fontSize: string): string {
   return `<tr>
-  <td style="padding:2px 0;color:#000;font-size:11px;">${escapeHtml(toPrintable(label))}</td>
-  <td style="padding:2px 0;text-align:right;color:#000;font-size:11px;white-space:nowrap;">${escapeHtml(toPrintable(value))}</td>
+  <td style="padding:1px 0;color:#000;font-size:${fontSize};width:58%;">${escapeHtml(toPrintable(label))}</td>
+  <td style="padding:1px 0 1px 2px;text-align:right;color:#000;font-size:${fontSize};width:42%;">${escapeHtml(toPrintable(value))}</td>
 </tr>`
 }
 
@@ -61,37 +66,43 @@ export function buildBrowserReceiptHtml(input: {
     paperWidth = '58mm',
   } = input
 
-  const bodyWidth = paperWidth === '58mm' ? '48mm' : '68mm'
-  const fontSize = paperWidth === '58mm' ? '11px' : '12px'
+  // Zone imprimable reelle ~48-50 mm sur rouleau 58 mm (marges pilote).
+  const bodyWidth = paperWidth === '58mm' ? '46mm' : '68mm'
+  const fontSize = paperWidth === '58mm' ? '9px' : '12px'
+  const smallSize = paperWidth === '58mm' ? '8px' : '10px'
+  const titleSize = paperWidth === '58mm' ? '11px' : '14px'
 
   const linesHtml = sale.lines
     .map((item) => {
       const name = escapeHtml(toPrintable(item.name))
       const detail = escapeHtml(
-        toPrintable(`${formatFCFA(item.unitPriceTTC)} x ${item.qty}`),
+        toPrintable(`${formatPrintMoney(item.unitPriceTTC)} x ${item.qty}`),
       )
-      const total = escapeHtml(
-        toPrintable(formatFCFA(item.unitPriceTTC * item.qty)),
-      )
+      const total = escapeHtml(formatPrintMoney(item.unitPriceTTC * item.qty))
+      // Ligne + montant sur 2 colonnes etroites (pas de float = plus fiable sur POS).
       return `<tr>
-  <td style="padding:3px 0;color:#000;font-size:${fontSize};">${name}<br/><span style="font-size:10px;">${detail}</span></td>
-  <td style="padding:3px 0;text-align:right;vertical-align:top;color:#000;font-size:${fontSize};white-space:nowrap;">${total}</td>
+  <td style="padding:2px 0;color:#000;font-size:${fontSize};width:62%;">${name}<br/><span style="font-size:${smallSize};">${detail}</span></td>
+  <td style="padding:2px 0 2px 2px;text-align:right;vertical-align:top;color:#000;font-size:${fontSize};font-weight:700;width:38%;">${total}</td>
 </tr>`
     })
     .join('')
 
   const totalsRows = [
-    line('Sous-total HT', formatFCFA(sale.subtotalHT)),
-    ...vatSlices.map((s) => line(`TVA ${s.ratePct} %`, formatFCFA(s.tva))),
-    line('Total TTC', formatFCFA(sale.totalTTC)),
-    amounts.cash > 0 ? line('Especes', formatFCFA(amounts.cash)) : '',
-    amounts.card > 0 ? line('Carte', formatFCFA(amounts.card)) : '',
-    amounts.mobile > 0 ? line('Mobile money', formatFCFA(amounts.mobile)) : '',
+    line('Sous-tot HT', formatPrintMoney(sale.subtotalHT), fontSize),
+    ...vatSlices.map((s) =>
+      line(`TVA ${s.ratePct}%`, formatPrintMoney(s.tva), fontSize),
+    ),
+    line('TOTAL TTC', formatPrintMoney(sale.totalTTC), fontSize),
+    amounts.cash > 0 ? line('Especes', formatPrintMoney(amounts.cash), fontSize) : '',
+    amounts.card > 0 ? line('Carte', formatPrintMoney(amounts.card), fontSize) : '',
+    amounts.mobile > 0
+      ? line('Mobile', formatPrintMoney(amounts.mobile), fontSize)
+      : '',
     sale.cashReceived != null
-      ? line('Recu', formatFCFA(sale.cashReceived))
+      ? line('Recu', formatPrintMoney(sale.cashReceived), fontSize)
       : '',
     sale.changeDue != null && sale.changeDue > 0
-      ? line('Monnaie', formatFCFA(sale.changeDue))
+      ? line('Monnaie', formatPrintMoney(sale.changeDue), fontSize)
       : '',
   ].join('')
 
@@ -107,30 +118,30 @@ export function buildBrowserReceiptHtml(input: {
   )
 
   const headerBits = [
-    `<div style="font-size:14px;font-weight:700;color:#000;">${escapeHtml(toPrintable(businessName))}</div>`,
-    `<div style="font-size:11px;color:#000;margin-top:2px;">${escapeHtml(toPrintable(documentLabel))}</div>`,
-    `<div style="font-size:10px;color:#000;margin-top:2px;">${escapeHtml(toPrintable(dtLabel))}</div>`,
-    `<div style="font-size:10px;color:#000;">Session #${escapeHtml(String(SESSION_ID))}</div>`,
-    `<div style="font-size:11px;color:#000;margin-top:2px;">Ref. ${receiptRef}</div>`,
+    `<div style="font-size:${titleSize};font-weight:700;color:#000;">${escapeHtml(toPrintable(businessName))}</div>`,
+    `<div style="font-size:${fontSize};color:#000;margin-top:1px;">${escapeHtml(toPrintable(documentLabel))}</div>`,
+    `<div style="font-size:${smallSize};color:#000;margin-top:1px;">${escapeHtml(toPrintable(dtLabel))}</div>`,
+    `<div style="font-size:${smallSize};color:#000;">Session #${escapeHtml(String(SESSION_ID))}</div>`,
+    `<div style="font-size:${fontSize};color:#000;margin-top:1px;">Ref. ${receiptRef}</div>`,
   ]
   if (sale.cashierDisplayName) {
     headerBits.push(
-      `<div style="font-size:10px;color:#000;">Caissier : ${escapeHtml(toPrintable(sale.cashierDisplayName))}</div>`,
+      `<div style="font-size:${smallSize};color:#000;">Caissier : ${escapeHtml(toPrintable(sale.cashierDisplayName))}</div>`,
     )
   }
   if (sale.storeName && sale.storeName.trim() !== businessName.trim()) {
     headerBits.push(
-      `<div style="font-size:10px;color:#000;">PV : ${escapeHtml(toPrintable(sale.storeName))}</div>`,
+      `<div style="font-size:${smallSize};color:#000;">PV : ${escapeHtml(toPrintable(sale.storeName))}</div>`,
     )
   }
   if (sale.tableName) {
     headerBits.push(
-      `<div style="font-size:10px;color:#000;">Table : ${escapeHtml(toPrintable(sale.tableName))}</div>`,
+      `<div style="font-size:${smallSize};color:#000;">Table : ${escapeHtml(toPrintable(sale.tableName))}</div>`,
     )
   }
   if (ticketInvoice?.customerName) {
     headerBits.push(
-      `<div style="font-size:10px;color:#000;">Client : ${escapeHtml(toPrintable(ticketInvoice.customerName))}</div>`,
+      `<div style="font-size:${smallSize};color:#000;">Client : ${escapeHtml(toPrintable(ticketInvoice.customerName))}</div>`,
     )
   }
 
@@ -140,7 +151,10 @@ export function buildBrowserReceiptHtml(input: {
     <meta charset="utf-8" />
     <title>Ticket</title>
     <style>
-      @page { margin: 2mm; }
+      @page {
+        size: 58mm 200mm;
+        margin: 0;
+      }
       html, body {
         margin: 0;
         padding: 0;
@@ -148,23 +162,30 @@ export function buildBrowserReceiptHtml(input: {
         color: #000;
         font-family: Arial, Helvetica, sans-serif;
       }
-      body { width: ${bodyWidth}; max-width: ${bodyWidth}; padding: 1mm; }
-      table { width: 100%; border-collapse: collapse; }
-      td { vertical-align: top; }
+      body {
+        width: ${bodyWidth};
+        max-width: ${bodyWidth};
+        padding: 1mm 1.5mm 0;
+        box-sizing: border-box;
+        overflow: hidden;
+      }
+      table { width: 100%; border-collapse: collapse; table-layout: fixed; }
+      td { vertical-align: top; word-wrap: break-word; overflow-wrap: anywhere; }
+      .cut-space { height: 18mm; margin-top: 4mm; }
     </style>
   </head>
   <body>
-    <div style="text-align:center;border-bottom:1px dashed #000;padding-bottom:4px;">
+    <div style="text-align:center;border-bottom:1px dashed #000;padding-bottom:3px;">
       ${headerBits.join('\n      ')}
     </div>
-    <table style="margin-top:4px;">
+    <table style="margin-top:3px;">
       <tbody>${linesHtml}</tbody>
     </table>
-    <table style="margin-top:4px;border-top:1px dashed #000;padding-top:4px;">
+    <table style="margin-top:3px;border-top:1px dashed #000;padding-top:3px;">
       <tbody>${totalsRows}</tbody>
     </table>
-    <div style="margin-top:6px;text-align:center;font-size:10px;color:#000;">${footerLine}</div>
-    <div style="margin-top:6px;font-size:10px;color:#000;">.<br/>.<br/>.</div>
+    <div style="margin-top:4px;text-align:center;font-size:${smallSize};color:#000;">${footerLine}</div>
+    <div class="cut-space" aria-hidden="true">&nbsp;</div>
   </body>
 </html>`
 }
