@@ -612,12 +612,14 @@ export function ParametresView({
                     </span>
                     <Switch
                       checked={deviceConnectivity[item.key]}
-                      onChange={(e) =>
-                        setDeviceConnectivity((prev) => ({
-                          ...prev,
-                          [item.key]: e.target.checked,
-                        }))
-                      }
+                      onChange={(e) => {
+                        const checked = e.target.checked
+                        setDeviceConnectivity((prev) => {
+                          const next = { ...prev, [item.key]: checked }
+                          setDeviceConnectivityDemo(next)
+                          return next
+                        })
+                      }}
                     />
                   </label>
                 ))}

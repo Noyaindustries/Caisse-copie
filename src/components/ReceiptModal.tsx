@@ -245,7 +245,12 @@ ${ticketInvoice.notes ? `<div><strong>Note :</strong> ${ticketInvoice.notes}</di
     if (printing) return
     setPrinting(true)
     try {
-      const escposReady = await isToplinkEscPosReady()
+      const escposReady = await Promise.race([
+        isToplinkEscPosReady(),
+        new Promise<boolean>((resolve) => {
+          window.setTimeout(() => resolve(false), 100)
+        }),
+      ])
       const result = await printReceiptJob(source, {
         openCashDrawer: amt.cash > 0,
         preferBrowser: !escposReady,
@@ -254,7 +259,10 @@ ${ticketInvoice.notes ? `<div><strong>Note :</strong> ${ticketInvoice.notes}</di
       if (result.mode === 'escpos') {
         toast.success('Ticket imprimé', result.message)
       } else {
-        toast.info('Impression', 'Choisissez POS-80 puis Imprimer.')
+        toast.info(
+          'Impression',
+          'Si le dialogue ne s’ouvre pas, cliquez Imprimer (bloqueurs Chrome).',
+        )
         if (amt.cash > 0 && result.drawerOpened === false) {
           toast.warning('Tiroir-caisse', CASH_DRAWER_WINDOWS_HINT)
         }
@@ -270,18 +278,44 @@ ${ticketInvoice.notes ? `<div><strong>Note :</strong> ${ticketInvoice.notes}</di
     }
   }, [amt.cash, printing, printViaBrowser, source, toast])
 
+  const printReceiptRef = useRef(printReceipt)
+  printReceiptRef.current = printReceipt
+  const printViaBrowserRef = useRef(printViaBrowser)
+  printViaBrowserRef.current = printViaBrowser
+
   useEffect(() => {
     if (!autoPrint) return
-    if (autoPrintedReceiptRef.current === receiptKey) {
-      return
-    }
-    autoPrintedReceiptRef.current = receiptKey
-    // Court délai pour laisser le modal se monter, sans perdre le geste utilisateur.
+    if (autoPrintedReceiptRef.current === receiptKey) return
+
+    // Marquer seulement au moment du tir, pour ne pas annuler un retry
+    // si les deps du callback changent pendant le court délai.
     const id = window.setTimeout(() => {
-      void printReceipt()
-    }, 120)
-    return () => clearTimeout(id)
-  }, [autoPrint, printReceipt, receiptKey])
+      if (autoPrintedReceiptRef.current === receiptKey) return
+      autoPrintedReceiptRef.current = receiptKey
+      // Chemin rapide navigateur (POS-80) : ne pas attendre le série USB.
+      void (async () => {
+        const escposReady = await Promise.race([
+          isToplinkEscPosReady(),
+          new Promise<boolean>((resolve) => {
+            window.setTimeout(() => resolve(false), 80)
+          }),
+        ])
+        if (escposReady) {
+          await printReceiptRef.current()
+          return
+        }
+        printViaBrowserRef.current()
+        toast.info(
+          'Impression',
+          'Choisissez POS-80 puis Imprimer. Si rien ne s’ouvre, cliquez le bouton Imprimer.',
+        )
+      })()
+    }, 50)
+
+    return () => {
+      window.clearTimeout(id)
+    }
+  }, [autoPrint, receiptKey, toast])
 
   return (
     <Modal
