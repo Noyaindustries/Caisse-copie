@@ -1,5 +1,5 @@
 import { getAppSettings } from '../appSettings'
-import { formatFCFA, type VatSliceByRate } from '../money'
+import { type VatSliceByRate } from '../money'
 import type { Sale, TicketInvoice } from '../../db/types'
 import { SESSION_ID } from '../session'
 
@@ -19,6 +19,8 @@ function toPrintable(value: string): string {
   return value
     .normalize('NFD')
     .replace(/\p{M}/gu, '')
+    // Espaces fins / inseparables (fr-CI) → espace normal (sinon "?" dans 2 400)
+    .replace(/[\u00A0\u202F\u2007\u2009\u200A\u2008]/g, ' ')
     .replace(/[œŒ]/g, (m) => (m === 'œ' ? 'oe' : 'OE'))
     .replace(/[æÆ]/g, (m) => (m === 'æ' ? 'ae' : 'AE'))
     .replace(/[€]/g, 'F')
@@ -29,9 +31,9 @@ function toPrintable(value: string): string {
     .trim()
 }
 
-/** Montants courts pour 58 mm (evite la coupe a droite). */
+/** Montants courts pour 58 mm — chiffres ASCII purs, sans separateur locale. */
 function formatPrintMoney(amount: number): string {
-  return toPrintable(formatFCFA(amount).replace(/\s*FCFA$/i, 'F'))
+  return `${Math.round(amount)} F`
 }
 
 function line(label: string, value: string, fontSize: string): string {
@@ -152,7 +154,7 @@ export function buildBrowserReceiptHtml(input: {
     <title>Ticket</title>
     <style>
       @page {
-        size: 58mm 200mm;
+        size: 58mm auto;
         margin: 0;
       }
       html, body {
@@ -165,13 +167,13 @@ export function buildBrowserReceiptHtml(input: {
       body {
         width: ${bodyWidth};
         max-width: ${bodyWidth};
-        padding: 1mm 1.5mm 0;
+        padding: 1mm 1.5mm 2mm;
         box-sizing: border-box;
         overflow: hidden;
       }
       table { width: 100%; border-collapse: collapse; table-layout: fixed; }
       td { vertical-align: top; word-wrap: break-word; overflow-wrap: anywhere; }
-      .cut-space { height: 18mm; margin-top: 4mm; }
+      .cut-space { height: 6mm; }
     </style>
   </head>
   <body>
