@@ -149,7 +149,7 @@ export function ReceiptModal({ source, autoPrint = false, onClose }: Props) {
     printFrame.style.left = '0'
     printFrame.style.top = '0'
     printFrame.style.width = '58mm'
-    printFrame.style.height = '100mm'
+    printFrame.style.height = '1px'
     printFrame.style.opacity = '0.01'
     printFrame.style.pointerEvents = 'none'
     printFrame.style.border = '0'
@@ -191,6 +191,14 @@ export function ReceiptModal({ source, autoPrint = false, onClose }: Props) {
           printFrame.remove()
           return
         }
+        // Ajuste la hauteur a la contenu reel (evite une page trop haute = bande blanche).
+        const contentHeight = Math.ceil(
+          Math.max(
+            frameWindow.document.body.scrollHeight,
+            frameWindow.document.documentElement.scrollHeight,
+          ),
+        )
+        printFrame.style.height = `${Math.max(contentHeight, 32)}px`
         frameWindow.focus()
         frameWindow.addEventListener('afterprint', cleanup, { once: true })
         frameWindow.print()

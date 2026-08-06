@@ -153,13 +153,13 @@ export function buildBrowserReceiptHtml(input: {
     <meta charset="utf-8" />
     <title>Ticket</title>
     <style>
-      @page {
-        size: 58mm auto;
-        margin: 0;
-      }
+      /* Pas de hauteur de page fixe : une page haute = longue bande blanche sur POS. */
+      @page { margin: 0; }
       html, body {
         margin: 0;
         padding: 0;
+        height: auto !important;
+        min-height: 0 !important;
         background: #fff;
         color: #000;
         font-family: Arial, Helvetica, sans-serif;
@@ -167,13 +167,14 @@ export function buildBrowserReceiptHtml(input: {
       body {
         width: ${bodyWidth};
         max-width: ${bodyWidth};
-        padding: 1mm 1.5mm 2mm;
+        padding: 1mm 1.5mm 1mm;
         box-sizing: border-box;
-        overflow: hidden;
       }
       table { width: 100%; border-collapse: collapse; table-layout: fixed; }
       td { vertical-align: top; word-wrap: break-word; overflow-wrap: anywhere; }
-      .cut-space { height: 6mm; }
+      @media print {
+        html, body { height: auto !important; min-height: 0 !important; }
+      }
     </style>
   </head>
   <body>
@@ -186,8 +187,7 @@ export function buildBrowserReceiptHtml(input: {
     <table style="margin-top:3px;border-top:1px dashed #000;padding-top:3px;">
       <tbody>${totalsRows}</tbody>
     </table>
-    <div style="margin-top:4px;text-align:center;font-size:${smallSize};color:#000;">${footerLine}</div>
-    <div class="cut-space" aria-hidden="true">&nbsp;</div>
+    <div style="margin-top:3px;text-align:center;font-size:${smallSize};color:#000;padding-bottom:2mm;">${footerLine}</div>
   </body>
 </html>`
 }
