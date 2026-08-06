@@ -3,6 +3,9 @@ import { formatFCFA, type VatSliceByRate } from '../money'
 import type { Sale, TicketInvoice } from '../../db/types'
 import { SESSION_ID } from '../session'
 
+/** Largeur imprimable approximative pour rouleau 58 mm. */
+export type ReceiptPaperWidth = '58mm' | '80mm'
+
 function escapeHtml(value: string): string {
   return value
     .replace(/&/g, '&amp;')
@@ -11,7 +14,32 @@ function escapeHtml(value: string): string {
     .replace(/"/g, '&quot;')
 }
 
-/** HTML compact pour impression ticket thermique via pilote Windows / navigateur. */
+/** ASCII simple — les pilotes POS en mode graphique plantent souvent sur accents / flex. */
+function toPrintable(value: string): string {
+  return value
+    .normalize('NFD')
+    .replace(/\p{M}/gu, '')
+    .replace(/[œŒ]/g, (m) => (m === 'œ' ? 'oe' : 'OE'))
+    .replace(/[æÆ]/g, (m) => (m === 'æ' ? 'ae' : 'AE'))
+    .replace(/[€]/g, 'FCFA')
+    .replace(/[’‘]/g, "'")
+    .replace(/[“”]/g, '"')
+    .replace(/[–—]/g, '-')
+    .replace(/[^\x20-\x7E]/g, '?')
+    .trim()
+}
+
+function line(label: string, value: string): string {
+  return `<tr>
+  <td style="padding:2px 0;color:#000;font-size:11px;">${escapeHtml(toPrintable(label))}</td>
+  <td style="padding:2px 0;text-align:right;color:#000;font-size:11px;white-space:nowrap;">${escapeHtml(toPrintable(value))}</td>
+</tr>`
+}
+
+/**
+ * HTML pour impression ticket thermique via pilote Windows (ZPrinter / POS).
+ * Tables uniquement — pas de flex/grid (souvent = page bizarre / caractères parasites).
+ */
 export function buildBrowserReceiptHtml(input: {
   sale: Sale
   businessName: string
@@ -20,57 +48,91 @@ export function buildBrowserReceiptHtml(input: {
   vatSlices: VatSliceByRate[]
   amounts: { cash: number; card: number; mobile: number }
   ticketInvoice?: TicketInvoice | null
+  paperWidth?: ReceiptPaperWidth
 }): string {
-  const { sale, businessName, documentLabel, dtLabel, vatSlices, amounts, ticketInvoice } =
-    input
+  const {
+    sale,
+    businessName,
+    documentLabel,
+    dtLabel,
+    vatSlices,
+    amounts,
+    ticketInvoice,
+    paperWidth = '58mm',
+  } = input
+
+  const bodyWidth = paperWidth === '58mm' ? '48mm' : '68mm'
+  const fontSize = paperWidth === '58mm' ? '11px' : '12px'
 
   const linesHtml = sale.lines
-    .map(
-      (line) => `<tr>
-  <td style="padding:3px 0;word-break:break-word;color:#000;">${escapeHtml(line.name)}<br/><span style="font-size:10px;color:#000;">${formatFCFA(line.unitPriceTTC)} x ${line.qty}</span></td>
-  <td style="padding:3px 0;text-align:right;white-space:nowrap;vertical-align:top;color:#000;">${formatFCFA(line.unitPriceTTC * line.qty)}</td>
-</tr>`,
-    )
+    .map((item) => {
+      const name = escapeHtml(toPrintable(item.name))
+      const detail = escapeHtml(
+        toPrintable(`${formatFCFA(item.unitPriceTTC)} x ${item.qty}`),
+      )
+      const total = escapeHtml(
+        toPrintable(formatFCFA(item.unitPriceTTC * item.qty)),
+      )
+      return `<tr>
+  <td style="padding:3px 0;color:#000;font-size:${fontSize};">${name}<br/><span style="font-size:10px;">${detail}</span></td>
+  <td style="padding:3px 0;text-align:right;vertical-align:top;color:#000;font-size:${fontSize};white-space:nowrap;">${total}</td>
+</tr>`
+    })
     .join('')
 
-  const vatHtml = vatSlices
-    .map(
-      (s) =>
-        `<div class="row"><span>TVA ${s.ratePct} %</span><span>${formatFCFA(s.tva)}</span></div>`,
-    )
-    .join('')
-
-  const payHtml = [
-    amounts.cash > 0
-      ? `<div class="row"><span>Especes</span><span>${formatFCFA(amounts.cash)}</span></div>`
-      : '',
-    amounts.card > 0
-      ? `<div class="row"><span>Carte</span><span>${formatFCFA(amounts.card)}</span></div>`
-      : '',
-    amounts.mobile > 0
-      ? `<div class="row"><span>Mobile money</span><span>${formatFCFA(amounts.mobile)}</span></div>`
-      : '',
+  const totalsRows = [
+    line('Sous-total HT', formatFCFA(sale.subtotalHT)),
+    ...vatSlices.map((s) => line(`TVA ${s.ratePct} %`, formatFCFA(s.tva))),
+    line('Total TTC', formatFCFA(sale.totalTTC)),
+    amounts.cash > 0 ? line('Especes', formatFCFA(amounts.cash)) : '',
+    amounts.card > 0 ? line('Carte', formatFCFA(amounts.card)) : '',
+    amounts.mobile > 0 ? line('Mobile money', formatFCFA(amounts.mobile)) : '',
     sale.cashReceived != null
-      ? `<div class="row"><span>Recu</span><span>${formatFCFA(sale.cashReceived)}</span></div>`
+      ? line('Recu', formatFCFA(sale.cashReceived))
       : '',
     sale.changeDue != null && sale.changeDue > 0
-      ? `<div class="row"><span>Monnaie</span><span>${formatFCFA(sale.changeDue)}</span></div>`
+      ? line('Monnaie', formatFCFA(sale.changeDue))
       : '',
   ].join('')
 
   const footerLine = escapeHtml(
-    ticketInvoice?.notes?.trim() || getAppSettings().receiptFooterLine,
+    toPrintable(
+      ticketInvoice?.notes?.trim() || getAppSettings().receiptFooterLine,
+    ),
   )
   const receiptRef = escapeHtml(
-    (ticketInvoice?.reference ?? sale.id.slice(0, 8)).toUpperCase(),
+    toPrintable(
+      (ticketInvoice?.reference ?? sale.id.slice(0, 8)).toUpperCase(),
+    ),
   )
-  const clientBlock = ticketInvoice
-    ? `<div style="margin-top:6px;font-size:11px;color:#000;">
-<div><strong>Ref:</strong> ${escapeHtml(ticketInvoice.reference)}</div>
-<div><strong>Client:</strong> ${escapeHtml(ticketInvoice.customerName ?? 'Client comptoir')}</div>
-${ticketInvoice.customerPhone ? `<div><strong>Tel:</strong> ${escapeHtml(ticketInvoice.customerPhone)}</div>` : ''}
-</div>`
-    : ''
+
+  const headerBits = [
+    `<div style="font-size:14px;font-weight:700;color:#000;">${escapeHtml(toPrintable(businessName))}</div>`,
+    `<div style="font-size:11px;color:#000;margin-top:2px;">${escapeHtml(toPrintable(documentLabel))}</div>`,
+    `<div style="font-size:10px;color:#000;margin-top:2px;">${escapeHtml(toPrintable(dtLabel))}</div>`,
+    `<div style="font-size:10px;color:#000;">Session #${escapeHtml(String(SESSION_ID))}</div>`,
+    `<div style="font-size:11px;color:#000;margin-top:2px;">Ref. ${receiptRef}</div>`,
+  ]
+  if (sale.cashierDisplayName) {
+    headerBits.push(
+      `<div style="font-size:10px;color:#000;">Caissier : ${escapeHtml(toPrintable(sale.cashierDisplayName))}</div>`,
+    )
+  }
+  if (sale.storeName && sale.storeName.trim() !== businessName.trim()) {
+    headerBits.push(
+      `<div style="font-size:10px;color:#000;">PV : ${escapeHtml(toPrintable(sale.storeName))}</div>`,
+    )
+  }
+  if (sale.tableName) {
+    headerBits.push(
+      `<div style="font-size:10px;color:#000;">Table : ${escapeHtml(toPrintable(sale.tableName))}</div>`,
+    )
+  }
+  if (ticketInvoice?.customerName) {
+    headerBits.push(
+      `<div style="font-size:10px;color:#000;">Client : ${escapeHtml(toPrintable(ticketInvoice.customerName))}</div>`,
+    )
+  }
 
   return `<!doctype html>
 <html lang="fr">
@@ -78,47 +140,31 @@ ${ticketInvoice.customerPhone ? `<div><strong>Tel:</strong> ${escapeHtml(ticketI
     <meta charset="utf-8" />
     <title>Ticket</title>
     <style>
-      @page { margin: 3mm; }
-      * { box-sizing: border-box; }
+      @page { margin: 2mm; }
       html, body {
         margin: 0;
         padding: 0;
         background: #fff;
         color: #000;
         font-family: Arial, Helvetica, sans-serif;
-        font-size: 12px;
-        line-height: 1.35;
       }
-      body { padding: 2mm; width: 72mm; }
-      .row { display: flex; justify-content: space-between; gap: 4px; color: #000; }
-      .total { font-weight: 700; font-size: 13px; border-top: 1px solid #000; padding-top: 4px; margin-top: 4px; }
+      body { width: ${bodyWidth}; max-width: ${bodyWidth}; padding: 1mm; }
       table { width: 100%; border-collapse: collapse; }
-      .feed { margin-top: 8px; color: #000; font-size: 10px; }
+      td { vertical-align: top; }
     </style>
   </head>
   <body>
-    <div style="text-align:center;border-bottom:1px dashed #000;padding-bottom:6px;color:#000;">
-      <div style="font-size:15px;font-weight:700;">${escapeHtml(businessName)}</div>
-      <div style="font-size:11px;margin-top:3px;">${escapeHtml(documentLabel)}</div>
-      <div style="font-size:11px;margin-top:3px;">${escapeHtml(dtLabel)}</div>
-      <div style="font-size:11px;">Session #${SESSION_ID}</div>
-      <div style="margin-top:3px;"><strong>Ref.</strong> ${receiptRef}</div>
-      ${sale.cashierDisplayName ? `<div>Caissier : ${escapeHtml(sale.cashierDisplayName)}</div>` : ''}
-      ${sale.storeName && sale.storeName.trim() !== businessName ? `<div>PV : ${escapeHtml(sale.storeName)}</div>` : ''}
-      ${sale.tableName ? `<div>Table : ${escapeHtml(sale.tableName)}</div>` : ''}
-      ${clientBlock}
+    <div style="text-align:center;border-bottom:1px dashed #000;padding-bottom:4px;">
+      ${headerBits.join('\n      ')}
     </div>
-    <table style="margin-top:6px;">
+    <table style="margin-top:4px;">
       <tbody>${linesHtml}</tbody>
     </table>
-    <div style="margin-top:6px;border-top:1px dashed #000;padding-top:6px;">
-      <div class="row"><span>Sous-total HT</span><span>${formatFCFA(sale.subtotalHT)}</span></div>
-      ${vatHtml}
-      <div class="row total"><span>Total TTC</span><span>${formatFCFA(sale.totalTTC)}</span></div>
-      ${payHtml}
-    </div>
-    <div style="margin-top:8px;text-align:center;">${footerLine}</div>
-    <div class="feed">.<br/>.<br/>.</div>
+    <table style="margin-top:4px;border-top:1px dashed #000;padding-top:4px;">
+      <tbody>${totalsRows}</tbody>
+    </table>
+    <div style="margin-top:6px;text-align:center;font-size:10px;color:#000;">${footerLine}</div>
+    <div style="margin-top:6px;font-size:10px;color:#000;">.<br/>.<br/>.</div>
   </body>
 </html>`
 }

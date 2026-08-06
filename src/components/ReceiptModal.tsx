@@ -148,8 +148,8 @@ export function ReceiptModal({ source, autoPrint = false, onClose }: Props) {
     printFrame.style.position = 'fixed'
     printFrame.style.left = '0'
     printFrame.style.top = '0'
-    printFrame.style.width = '80mm'
-    printFrame.style.height = '120mm'
+    printFrame.style.width = '58mm'
+    printFrame.style.height = '100mm'
     printFrame.style.opacity = '0.01'
     printFrame.style.pointerEvents = 'none'
     printFrame.style.border = '0'
@@ -170,6 +170,7 @@ export function ReceiptModal({ source, autoPrint = false, onClose }: Props) {
       vatSlices,
       amounts: amt,
       ticketInvoice,
+      paperWidth: '58mm',
     })
 
     const cleanup = () => {
