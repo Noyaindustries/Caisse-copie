@@ -578,6 +578,11 @@ export function ParametresView({
                 Windows de <strong>POS-80</strong>. L’impression PDF/GDI seule ne
                 déclenche pas le tiroir.
               </p>
+              <p className="text-[11px] text-ink-subtle">
+                Ticket coupé / incomplet sous Windows : préférences POS →{' '}
+                <strong>Paper cutting = ON</strong>, marge de fin ~30–50 mm, échelle
+                100 % (pas « ajuster à la page »), décocher en-têtes/pieds Chrome.
+              </p>
             </CardContent>
           </Card>
 
