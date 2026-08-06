@@ -11,6 +11,7 @@ import {
   isToplinkEscPosReady,
   CASH_DRAWER_WINDOWS_HINT,
 } from '../lib/printer/printReceipt'
+import { buildBrowserReceiptHtml } from '../lib/printer/browserReceiptHtml'
 import {
   getReceiptBusinessName,
   receiptDocumentLabel,
@@ -143,14 +144,16 @@ export function ReceiptModal({ source, autoPrint = false, onClose }: Props) {
   const printViaBrowser = useCallback(() => {
     const printFrame = document.createElement('iframe')
     printFrame.setAttribute('title', 'Impression ticket')
+    // Dimensionne hors ecran : un iframe 1x1 produit souvent une page POS blanche.
     printFrame.style.position = 'fixed'
-    printFrame.style.right = '0'
-    printFrame.style.bottom = '0'
-    printFrame.style.width = '1px'
-    printFrame.style.height = '1px'
-    printFrame.style.opacity = '0'
+    printFrame.style.left = '0'
+    printFrame.style.top = '0'
+    printFrame.style.width = '80mm'
+    printFrame.style.height = '120mm'
+    printFrame.style.opacity = '0.01'
     printFrame.style.pointerEvents = 'none'
     printFrame.style.border = '0'
+    printFrame.style.zIndex = '-1'
     printFrame.setAttribute('aria-hidden', 'true')
     document.body.appendChild(printFrame)
     const frameWindow = printFrame.contentWindow
@@ -158,147 +161,60 @@ export function ReceiptModal({ source, autoPrint = false, onClose }: Props) {
       printFrame.remove()
       return
     }
-    const linesHtml = sale.lines
-      .map(
-        (line) => `<tr>
-  <td style="padding:4px 0;word-break:break-word;">${line.name}<br/><span style="font-size:11px;color:#666;">${formatFCFA(line.unitPriceTTC)} × ${line.qty}</span></td>
-  <td style="padding:4px 0;text-align:right;white-space:nowrap;vertical-align:top;">${formatFCFA(line.unitPriceTTC * line.qty)}</td>
-</tr>`,
-      )
-      .join('')
-    const vatHtml = vatSlices
-      .map(
-        (s) => `<div class="row muted"><span>TVA ${s.ratePct} %</span><span>${formatFCFA(s.tva)}</span></div>`,
-      )
-      .join('')
-    const payHtml = [
-      amt.cash > 0
-        ? `<div class="row"><span>Espèces</span><span>${formatFCFA(amt.cash)}</span></div>`
-        : '',
-      amt.card > 0
-        ? `<div class="row"><span>Carte</span><span>${formatFCFA(amt.card)}</span></div>`
-        : '',
-      amt.mobile > 0
-        ? `<div class="row"><span>Mobile money</span><span>${formatFCFA(amt.mobile)}</span></div>`
-        : '',
-      sale.cashReceived != null
-        ? `<div class="row"><span>Reçu</span><span>${formatFCFA(sale.cashReceived)}</span></div>`
-        : '',
-      sale.changeDue != null && sale.changeDue > 0
-        ? `<div class="row"><span>Monnaie</span><span>${formatFCFA(sale.changeDue)}</span></div>`
-        : '',
-    ].join('')
-    const footerLine =
-      ticketInvoice?.notes?.trim() || getAppSettings().receiptFooterLine
-    const receiptRef = (ticketInvoice?.reference ?? sale.id.slice(0, 8)).toUpperCase()
-    const clientBlock = ticketInvoice
-      ? `<div style="margin-top:8px;font-size:12px;">
-<div><strong>Référence :</strong> ${ticketInvoice.reference}</div>
-<div><strong>Client :</strong> ${ticketInvoice.customerName ?? 'Client comptoir'}</div>
-${ticketInvoice.customerPhone ? `<div><strong>Tél. :</strong> ${ticketInvoice.customerPhone}</div>` : ''}
-</div>`
-      : ''
-    const html = `<!doctype html>
-<html lang="fr">
-  <head>
-    <meta charset="utf-8" />
-    <title>Ticket Caisse CI</title>
-    <style>
-      @page {
-        margin: 0;
-        /* Évite le rognage Chrome "80mm auto" qui coupe le bas du ticket */
-        size: auto;
-      }
-      * { box-sizing: border-box; }
-      html, body {
-        background: #fff;
-        color: #111;
-        font-family: Arial, Helvetica, sans-serif;
-        margin: 0;
-        padding: 0;
-      }
-      body {
-        width: 72mm;
-        max-width: 72mm;
-        padding: 2mm 2mm 0;
-      }
-      .ticket { width: 100%; }
-      .row { display: flex; justify-content: space-between; gap: 6px; font-size: 12px; }
-      .muted { color: #444; }
-      .total { font-weight: 700; font-size: 14px; border-top: 1px solid #ddd; padding-top: 6px; margin-top: 4px; }
-      /* Marge basse pour que le total soit visible + zone de coupe du cutter */
-      .cut-feed {
-        height: 28mm;
-        margin-top: 6mm;
-        border-top: 1px dashed #bbb;
-        padding-top: 4mm;
-        text-align: center;
-        font-size: 10px;
-        color: #888;
-      }
-      @media print {
-        html, body { width: 72mm; }
-        .cut-feed { height: 32mm; }
-      }
-    </style>
-  </head>
-  <body>
-    <section class="ticket">
-      <div style="text-align:center;border-bottom:1px dashed #999;padding-bottom:8px;">
-        <div style="font-size:16px;font-weight:700;">${businessName}</div>
-        <div style="font-size:11px;font-weight:600;margin-top:4px;color:#444;">${documentLabel}</div>
-        <div style="font-size:12px;color:#555;margin-top:4px;">${dtLabel}</div>
-        <div style="font-size:11px;color:#555;">Session #${SESSION_ID}</div>
-        <div style="font-size:12px;margin-top:4px;"><strong>Réf.</strong> ${receiptRef}</div>
-        ${sale.cashierDisplayName ? `<div style="font-size:12px;">Caissier : ${sale.cashierDisplayName}</div>` : ''}
-        ${sale.storeName && sale.storeName.trim() !== businessName ? `<div style="font-size:12px;">PV : ${sale.storeName}</div>` : ''}
-        ${sale.tableName ? `<div style="font-size:12px;">Table : ${sale.tableName}</div>` : ''}
-        ${clientBlock}
-      </div>
-      <table style="width:100%;border-collapse:collapse;margin-top:8px;font-size:12px;">
-        <tbody>${linesHtml}</tbody>
-      </table>
-      <div style="margin-top:8px;border-top:1px dashed #999;padding-top:6px;">
-        <div class="row"><span>Sous-total HT</span><span>${formatFCFA(sale.subtotalHT)}</span></div>
-        ${vatHtml}
-        <div class="row total"><span>Total TTC</span><span>${formatFCFA(sale.totalTTC)}</span></div>
-        ${payHtml}
-      </div>
-      <div style="margin-top:10px;text-align:center;font-size:11px;">${footerLine}</div>
-      <div class="cut-feed">— coupe —</div>
-    </section>
-  </body>
-</html>`
+
+    const html = buildBrowserReceiptHtml({
+      sale,
+      businessName,
+      documentLabel,
+      dtLabel,
+      vatSlices,
+      amounts: amt,
+      ticketInvoice,
+    })
+
+    const cleanup = () => {
+      window.setTimeout(() => {
+        try {
+          printFrame.remove()
+        } catch {
+          /* ignore */
+        }
+      }, 60_000)
+    }
 
     const triggerPrint = () => {
       try {
-        frameWindow.focus()
-        frameWindow.print()
-      } finally {
-        window.setTimeout(() => {
+        const bodyText = frameWindow.document.body?.innerText?.trim() ?? ''
+        if (!bodyText) {
+          toast.error('Impression', 'Ticket vide — réessayez via le bouton Imprimer.')
           printFrame.remove()
-        }, 2000)
+          return
+        }
+        frameWindow.focus()
+        frameWindow.addEventListener('afterprint', cleanup, { once: true })
+        frameWindow.print()
+        cleanup()
+      } catch {
+        printFrame.remove()
       }
     }
 
     printFrame.addEventListener('load', () => {
-      window.setTimeout(triggerPrint, 80)
+      window.setTimeout(triggerPrint, 150)
     })
     frameWindow.document.open()
     frameWindow.document.write(html)
     frameWindow.document.close()
   }, [
-    amt.card,
-    amt.cash,
-    amt.mobile,
+    amt,
     businessName,
     documentLabel,
     dtLabel,
     sale,
     ticketInvoice,
+    toast,
     vatSlices,
   ])
-
   const printReceipt = useCallback(async () => {
     if (printing) return
     setPrinting(true)
