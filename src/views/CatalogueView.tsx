@@ -17,6 +17,7 @@ import {
 import { productIsActive } from '../lib/productFilters'
 import type { AuditActor } from '../lib/auditLog'
 import { appendAuditEvent } from '../lib/auditLog'
+import { deleteProductPermanently } from '../lib/deleteProduct'
 import { storeStockRowId } from '../lib/storeStockId'
 import { Badge } from '../ui/Badge'
 import { Button } from '../ui/Button'
@@ -42,6 +43,7 @@ import {
   IconSearch,
   IconTable,
   IconTag,
+  IconTrash,
   IconTrendingUp,
   IconUpload,
   IconWarning,
@@ -132,6 +134,8 @@ export function CatalogueView({
   const [categoryAddBusy, setCategoryAddBusy] = useState(false)
   const [pendingArchiveId, setPendingArchiveId] = useState<string | null>(null)
   const [pendingArchiveUntil, setPendingArchiveUntil] = useState(0)
+  const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null)
+  const [pendingDeleteUntil, setPendingDeleteUntil] = useState(0)
   const fileRef = useRef<HTMLInputElement>(null)
 
   const gridCols = density === 'compact'
@@ -290,6 +294,32 @@ export function CatalogueView({
     toast.success('Article réactivé', p.name)
   }
 
+  const handleDelete = async (p: ProductWithStock) => {
+    const now = Date.now()
+    if (pendingDeleteId !== p.id || now > pendingDeleteUntil) {
+      setPendingDeleteId(p.id)
+      setPendingDeleteUntil(now + 7000)
+      toast.warning(
+        'Confirmer la suppression',
+        `Cliquez encore sur "Supprimer" pour effacer définitivement « ${p.name} » (7s).`,
+      )
+      return
+    }
+    try {
+      await deleteProductPermanently(p, auditActor)
+      setPendingDeleteId(null)
+      setPendingDeleteUntil(0)
+      if (editing?.id === p.id) setEditing(null)
+      if (detailProduct?.id === p.id) setDetailProduct(null)
+      toast.success('Article supprimé', p.name)
+    } catch (err) {
+      toast.error(
+        'Suppression impossible',
+        err instanceof Error ? err.message : 'Erreur inattendue',
+      )
+    }
+  }
+
   const onPickCsv = useCallback(() => {
     fileRef.current?.click()
   }, [])
@@ -380,6 +410,21 @@ export function CatalogueView({
               aria-label="Archiver"
             />
           )}
+          <Button
+            size="sm"
+            variant={pendingDeleteId === p.id ? 'danger' : 'ghost'}
+            iconLeft={<IconTrash />}
+            onClick={() => void handleDelete(p)}
+            aria-label={
+              pendingDeleteId === p.id ? 'Confirmer la suppression' : 'Supprimer'
+            }
+          >
+            {!compact ? (
+              <span className="hidden xl:inline">
+                {pendingDeleteId === p.id ? 'Confirmer' : 'Supprimer'}
+              </span>
+            ) : null}
+          </Button>
         </>
       ) : null}
     </div>

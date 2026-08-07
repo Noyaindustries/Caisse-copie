@@ -491,6 +491,7 @@ export type AuditEventKind =
   | 'promo_applied'
   | 'stock_adjusted'
   | 'stock_transfer'
+  | 'product_deleted'
   | 'time_punch'
   | 'ticket_invoice_updated'
   | 'day_closure'
