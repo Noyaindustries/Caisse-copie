@@ -1,4 +1,4 @@
-/* eslint-disable react-refresh/only-export-components -- Provider et hook partagent le même contexte typé. */
+/* Provider et hook partagent le même contexte typé. */
 import {
   createContext,
   useCallback,

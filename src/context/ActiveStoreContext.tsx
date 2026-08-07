@@ -1,5 +1,5 @@
 import { useLiveQuery } from 'dexie-react-hooks'
-/* eslint-disable react-refresh/only-export-components -- Provider et hooks sont volontairement co-localisés. */
+/* Provider et hooks sont volontairement co-localisés. */
 import {
   createContext,
   useCallback,

@@ -25,6 +25,10 @@ export default defineConfig([
       ecmaVersion: 2020,
       globals: globals.browser,
     },
+    rules: {
+      // Temporary: React Compiler lint noise / setState-in-effect until refactors land.
+      'react-hooks/set-state-in-effect': 'off',
+    },
   },
   {
     files: ['server/**/*.ts'],

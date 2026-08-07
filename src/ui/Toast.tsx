@@ -1,4 +1,4 @@
-/* eslint-disable react-refresh/only-export-components -- Le provider et ses hooks utilisent le même contexte privé. */
+/* Le provider et ses hooks utilisent le même contexte privé. */
 import {
   createContext,
   useCallback,

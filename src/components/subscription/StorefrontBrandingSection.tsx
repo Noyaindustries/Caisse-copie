@@ -219,7 +219,6 @@ export function StorefrontBrandingSection({
           <Field label="Logo">
             <div className="flex flex-wrap items-center gap-3">
               {logoUrl ? (
-                // eslint-disable-next-line @next/next/no-img-element
                 <img
                   src={logoUrl}
                   alt="Logo boutique"
@@ -264,7 +263,6 @@ export function StorefrontBrandingSection({
           <Field label="Bannière">
             <div className="space-y-2">
               {bannerUrl ? (
-                // eslint-disable-next-line @next/next/no-img-element
                 <img
                   src={bannerUrl}
                   alt="Bannière boutique"

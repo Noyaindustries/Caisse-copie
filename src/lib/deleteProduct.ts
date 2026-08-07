@@ -29,14 +29,12 @@ export async function deleteProductPermanently(
       await db.locationTransfers.where('productId').equals(productId).delete()
       await db.productRecipeIngredients.where('productId').equals(productId).delete()
 
-      const linkedIngredients = await db.kitchenIngredients
+      await db.kitchenIngredients
         .where('productId')
         .equals(productId)
-        .toArray()
-      for (const ing of linkedIngredients) {
-        const { productId: _removed, ...rest } = ing
-        await db.kitchenIngredients.put(rest)
-      }
+        .modify((ing) => {
+          delete ing.productId
+        })
 
       await db.products.delete(productId)
 

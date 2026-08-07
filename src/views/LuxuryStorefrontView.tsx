@@ -436,7 +436,6 @@ export function LuxuryStorefrontView({
     () => cart.reduce((sum, line) => sum + line.qty, 0),
     [cart],
   )
-  const distinctItemCount = cart.length
   const freeDeliveryProgressPct = useMemo(() => {
     if (FREE_DELIVERY_THRESHOLD <= 0) return 100
     return Math.min(
@@ -455,8 +454,6 @@ export function LuxuryStorefrontView({
     () => new Map(displayProducts.map((p) => [p.id, p])),
     [displayProducts],
   )
-  const fulfillmentLabel =
-    fulfillmentMode === 'delivery' ? 'Livraison à domicile' : 'Retrait boutique'
 
   const openCart = useCallback(() => {
     setIsCartOpen(true)
