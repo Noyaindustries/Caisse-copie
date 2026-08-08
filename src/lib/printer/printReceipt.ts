@@ -58,7 +58,7 @@ export async function printReceipt(
   options?: {
     preferBrowser?: boolean
     openCashDrawer?: boolean
-    browserFallback?: () => void
+    browserFallback?: () => void | Promise<void>
   },
 ): Promise<PrintReceiptResult> {
   const devices = getDeviceConnectivityDemo()
@@ -103,7 +103,7 @@ export async function printReceipt(
   }
 
   if (options?.browserFallback) {
-    options.browserFallback()
+    await options.browserFallback()
     const parts: string[] = [
       'Impression via le pilote Windows (POS-80).',
     ]

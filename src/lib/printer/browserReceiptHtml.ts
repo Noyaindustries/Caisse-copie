@@ -57,6 +57,8 @@ export function buildBrowserReceiptHtml(input: {
   amounts: { cash: number; card: number; mobile: number }
   ticketInvoice?: TicketInvoice | null
   paperWidth?: ReceiptPaperWidth
+  /** Data URL ou URL absolue du logo (PNG recommandé pour les pilotes POS). */
+  logoSrc?: string | null
 }): string {
   const {
     sale,
@@ -67,6 +69,7 @@ export function buildBrowserReceiptHtml(input: {
     amounts,
     ticketInvoice,
     paperWidth = '58mm',
+    logoSrc,
   } = input
 
   // Largeur ticket centree sur la page d'impression (evite tout a gauche).
@@ -74,6 +77,7 @@ export function buildBrowserReceiptHtml(input: {
   const fontSize = paperWidth === '58mm' ? '13px' : '15px'
   const smallSize = paperWidth === '58mm' ? '11px' : '13px'
   const titleSize = paperWidth === '58mm' ? '16px' : '18px'
+  const logoMaxWidth = paperWidth === '58mm' ? '28mm' : '36mm'
 
   const linesHtml = sale.lines
     .map((item) => {
@@ -122,13 +126,25 @@ export function buildBrowserReceiptHtml(input: {
     ),
   )
 
+  const logoHtml =
+    logoSrc &&
+    (logoSrc.startsWith('data:image/') ||
+      logoSrc.startsWith('https://') ||
+      logoSrc.startsWith('http://') ||
+      logoSrc.startsWith('/'))
+      ? `<div style="text-align:center;margin:0 0 4px;">
+        <img src="${escapeHtml(logoSrc)}" alt="" width="120" height="120" style="display:block;margin:0 auto;max-width:${logoMaxWidth};width:${logoMaxWidth};height:auto;" />
+      </div>`
+      : ''
+
   const headerBits = [
+    logoHtml,
     `<div style="font-size:${titleSize};font-weight:700;color:#000;text-align:center;">${escapeHtml(toPrintable(businessName))}</div>`,
     `<div style="font-size:${fontSize};color:#000;margin-top:2px;text-align:center;">${escapeHtml(toPrintable(documentLabel))}</div>`,
     `<div style="font-size:${smallSize};color:#000;margin-top:2px;text-align:center;">${escapeHtml(toPrintable(dtLabel))}</div>`,
     `<div style="font-size:${smallSize};color:#000;text-align:center;">Session #${escapeHtml(String(SESSION_ID))}</div>`,
     `<div style="font-size:${fontSize};color:#000;margin-top:2px;text-align:center;">Ref. ${receiptRef}</div>`,
-  ]
+  ].filter(Boolean)
   if (sale.cashierDisplayName) {
     headerBits.push(
       `<div style="font-size:${smallSize};color:#000;text-align:center;">Caissier : ${escapeHtml(toPrintable(sale.cashierDisplayName))}</div>`,

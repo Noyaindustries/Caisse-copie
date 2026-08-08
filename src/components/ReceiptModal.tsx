@@ -13,6 +13,8 @@ import {
   CASH_DRAWER_WINDOWS_HINT,
 } from '../lib/printer/printReceipt'
 import { connectToplinkPrinter } from '../lib/printer/toplinkSerial'
+import { BRAND_LOGO_FULL_SRC } from '../brand'
+import { useSiteBranding } from '../context/SiteBrandingContext'
 import { buildBrowserReceiptHtml } from '../lib/printer/browserReceiptHtml'
 import {
   getReceiptBusinessName,
@@ -94,8 +96,32 @@ function onlineOrderStatusLabel(status: OnlineOrder['status']): string {
   }
 }
 
+/** Emballe le logo en data URL pour que l’iframe d’impression le voie sans réseau. */
+async function resolveLogoDataUrl(src: string): Promise<string | null> {
+  try {
+    if (src.startsWith('data:image/')) return src
+    const url = /^https?:\/\//i.test(src)
+      ? src
+      : new URL(src, window.location.origin).href
+    const res = await fetch(url)
+    if (!res.ok) return null
+    const blob = await res.blob()
+    if (!blob.type.startsWith('image/')) return null
+    return await new Promise<string>((resolve, reject) => {
+      const reader = new FileReader()
+      reader.onload = () => resolve(String(reader.result))
+      reader.onerror = () => reject(reader.error ?? new Error('read failed'))
+      reader.readAsDataURL(blob)
+    })
+  } catch {
+    return null
+  }
+}
+
 export function ReceiptModal({ source, autoPrint = false, onClose }: Props) {
   const toast = useToast()
+  const { logoSrc, customLogo } = useSiteBranding()
+  const receiptLogoSrc = customLogo ? logoSrc : BRAND_LOGO_FULL_SRC
   const autoPrintedReceiptRef = useRef<string | null>(null)
   const [printing, setPrinting] = useState(false)
   const [serialBusy, setSerialBusy] = useState(false)
@@ -145,7 +171,7 @@ export function ReceiptModal({ source, autoPrint = false, onClose }: Props) {
         )
       : receiptDocumentLabel('sale')
 
-  const printViaBrowser = useCallback(() => {
+  const printViaBrowser = useCallback(async () => {
     const printFrame = document.createElement('iframe')
     printFrame.setAttribute('title', 'Impression ticket')
     // Dimensionne hors ecran : un iframe 1x1 produit souvent une page POS blanche.
@@ -166,6 +192,8 @@ export function ReceiptModal({ source, autoPrint = false, onClose }: Props) {
       return
     }
 
+    const logoDataUrl = await resolveLogoDataUrl(receiptLogoSrc)
+
     const html = buildBrowserReceiptHtml({
       sale,
       businessName,
@@ -175,6 +203,7 @@ export function ReceiptModal({ source, autoPrint = false, onClose }: Props) {
       amounts: amt,
       ticketInvoice,
       paperWidth: '58mm',
+      logoSrc: logoDataUrl,
     })
 
     const cleanup = () => {
@@ -212,9 +241,28 @@ export function ReceiptModal({ source, autoPrint = false, onClose }: Props) {
       }
     }
 
-    printFrame.addEventListener('load', () => {
-      window.setTimeout(triggerPrint, 150)
-    })
+    const waitImagesThenPrint = () => {
+      const images = [...frameWindow.document.images]
+      if (images.length === 0) {
+        window.setTimeout(triggerPrint, 150)
+        return
+      }
+      let pending = images.length
+      const done = () => {
+        pending -= 1
+        if (pending <= 0) window.setTimeout(triggerPrint, 80)
+      }
+      for (const img of images) {
+        if (img.complete) {
+          done()
+          continue
+        }
+        img.addEventListener('load', done, { once: true })
+        img.addEventListener('error', done, { once: true })
+      }
+    }
+
+    printFrame.addEventListener('load', waitImagesThenPrint)
     frameWindow.document.open()
     frameWindow.document.write(html)
     frameWindow.document.close()
@@ -223,6 +271,7 @@ export function ReceiptModal({ source, autoPrint = false, onClose }: Props) {
     businessName,
     documentLabel,
     dtLabel,
+    receiptLogoSrc,
     sale,
     ticketInvoice,
     toast,
@@ -266,7 +315,7 @@ export function ReceiptModal({ source, autoPrint = false, onClose }: Props) {
         'Impression',
         err instanceof Error ? err.message : 'Erreur inconnue',
       )
-      printViaBrowser()
+      void printViaBrowser()
     } finally {
       setPrinting(false)
     }
@@ -385,6 +434,12 @@ export function ReceiptModal({ source, autoPrint = false, onClose }: Props) {
     >
       <div id="print-receipt" className="space-y-4 text-zinc-800">
         <header className="border-b border-dashed border-zinc-200 pb-3 text-center">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={receiptLogoSrc}
+            alt=""
+            className="mx-auto mb-2 h-14 w-14 object-contain"
+          />
           <p className="text-lg font-bold tracking-tight text-zinc-900">
             {businessName}
           </p>
