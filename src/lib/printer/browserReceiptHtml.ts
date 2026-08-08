@@ -38,8 +38,9 @@ function formatPrintMoney(amount: number): string {
 
 function line(label: string, value: string, fontSize: string): string {
   return `<tr>
-  <td style="padding:1px 0;color:#000;font-size:${fontSize};width:58%;">${escapeHtml(toPrintable(label))}</td>
-  <td style="padding:1px 0 1px 2px;text-align:right;color:#000;font-size:${fontSize};width:42%;">${escapeHtml(toPrintable(value))}</td>
+  <td colspan="2" style="padding:2px 0;text-align:center;color:#000;font-size:${fontSize};">
+    ${escapeHtml(toPrintable(label))} : <strong>${escapeHtml(toPrintable(value))}</strong>
+  </td>
 </tr>`
 }
 
@@ -68,11 +69,11 @@ export function buildBrowserReceiptHtml(input: {
     paperWidth = '58mm',
   } = input
 
-  // Zone imprimable reelle ~48-50 mm sur rouleau 58 mm (marges pilote).
-  const bodyWidth = paperWidth === '58mm' ? '46mm' : '68mm'
-  const fontSize = paperWidth === '58mm' ? '9px' : '12px'
-  const smallSize = paperWidth === '58mm' ? '8px' : '10px'
-  const titleSize = paperWidth === '58mm' ? '11px' : '14px'
+  // Largeur ticket centree sur la page d'impression (evite tout a gauche).
+  const bodyWidth = paperWidth === '58mm' ? '52mm' : '72mm'
+  const fontSize = paperWidth === '58mm' ? '13px' : '15px'
+  const smallSize = paperWidth === '58mm' ? '11px' : '13px'
+  const titleSize = paperWidth === '58mm' ? '16px' : '18px'
 
   const linesHtml = sale.lines
     .map((item) => {
@@ -81,10 +82,12 @@ export function buildBrowserReceiptHtml(input: {
         toPrintable(`${formatPrintMoney(item.unitPriceTTC)} x ${item.qty}`),
       )
       const total = escapeHtml(formatPrintMoney(item.unitPriceTTC * item.qty))
-      // Ligne + montant sur 2 colonnes etroites (pas de float = plus fiable sur POS).
       return `<tr>
-  <td style="padding:2px 0;color:#000;font-size:${fontSize};width:62%;">${name}<br/><span style="font-size:${smallSize};">${detail}</span></td>
-  <td style="padding:2px 0 2px 2px;text-align:right;vertical-align:top;color:#000;font-size:${fontSize};font-weight:700;width:38%;">${total}</td>
+  <td colspan="2" style="padding:4px 0;text-align:center;color:#000;font-size:${fontSize};">
+    <div style="font-weight:700;">${name}</div>
+    <div style="font-size:${smallSize};margin-top:1px;">${detail}</div>
+    <div style="font-weight:700;margin-top:1px;">${total}</div>
+  </td>
 </tr>`
     })
     .join('')
@@ -120,30 +123,30 @@ export function buildBrowserReceiptHtml(input: {
   )
 
   const headerBits = [
-    `<div style="font-size:${titleSize};font-weight:700;color:#000;">${escapeHtml(toPrintable(businessName))}</div>`,
-    `<div style="font-size:${fontSize};color:#000;margin-top:1px;">${escapeHtml(toPrintable(documentLabel))}</div>`,
-    `<div style="font-size:${smallSize};color:#000;margin-top:1px;">${escapeHtml(toPrintable(dtLabel))}</div>`,
-    `<div style="font-size:${smallSize};color:#000;">Session #${escapeHtml(String(SESSION_ID))}</div>`,
-    `<div style="font-size:${fontSize};color:#000;margin-top:1px;">Ref. ${receiptRef}</div>`,
+    `<div style="font-size:${titleSize};font-weight:700;color:#000;text-align:center;">${escapeHtml(toPrintable(businessName))}</div>`,
+    `<div style="font-size:${fontSize};color:#000;margin-top:2px;text-align:center;">${escapeHtml(toPrintable(documentLabel))}</div>`,
+    `<div style="font-size:${smallSize};color:#000;margin-top:2px;text-align:center;">${escapeHtml(toPrintable(dtLabel))}</div>`,
+    `<div style="font-size:${smallSize};color:#000;text-align:center;">Session #${escapeHtml(String(SESSION_ID))}</div>`,
+    `<div style="font-size:${fontSize};color:#000;margin-top:2px;text-align:center;">Ref. ${receiptRef}</div>`,
   ]
   if (sale.cashierDisplayName) {
     headerBits.push(
-      `<div style="font-size:${smallSize};color:#000;">Caissier : ${escapeHtml(toPrintable(sale.cashierDisplayName))}</div>`,
+      `<div style="font-size:${smallSize};color:#000;text-align:center;">Caissier : ${escapeHtml(toPrintable(sale.cashierDisplayName))}</div>`,
     )
   }
   if (sale.storeName && sale.storeName.trim() !== businessName.trim()) {
     headerBits.push(
-      `<div style="font-size:${smallSize};color:#000;">PV : ${escapeHtml(toPrintable(sale.storeName))}</div>`,
+      `<div style="font-size:${smallSize};color:#000;text-align:center;">PV : ${escapeHtml(toPrintable(sale.storeName))}</div>`,
     )
   }
   if (sale.tableName) {
     headerBits.push(
-      `<div style="font-size:${smallSize};color:#000;">Table : ${escapeHtml(toPrintable(sale.tableName))}</div>`,
+      `<div style="font-size:${smallSize};color:#000;text-align:center;">Table : ${escapeHtml(toPrintable(sale.tableName))}</div>`,
     )
   }
   if (ticketInvoice?.customerName) {
     headerBits.push(
-      `<div style="font-size:${smallSize};color:#000;">Client : ${escapeHtml(toPrintable(ticketInvoice.customerName))}</div>`,
+      `<div style="font-size:${smallSize};color:#000;text-align:center;">Client : ${escapeHtml(toPrintable(ticketInvoice.customerName))}</div>`,
     )
   }
 
@@ -154,40 +157,58 @@ export function buildBrowserReceiptHtml(input: {
     <title>Ticket</title>
     <style>
       /* Pas de hauteur de page fixe : une page haute = longue bande blanche sur POS. */
-      @page { margin: 0; }
+      @page { margin: 0; size: ${paperWidth} auto; }
       html, body {
         margin: 0;
         padding: 0;
+        width: 100%;
         height: auto !important;
         min-height: 0 !important;
         background: #fff;
         color: #000;
         font-family: Arial, Helvetica, sans-serif;
+        text-align: center;
       }
-      body {
+      .ticket {
+        display: block;
         width: ${bodyWidth};
-        max-width: ${bodyWidth};
-        padding: 1mm 1.5mm 1mm;
+        max-width: 100%;
+        margin: 0 auto;
+        padding: 2mm 1mm 2mm;
         box-sizing: border-box;
+        text-align: center;
       }
-      table { width: 100%; border-collapse: collapse; table-layout: fixed; }
-      td { vertical-align: top; word-wrap: break-word; overflow-wrap: anywhere; }
+      table {
+        width: 100%;
+        margin: 0 auto;
+        border-collapse: collapse;
+        table-layout: fixed;
+      }
+      td {
+        vertical-align: top;
+        word-wrap: break-word;
+        overflow-wrap: anywhere;
+        text-align: center;
+      }
       @media print {
-        html, body { height: auto !important; min-height: 0 !important; }
+        html, body { height: auto !important; min-height: 0 !important; width: 100%; text-align: center; }
+        .ticket { margin: 0 auto; }
       }
     </style>
   </head>
   <body>
-    <div style="text-align:center;border-bottom:1px dashed #000;padding-bottom:3px;">
-      ${headerBits.join('\n      ')}
+    <div class="ticket">
+      <div style="text-align:center;border-bottom:1px dashed #000;padding-bottom:4px;">
+        ${headerBits.join('\n        ')}
+      </div>
+      <table style="margin-top:4px;">
+        <tbody>${linesHtml}</tbody>
+      </table>
+      <table style="margin-top:4px;border-top:1px dashed #000;padding-top:4px;">
+        <tbody>${totalsRows}</tbody>
+      </table>
+      <div style="margin-top:4px;text-align:center;font-size:${fontSize};color:#000;padding-bottom:2mm;">${footerLine}</div>
     </div>
-    <table style="margin-top:3px;">
-      <tbody>${linesHtml}</tbody>
-    </table>
-    <table style="margin-top:3px;border-top:1px dashed #000;padding-top:3px;">
-      <tbody>${totalsRows}</tbody>
-    </table>
-    <div style="margin-top:3px;text-align:center;font-size:${smallSize};color:#000;padding-bottom:2mm;">${footerLine}</div>
   </body>
 </html>`
 }
