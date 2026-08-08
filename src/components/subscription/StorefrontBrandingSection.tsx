@@ -4,6 +4,7 @@ import {
   patchStorefrontBranding,
 } from '../../lib/storefront/api'
 import type { StorefrontBranding } from '../../lib/storefront/types'
+import { setCachedReceiptLogoUrl } from '../../lib/receiptLogo'
 import { hasOrgAuth } from '../../lib/subscription/authHeaders'
 import {
   isBlobUploadAvailable,
@@ -72,6 +73,7 @@ export function StorefrontBrandingSection({
         setLogoUrl(data.branding.logoUrl ?? '')
         setBannerUrl(data.branding.bannerUrl ?? '')
         setStoreNameHint(data.storeName)
+        setCachedReceiptLogoUrl(data.branding.logoUrl)
       } catch (err) {
         if (!cancelled) {
           toast.error(
@@ -147,6 +149,7 @@ export function StorefrontBrandingSection({
         bannerUrl: bannerUrl.trim() || undefined,
       }
       await patchStorefrontBranding(branding)
+      setCachedReceiptLogoUrl(branding.logoUrl)
       if (color) setPrimaryColor(color)
       toast.success('Apparence boutique enregistrée.')
     } catch (err) {

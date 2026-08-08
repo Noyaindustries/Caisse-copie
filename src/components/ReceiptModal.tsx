@@ -13,9 +13,11 @@ import {
   CASH_DRAWER_WINDOWS_HINT,
 } from '../lib/printer/printReceipt'
 import { connectToplinkPrinter } from '../lib/printer/toplinkSerial'
-import { BRAND_LOGO_FULL_SRC } from '../brand'
-import { useSiteBranding } from '../context/SiteBrandingContext'
 import { buildBrowserReceiptHtml } from '../lib/printer/browserReceiptHtml'
+import {
+  getCachedReceiptLogoUrl,
+  resolveReceiptLogoUrl,
+} from '../lib/receiptLogo'
 import {
   getReceiptBusinessName,
   receiptDocumentLabel,
@@ -120,8 +122,9 @@ async function resolveLogoDataUrl(src: string): Promise<string | null> {
 
 export function ReceiptModal({ source, autoPrint = false, onClose }: Props) {
   const toast = useToast()
-  const { logoSrc, customLogo } = useSiteBranding()
-  const receiptLogoSrc = customLogo ? logoSrc : BRAND_LOGO_FULL_SRC
+  const [receiptLogoSrc, setReceiptLogoSrc] = useState<string | null>(() =>
+    getCachedReceiptLogoUrl(),
+  )
   const autoPrintedReceiptRef = useRef<string | null>(null)
   const [printing, setPrinting] = useState(false)
   const [serialBusy, setSerialBusy] = useState(false)
@@ -192,7 +195,14 @@ export function ReceiptModal({ source, autoPrint = false, onClose }: Props) {
       return
     }
 
-    const logoDataUrl = await resolveLogoDataUrl(receiptLogoSrc)
+    const resolvedLogo =
+      (await resolveReceiptLogoUrl()) ?? receiptLogoSrc
+    if (resolvedLogo && resolvedLogo !== receiptLogoSrc) {
+      setReceiptLogoSrc(resolvedLogo)
+    }
+    const logoDataUrl = resolvedLogo
+      ? await resolveLogoDataUrl(resolvedLogo)
+      : null
 
     const html = buildBrowserReceiptHtml({
       sale,
@@ -325,6 +335,17 @@ export function ReceiptModal({ source, autoPrint = false, onClose }: Props) {
   printReceiptRef.current = printReceipt
 
   useEffect(() => {
+    let cancelled = false
+    void (async () => {
+      const logo = await resolveReceiptLogoUrl()
+      if (!cancelled) setReceiptLogoSrc(logo)
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
+  useEffect(() => {
     if (!autoPrint) return
     if (autoPrintedReceiptRef.current === receiptKey) return
 
@@ -434,12 +455,14 @@ export function ReceiptModal({ source, autoPrint = false, onClose }: Props) {
     >
       <div id="print-receipt" className="space-y-4 text-zinc-800">
         <header className="border-b border-dashed border-zinc-200 pb-3 text-center">
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            src={receiptLogoSrc}
-            alt=""
-            className="mx-auto mb-2 h-14 w-14 object-contain"
-          />
+          {receiptLogoSrc ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={receiptLogoSrc}
+              alt=""
+              className="mx-auto mb-2 h-14 w-14 object-contain"
+            />
+          ) : null}
           <p className="text-lg font-bold tracking-tight text-zinc-900">
             {businessName}
           </p>
