@@ -237,12 +237,13 @@ export async function connectToplinkPrinter(): Promise<ToplinkPrinterMeta> {
 
   const { baudRate } = await ensurePortOpen(port, readMeta().baudRate ?? 9600)
   activePort = port
-  return writeMeta({
+  const meta = writeMeta({
     connectedAt: Date.now(),
     lastUsedAt: Date.now(),
     baudRate,
     label: `Toplink TL-R120 (USB · ${baudRate} bauds)`,
   })
+  return meta
 }
 
 /** Réutilise un port déjà autorisé par le navigateur. */

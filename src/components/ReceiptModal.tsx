@@ -9,8 +9,10 @@ import {
 import {
   printReceipt as printReceiptJob,
   isToplinkEscPosReady,
+  kickCashDrawer,
   CASH_DRAWER_WINDOWS_HINT,
 } from '../lib/printer/printReceipt'
+import { connectToplinkPrinter } from '../lib/printer/toplinkSerial'
 import { buildBrowserReceiptHtml } from '../lib/printer/browserReceiptHtml'
 import {
   getReceiptBusinessName,
@@ -96,6 +98,8 @@ export function ReceiptModal({ source, autoPrint = false, onClose }: Props) {
   const toast = useToast()
   const autoPrintedReceiptRef = useRef<string | null>(null)
   const [printing, setPrinting] = useState(false)
+  const [serialBusy, setSerialBusy] = useState(false)
+  const [drawerOpenedOk, setDrawerOpenedOk] = useState<boolean | null>(null)
   const isOnline = source.kind === 'onlineOrder'
   const isTicketInvoice = source.kind === 'ticketInvoice'
   const order = isOnline ? source.order : null
@@ -231,7 +235,7 @@ export function ReceiptModal({ source, autoPrint = false, onClose }: Props) {
       const escposReady = await Promise.race([
         isToplinkEscPosReady(),
         new Promise<boolean>((resolve) => {
-          window.setTimeout(() => resolve(false), 100)
+          window.setTimeout(() => resolve(false), 2000)
         }),
       ])
       const result = await printReceiptJob(source, {
@@ -239,6 +243,9 @@ export function ReceiptModal({ source, autoPrint = false, onClose }: Props) {
         preferBrowser: !escposReady,
         browserFallback: printViaBrowser,
       })
+      if (amt.cash > 0) {
+        setDrawerOpenedOk(result.drawerOpened === true)
+      }
       if (result.mode === 'escpos') {
         toast.success('Ticket imprimé', result.message)
       } else {
@@ -247,7 +254,11 @@ export function ReceiptModal({ source, autoPrint = false, onClose }: Props) {
           'Si le dialogue ne s’ouvre pas, cliquez Imprimer (bloqueurs Chrome).',
         )
         if (amt.cash > 0 && result.drawerOpened === false) {
-          toast.warning('Tiroir-caisse', CASH_DRAWER_WINDOWS_HINT)
+          toast.warning(
+            'Tiroir-caisse',
+            'Cliquez « Connecter USB » ci-dessous (COM3), puis « Ouvrir tiroir ». ' +
+              CASH_DRAWER_WINDOWS_HINT,
+          )
         }
       }
     } catch (err) {
@@ -263,8 +274,6 @@ export function ReceiptModal({ source, autoPrint = false, onClose }: Props) {
 
   const printReceiptRef = useRef(printReceipt)
   printReceiptRef.current = printReceipt
-  const printViaBrowserRef = useRef(printViaBrowser)
-  printViaBrowserRef.current = printViaBrowser
 
   useEffect(() => {
     if (!autoPrint) return
@@ -275,23 +284,10 @@ export function ReceiptModal({ source, autoPrint = false, onClose }: Props) {
     const id = window.setTimeout(() => {
       if (autoPrintedReceiptRef.current === receiptKey) return
       autoPrintedReceiptRef.current = receiptKey
-      // Chemin rapide navigateur (POS-80) : ne pas attendre le série USB.
+      // Toujours passer par printReceipt : le fallback navigateur y est géré
+      // et kickCashDrawer reste tenté si un COM Web Serial est autorisé.
       void (async () => {
-        const escposReady = await Promise.race([
-          isToplinkEscPosReady(),
-          new Promise<boolean>((resolve) => {
-            window.setTimeout(() => resolve(false), 80)
-          }),
-        ])
-        if (escposReady) {
-          await printReceiptRef.current()
-          return
-        }
-        printViaBrowserRef.current()
-        toast.info(
-          'Impression',
-          'Choisissez POS-80 puis Imprimer. Si rien ne s’ouvre, cliquez le bouton Imprimer.',
-        )
+        await printReceiptRef.current()
       })()
     }, 50)
 
@@ -312,6 +308,70 @@ export function ReceiptModal({ source, autoPrint = false, onClose }: Props) {
           <Button variant="ghost" onClick={onClose}>
             Fermer
           </Button>
+          {amt.cash > 0 && drawerOpenedOk !== true ? (
+            <>
+              <Button
+                variant="secondary"
+                disabled={serialBusy || printing}
+                onClick={() => {
+                  setSerialBusy(true)
+                  void connectToplinkPrinter()
+                    .then(() => {
+                      toast.success(
+                        'USB lié',
+                        'Port autorisé. Cliquez « Ouvrir tiroir ».',
+                      )
+                      return kickCashDrawer()
+                    })
+                    .then((ok) => {
+                      setDrawerOpenedOk(ok === true)
+                      if (ok) {
+                        toast.success('Tiroir', 'Commande d’ouverture envoyée.')
+                      } else {
+                        toast.warning('Tiroir', CASH_DRAWER_WINDOWS_HINT)
+                      }
+                    })
+                    .catch((err) =>
+                      toast.error(
+                        'USB / tiroir',
+                        err instanceof Error ? err.message : 'Erreur',
+                      ),
+                    )
+                    .finally(() => setSerialBusy(false))
+                }}
+              >
+                {serialBusy ? 'USB…' : 'Connecter USB'}
+              </Button>
+              <Button
+                variant="secondary"
+                disabled={serialBusy || printing}
+                onClick={() => {
+                  setSerialBusy(true)
+                  void kickCashDrawer()
+                    .then((ok) => {
+                      setDrawerOpenedOk(ok === true)
+                      if (ok) {
+                        toast.success('Tiroir', 'Commande d’ouverture envoyée.')
+                      } else {
+                        toast.warning(
+                          'Tiroir',
+                          'D’abord « Connecter USB » (COM3), puis réessayez.',
+                        )
+                      }
+                    })
+                    .catch((err) =>
+                      toast.error(
+                        'Tiroir',
+                        err instanceof Error ? err.message : 'Erreur',
+                      ),
+                    )
+                    .finally(() => setSerialBusy(false))
+                }}
+              >
+                Ouvrir tiroir
+              </Button>
+            </>
+          ) : null}
           <Button
             variant="primary"
             iconLeft={<IconPrinter />}
