@@ -2,10 +2,16 @@ import { useLiveQuery } from 'dexie-react-hooks'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { RefundSaleModal } from '../components/RefundSaleModal'
 import { db } from '../db/db'
-import type { AuditEvent, AuditEventKind, Sale } from '../db/types'
+import type { AuditEvent, AuditEventKind, CashOutflow, Sale } from '../db/types'
 import type { UserRole } from '../auth/types'
 import { downloadTextFile, toCsvSemicolon } from '../lib/analyticsExport'
 import { appendAuditEvent } from '../lib/auditLog'
+import {
+  filterCashOutflowsByDate,
+  sumCashOutflows,
+  sumChangeDue,
+} from '../lib/cashOutflows'
+import { periodMarginTotals } from '../lib/marginAnalytics'
 import { formatFCFA } from '../lib/money'
 import { paymentMethodShortLabel } from '../lib/paymentDisplay'
 import { saleFullyRefunded, saleNetTTC } from '../lib/refundMath'
@@ -143,6 +149,9 @@ export function JournalReportView({
 }: Props) {
   const toast = useToast()
   const sales = useLiveQuery(() => db.sales.toArray(), [], []) ?? []
+  const products = useLiveQuery(() => db.products.toArray(), [], []) ?? []
+  const allCashOutflows =
+    useLiveQuery(() => db.cashOutflows.toArray(), [], []) ?? []
   const allAuditEvents =
     useLiveQuery(
       () => db.auditEvents.orderBy('createdAt').reverse().limit(120).toArray(),
@@ -161,6 +170,22 @@ export function JournalReportView({
             sale.cashierDisplayName === currentProfile.displayName),
       ),
     [sales, currentProfile.id, currentProfile.displayName],
+  )
+  const outflowsToday = useMemo(
+    () =>
+      filterCashOutflowsByDate(allCashOutflows, todayYmd).sort(
+        (a, b) => b.createdAt - a.createdAt,
+      ),
+    [allCashOutflows, todayYmd],
+  )
+  const outflowsTotalLive = useMemo(
+    () => sumCashOutflows(outflowsToday),
+    [outflowsToday],
+  )
+  const changeDueToday = useMemo(() => sumChangeDue(today), [today])
+  const marginToday = useMemo(
+    () => periodMarginTotals(today, products),
+    [today, products],
   )
   const auditEvents = useMemo(
     () =>
@@ -203,11 +228,16 @@ export function JournalReportView({
 
   const openingFloat = dayRow?.openingFloat ?? 0
   const cashSalesToday = breakdown.cash
-  const theoreticalCash = openingFloat + cashSalesToday
+  const outflowsTotal = isClosed
+    ? (dayRow?.snapshotCashOutflows ?? outflowsTotalLive)
+    : outflowsTotalLive
+  const theoreticalCash = openingFloat + cashSalesToday - outflowsTotal
 
   const [openingEdit, setOpeningEdit] = useState('0')
   const [countedEdit, setCountedEdit] = useState('')
   const [closureNote, setClosureNote] = useState('')
+  const [outflowAmountEdit, setOutflowAmountEdit] = useState('')
+  const [outflowLabelEdit, setOutflowLabelEdit] = useState('')
   const [busy, setBusy] = useState(false)
   const [refundSale, setRefundSale] = useState<Sale | null>(null)
   const [pendingClosureUntil, setPendingClosureUntil] = useState(0)
@@ -268,6 +298,61 @@ export function JournalReportView({
     }
   }, [canDailyClosure, isClosed, openingEdit, todayYmd, toast])
 
+  const addCashOutflow = useCallback(async () => {
+    if (!canDailyClosure || isClosed) return
+    const amount = Number.parseInt(outflowAmountEdit.replace(/\s/g, ''), 10)
+    const label = outflowLabelEdit.trim()
+    if (!Number.isFinite(amount) || amount <= 0) {
+      toast.error('Montant invalide', 'Indiquez un montant positif.')
+      return
+    }
+    if (label.length < 2) {
+      toast.error('Motif requis', 'Décrivez la sortie (min. 2 caractères).')
+      return
+    }
+    setBusy(true)
+    try {
+      const row: CashOutflow = {
+        id: crypto.randomUUID(),
+        dateYmd: todayYmd,
+        amount,
+        label,
+        createdAt: Date.now(),
+        createdByProfileId: currentProfile.id,
+        createdByDisplayName: currentProfile.displayName,
+      }
+      await db.cashOutflows.put(row)
+      setOutflowAmountEdit('')
+      setOutflowLabelEdit('')
+      toast.success('Sortie enregistrée', formatFCFA(amount))
+    } finally {
+      setBusy(false)
+    }
+  }, [
+    canDailyClosure,
+    isClosed,
+    outflowAmountEdit,
+    outflowLabelEdit,
+    todayYmd,
+    currentProfile.id,
+    currentProfile.displayName,
+    toast,
+  ])
+
+  const deleteCashOutflow = useCallback(
+    async (id: string) => {
+      if (!canDailyClosure || isClosed) return
+      setBusy(true)
+      try {
+        await db.cashOutflows.delete(id)
+        toast.success('Sortie supprimée')
+      } finally {
+        setBusy(false)
+      }
+    },
+    [canDailyClosure, isClosed, toast],
+  )
+
   const performClosure = useCallback(async () => {
     if (!canDailyClosure || isClosed) return
     const now = Date.now()
@@ -282,7 +367,10 @@ export function JournalReportView({
     const stats = paymentStatsByMethod(today)
     const cashTot = stats.cash.totalTTC
     const opening = dayRow?.openingFloat ?? 0
-    const expected = opening + cashTot
+    const outflowsSnap = sumCashOutflows(
+      filterCashOutflowsByDate(await db.cashOutflows.toArray(), todayYmd),
+    )
+    const expected = opening + cashTot - outflowsSnap
     const countedRaw = countedEdit.trim()
     const counted =
       countedRaw === ''
@@ -320,6 +408,7 @@ export function JournalReportView({
         snapshotCashCount: stats.cash.count,
         snapshotCardCount: stats.card.count,
         snapshotMobileCount: stats.mobile.count,
+        snapshotCashOutflows: outflowsSnap,
         expectedCashAtClose: expected,
         countedCash: counted,
         cashDifference,
@@ -343,6 +432,7 @@ export function JournalReportView({
           expectedCashAtClose: expected,
           countedCash: counted ?? null,
           cashDifference: cashDifference ?? null,
+          cashOutflows: outflowsSnap,
           ticketCount: today.length,
           totalTTC: sumTotalTTC(today),
         },
@@ -571,7 +661,29 @@ export function JournalReportView({
                 ? dayRow.expectedCashAtClose
                 : theoreticalCash,
             )}
-            hint="Fond + espèces"
+            hint="Fond + espèces − sorties"
+            tone="amber"
+          />
+          <Kpi
+            label="Monnaie rendue"
+            value={formatFCFA(changeDueToday)}
+            hint="Somme des monnaies du jour"
+            tone="neutral"
+          />
+          <Kpi
+            label="Bénéfices (marge)"
+            value={formatFCFA(marginToday.marginOnKnownTTC)}
+            hint={
+              marginToday.revenueWithCostTTC < marginToday.revenueTTC
+                ? 'Sur articles avec prix de revient'
+                : 'CA − coût d’achat'
+            }
+            tone="violet"
+          />
+          <Kpi
+            label="Dépenses (sorties)"
+            value={formatFCFA(outflowsTotal)}
+            hint={`${outflowsToday.length} sortie${outflowsToday.length > 1 ? 's' : ''}`}
             tone="amber"
           />
         </div>
@@ -598,6 +710,12 @@ export function JournalReportView({
                   {formatFCFA(
                     isClosed ? (dayRow?.snapshotCash ?? 0) : cashSalesToday,
                   )}
+                </dd>
+              </div>
+              <div className="flex items-center justify-between rounded-lg bg-zinc-50 px-3 py-2 sm:col-span-2">
+                <dt className="text-zinc-600">− Sorties de caisse</dt>
+                <dd className="font-mono-nums font-semibold">
+                  {formatFCFA(outflowsTotal)}
                 </dd>
               </div>
               <div className="flex items-center justify-between rounded-lg bg-emerald-50 px-3 py-2 sm:col-span-2">
@@ -663,6 +781,95 @@ export function JournalReportView({
         <Card className="rounded-2xl">
           <CardContent>
             <h3 className="text-[14px] font-semibold text-zinc-900">
+              Sorties de caisse
+            </h3>
+            <p className="mt-1 text-[12px] text-zinc-500">
+              Dépenses espèces (achats, retraits, frais). Elles diminuent le solde
+              théorique.
+            </p>
+
+            {!isClosed && canDailyClosure ? (
+              <div className="mt-3 grid gap-2 sm:grid-cols-[1fr_1.4fr_auto] sm:items-end">
+                <Field label="Montant (FCFA)">
+                  <Input
+                    inputMode="numeric"
+                    value={outflowAmountEdit}
+                    onChange={(e) => setOutflowAmountEdit(e.target.value)}
+                    disabled={busy}
+                    className="font-mono-nums"
+                    placeholder="5000"
+                  />
+                </Field>
+                <Field label="Motif">
+                  <Input
+                    value={outflowLabelEdit}
+                    onChange={(e) => setOutflowLabelEdit(e.target.value)}
+                    disabled={busy}
+                    placeholder="Achat fournitures…"
+                  />
+                </Field>
+                <Button
+                  variant="primary"
+                  loading={busy}
+                  onClick={() => void addCashOutflow()}
+                >
+                  Ajouter
+                </Button>
+              </div>
+            ) : null}
+
+            {outflowsToday.length === 0 ? (
+              <p className="mt-3 text-[13px] text-zinc-500">
+                Aucune sortie aujourd’hui.
+              </p>
+            ) : (
+              <ul className="mt-3 divide-y divide-zinc-100 rounded-lg border border-zinc-200">
+                {outflowsToday.map((row) => (
+                  <li
+                    key={row.id}
+                    className="flex flex-wrap items-center justify-between gap-2 px-3 py-2 text-[13px]"
+                  >
+                    <div className="min-w-0">
+                      <p className="font-medium text-zinc-900">{row.label}</p>
+                      <p className="text-[11px] text-zinc-500">
+                        {new Date(row.createdAt).toLocaleTimeString('fr-FR', {
+                          hour: '2-digit',
+                          minute: '2-digit',
+                        })}
+                        {row.createdByDisplayName
+                          ? ` · ${row.createdByDisplayName}`
+                          : ''}
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="font-mono-nums font-semibold text-zinc-900">
+                        {formatFCFA(row.amount)}
+                      </span>
+                      {!isClosed && canDailyClosure ? (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          disabled={busy}
+                          onClick={() => void deleteCashOutflow(row.id)}
+                        >
+                          Supprimer
+                        </Button>
+                      ) : null}
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            )}
+            <div className="mt-2 flex justify-between text-[13px] font-semibold">
+              <span className="text-zinc-600">Total sorties</span>
+              <span className="font-mono-nums">{formatFCFA(outflowsTotal)}</span>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className="rounded-2xl">
+          <CardContent>
+            <h3 className="text-[14px] font-semibold text-zinc-900">
               Modes de paiement
             </h3>
             <ul className="mt-3 space-y-3">
@@ -708,7 +915,8 @@ export function JournalReportView({
                 Clôture journalière
               </h3>
               <p className="mt-1 text-[12px] text-zinc-500">
-                Figez les totaux du jour. Saisissez le montant compté pour calculer l’écart.
+                Figez les totaux du jour (ventes, sorties). Saisissez le montant
+                compté pour calculer l’écart vs fond + espèces − sorties.
               </p>
               <div className="mt-3 grid gap-2 sm:grid-cols-2">
                 <Field label="Compté en caisse (optionnel)">

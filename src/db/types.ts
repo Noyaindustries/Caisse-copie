@@ -534,7 +534,9 @@ export interface DayClosure {
   snapshotCashCount?: number
   snapshotCardCount?: number
   snapshotMobileCount?: number
-  /** openingFloat + encaissements espèces au moment de la clôture. */
+  /** Total des sorties de caisse (espèces) figé à la clôture. */
+  snapshotCashOutflows?: number
+  /** openingFloat + encaissements espèces − sorties au moment de la clôture. */
   expectedCashAtClose?: number
   /** Montant physique compté en caisse à la clôture (optionnel). */
   countedCash?: number
@@ -543,4 +545,16 @@ export interface DayClosure {
   note?: string
   closedByProfileId?: string
   closedByDisplayName?: string
+}
+
+/** Sortie d’espèces hors ventes (dépense, achat, retrait). */
+export interface CashOutflow {
+  id: string
+  dateYmd: string
+  amount: number
+  label: string
+  createdAt: number
+  createdByProfileId?: string
+  createdByDisplayName?: string
+  storeId?: string
 }

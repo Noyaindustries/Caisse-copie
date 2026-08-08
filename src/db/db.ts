@@ -4,6 +4,7 @@ import { storeStockRowId } from '../lib/storeStockId'
 import { locationStockRowId } from '../lib/locationStockId'
 import type {
   AuditEvent,
+  CashOutflow,
   DayClosure,
   DiningTable,
   OnlineOrder,
@@ -88,6 +89,7 @@ export class CaisseDB extends Dexie {
   locationTransfers!: Table<StockLocationTransfer, string>
   stockTransfers!: Table<StockTransfer, string>
   dayClosures!: Table<DayClosure, string>
+  cashOutflows!: Table<CashOutflow, string>
   refunds!: Table<RefundRecord, string>
   auditEvents!: Table<AuditEvent, string>
   onlineOrders!: Table<OnlineOrder, string>
@@ -542,6 +544,41 @@ export class CaisseDB extends Dexie {
       locationTransfers: 'id, createdAt, storeId, productId, fromLocationId, toLocationId',
       stockTransfers: 'id, createdAt, fromStoreId, toStoreId',
       dayClosures: 'dateYmd',
+      refunds: 'id, saleId, createdAt',
+      auditEvents: 'id, createdAt, kind',
+      onlineOrders:
+        'id, createdAt, status, storeId, sourcePlatform, externalOrderRef, [storeId+createdAt]',
+      onlineOrderMessages: 'id, orderId, createdAt',
+      productCategories: 'id, sortOrder',
+      timePunches: 'id, profileId, storeId, createdAt',
+      diningTables: 'id, storeId, status, sortOrder, [storeId+sortOrder]',
+      promotions: 'id, code, active, storeId, [active+code]',
+      loyaltyCustomers: 'id, phone, updatedAt',
+      loyaltyTransactions: 'id, customerId, createdAt, type',
+      hrRequests: 'id, createdAt, staffProfileId, status, type, [staffProfileId+createdAt]',
+      crmInteractions:
+        'id, createdAt, customerId, customerPhone, kind, [customerId+createdAt]',
+      ticketInvoices: 'id, createdAt, updatedAt, kind, status, storeId, reference, [storeId+createdAt]',
+      terminalNodes: 'id, storeId, online, lastSeenAt, [storeId+lastSeenAt]',
+      tableReservations:
+        'id, storeId, tableId, status, startAt, endAt, [storeId+startAt], [tableId+startAt]',
+      kitchenIngredients: 'id, name, archived, productId',
+      kitchenIngredientStocks: 'id, storeId, ingredientId, [storeId+ingredientId]',
+      productRecipeIngredients: 'id, productId, ingredientId, [productId+ingredientId]',
+    })
+    this.version(21).stores({
+      products: 'id, barcode, category, archived',
+      sales: 'id, createdAt, synced, storeId',
+      syncQueue: '++id, createdAt',
+      stores: 'id, sortOrder',
+      storeStocks: 'id, storeId, productId, [storeId+productId]',
+      stockLocations: 'id, storeId, active, sortOrder, [storeId+sortOrder]',
+      locationStocks:
+        'id, storeId, locationId, productId, [storeId+productId], [storeId+locationId]',
+      locationTransfers: 'id, createdAt, storeId, productId, fromLocationId, toLocationId',
+      stockTransfers: 'id, createdAt, fromStoreId, toStoreId',
+      dayClosures: 'dateYmd',
+      cashOutflows: 'id, dateYmd, createdAt',
       refunds: 'id, saleId, createdAt',
       auditEvents: 'id, createdAt, kind',
       onlineOrders:
