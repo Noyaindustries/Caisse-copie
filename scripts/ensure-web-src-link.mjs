@@ -11,21 +11,56 @@ const repoRoot = path.join(__dirname, '..')
 const linkPath = path.join(repoRoot, 'apps', 'web', 'src')
 const targetPath = path.join(repoRoot, 'src')
 
-function alreadyLinked() {
+function removeLinkIfAny() {
   try {
     const st = fs.lstatSync(linkPath)
-    return st.isSymbolicLink() || st.isDirectory()
+    if (st.isSymbolicLink()) {
+      fs.unlinkSync(linkPath)
+      return
+    }
+    if (st.isDirectory()) {
+      // Ne pas supprimer un vrai dossier source (copie locale).
+      return
+    }
   } catch {
-    return false
+    // absent
   }
 }
 
-if (alreadyLinked()) {
-  console.log('[ensure-web-src-link] apps/web/src déjà présent')
+function linkPointsToSrc() {
+  try {
+    const st = fs.lstatSync(linkPath)
+    if (st.isDirectory() && !st.isSymbolicLink()) {
+      // Dossier réel (ex. copie Windows) : OK si index présent
+      return fs.existsSync(path.join(linkPath, 'App.tsx'))
+    }
+    if (st.isSymbolicLink()) {
+      const resolved = fs.realpathSync(linkPath)
+      return resolved === fs.realpathSync(targetPath)
+    }
+  } catch {
+    return false
+  }
+  return false
+}
+
+if (linkPointsToSrc()) {
+  console.log('[ensure-web-src-link] apps/web/src OK')
   process.exit(0)
 }
 
+removeLinkIfAny()
+
 if (process.platform === 'win32') {
+  // Junction Windows
+  try {
+    if (fs.existsSync(linkPath)) {
+      console.log('[ensure-web-src-link] apps/web/src déjà présent (win)')
+      process.exit(0)
+    }
+  } catch {
+    // continue
+  }
   const r = spawnSync(
     'cmd',
     ['/c', 'mklink', '/J', linkPath, targetPath],
@@ -37,14 +72,7 @@ if (process.platform === 'win32') {
   }
   console.log('[ensure-web-src-link]', r.stdout.trim())
 } else {
-  try {
-    fs.symlinkSync(path.relative(path.dirname(linkPath), targetPath), linkPath, 'dir')
-    console.log('[ensure-web-src-link] symlink créé')
-  } catch (err) {
-    if (err && typeof err === 'object' && 'code' in err && err.code === 'EEXIST') {
-      console.log('[ensure-web-src-link] apps/web/src déjà présent (EEXIST)')
-      process.exit(0)
-    }
-    throw err
-  }
+  const rel = path.relative(path.dirname(linkPath), targetPath)
+  fs.symlinkSync(rel, linkPath, 'dir')
+  console.log('[ensure-web-src-link] symlink créé →', rel)
 }

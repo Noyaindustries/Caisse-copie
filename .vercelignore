@@ -3,3 +3,5 @@
 !.env.example
 server-dist
 dist
+# Junction Windows locale — recréé sur Vercel par postinstall
+apps/web/src
