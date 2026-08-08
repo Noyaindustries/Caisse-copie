@@ -1,5 +1,5 @@
 /**
- * Crée la junction Windows apps/web/src → ../../src (évite externalDir / double React).
+ * Crée le lien apps/web/src → ../../src (évite externalDir / double React).
  */
 import fs from 'node:fs'
 import path from 'node:path'
@@ -11,12 +11,18 @@ const repoRoot = path.join(__dirname, '..')
 const linkPath = path.join(repoRoot, 'apps', 'web', 'src')
 const targetPath = path.join(repoRoot, 'src')
 
-if (fs.existsSync(linkPath)) {
-  const st = fs.lstatSync(linkPath)
-  if (st.isSymbolicLink() || st.isDirectory()) {
-    console.log('[ensure-web-src-link] apps/web/src déjà présent')
-    process.exit(0)
+function alreadyLinked() {
+  try {
+    const st = fs.lstatSync(linkPath)
+    return st.isSymbolicLink() || st.isDirectory()
+  } catch {
+    return false
   }
+}
+
+if (alreadyLinked()) {
+  console.log('[ensure-web-src-link] apps/web/src déjà présent')
+  process.exit(0)
 }
 
 if (process.platform === 'win32') {
@@ -31,7 +37,14 @@ if (process.platform === 'win32') {
   }
   console.log('[ensure-web-src-link]', r.stdout.trim())
 } else {
-  fs.symlinkSync(targetPath, linkPath, 'dir')
-  console.log('[ensure-web-src-link] symlink créé')
+  try {
+    fs.symlinkSync(path.relative(path.dirname(linkPath), targetPath), linkPath, 'dir')
+    console.log('[ensure-web-src-link] symlink créé')
+  } catch (err) {
+    if (err && typeof err === 'object' && 'code' in err && err.code === 'EEXIST') {
+      console.log('[ensure-web-src-link] apps/web/src déjà présent (EEXIST)')
+      process.exit(0)
+    }
+    throw err
+  }
 }
-
