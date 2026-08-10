@@ -171,5 +171,7 @@ export async function createKitchenIngredientFromProduct(params: {
     ingredientId: id,
     stock: Math.max(0, params.stock),
   })
+  const { scheduleWorkspaceCatalogPush } = await import('./workspaceCatalogCloud')
+  scheduleWorkspaceCatalogPush()
   return id
 }

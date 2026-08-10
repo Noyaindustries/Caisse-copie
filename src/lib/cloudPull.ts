@@ -6,6 +6,7 @@ import { getLastSyncTimestamp, setLastSyncTimestamp } from './syncMeta'
 import { importStorefrontOrdersFromPull } from './storefront/syncInbox'
 import type { UserRole } from '../auth/types'
 import { getOrCreateTerminalId } from './session'
+import type { WorkspaceCatalogCloud } from './workspaceCatalogCloud'
 
 export type CloudPullResult = {
   ok: boolean
@@ -15,6 +16,7 @@ export type CloudPullResult = {
   stockMerged: number
   mergeConflicts: number
   categoriesMerged: number
+  productsMerged: number
   error?: string
 }
 
@@ -52,6 +54,7 @@ type PullResponse = {
     name: string
     sortOrder: number
   }>
+  workspaceCatalog?: WorkspaceCatalogCloud
 }
 
 export async function pullCloudData(): Promise<CloudPullResult> {
@@ -79,14 +82,25 @@ export async function pullCloudData(): Promise<CloudPullResult> {
     // Après un reset serveur, le pull peut réimporter des restes : re-appliquer la purge locale.
     const { ensureSeed, maybeApplyPendingLocalDataWipe } = await import('../db/db')
     const wiped = await maybeApplyPendingLocalDataWipe()
-    if (wiped) await ensureSeed()
-    // Après wipe éventuel : restaurer / fusionner les catégories cloud.
+    if (wiped) {
+      await ensureSeed()
+      try {
+        localStorage.removeItem('caisseci-workspace-catalog-applied-at')
+      } catch {
+        /* ignore */
+      }
+    }
+    // Après wipe éventuel : restaurer / fusionner catalogues cloud.
     const { mergeCatalogCategoriesFromCloud } = await import(
       './catalogCategoriesCloud'
     )
     const categoriesMerged = await mergeCatalogCategoriesFromCloud(
       data.catalogCategories,
     )
+    const { mergeWorkspaceCatalogFromCloud } = await import(
+      './workspaceCatalogCloud'
+    )
+    const workspace = await mergeWorkspaceCatalogFromCloud(data.workspaceCatalog)
     return {
       ok: true,
       staffCount,
@@ -95,6 +109,7 @@ export async function pullCloudData(): Promise<CloudPullResult> {
       stockMerged: merge.stockMerged,
       mergeConflicts: merge.conflicts,
       categoriesMerged,
+      productsMerged: workspace.products,
     }
   } catch (err) {
     return emptyResult(err instanceof Error ? err.message : 'Pull cloud échoué')
@@ -110,6 +125,7 @@ function emptyResult(error: string): CloudPullResult {
     stockMerged: 0,
     mergeConflicts: 0,
     categoriesMerged: 0,
+    productsMerged: 0,
     error,
   }
 }

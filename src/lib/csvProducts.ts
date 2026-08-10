@@ -331,6 +331,7 @@ export async function applyProductsCsvImport(
           lowStockThreshold: p.lowStockThreshold,
           vatRatePct: p.vatRatePct,
           archived: p.archived,
+          updatedAt: Date.now(),
         }
         if (p.imageUrl !== undefined) {
           merged.imageUrl = p.imageUrl
@@ -359,7 +360,7 @@ export async function applyProductsCsvImport(
         })
         updated++
       } else {
-        await db.products.add(p)
+        await db.products.add({ ...p, updatedAt: Date.now() })
         await db.storeStocks.put({
           id: storeStockRowId(DEFAULT_STORE_ID, p.id),
           storeId: DEFAULT_STORE_ID,
@@ -373,6 +374,8 @@ export async function applyProductsCsvImport(
 
   await ensureAllStoreStockRows()
   await syncProductCategoriesFromProducts()
+  const { scheduleWorkspaceCatalogPush } = await import('./workspaceCatalogCloud')
+  scheduleWorkspaceCatalogPush(400)
   return { created, updated, errors }
 }
 

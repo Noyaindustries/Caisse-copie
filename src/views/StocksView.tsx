@@ -367,7 +367,10 @@ export function StocksView({ isAdmin, auditActor }: Props) {
     const previousTh = p.lowStockThreshold
     setBusyId(p.id)
     try {
-      await db.products.update(p.id, { lowStockThreshold: th })
+      await db.products.update(p.id, {
+        lowStockThreshold: th,
+        updatedAt: Date.now(),
+      })
       await db.locationStocks.put({
         id: locationStockRowId(activeStoreId, selectedLocationId, p.id),
         storeId: activeStoreId,
@@ -377,6 +380,10 @@ export function StocksView({ isAdmin, auditActor }: Props) {
       })
       const totalStock = await recomputeAndWriteStoreStock(p.id)
       await pushStockCloud({ ...p, stock: totalStock, lowStockThreshold: th })
+      const { scheduleWorkspaceCatalogPush } = await import(
+        '../lib/workspaceCatalogCloud'
+      )
+      scheduleWorkspaceCatalogPush()
       void appendAuditEvent({
         kind: 'stock_adjusted',
         actor: auditActor,
@@ -570,6 +577,10 @@ export function StocksView({ isAdmin, auditActor }: Props) {
       ingredientId: id,
       stock,
     })
+    const { scheduleWorkspaceCatalogPush } = await import(
+      '../lib/workspaceCatalogCloud'
+    )
+    scheduleWorkspaceCatalogPush()
     setIngredientName('')
     setIngredientStock('0')
     setIngredientThreshold('0')
@@ -658,12 +669,20 @@ export function StocksView({ isAdmin, auditActor }: Props) {
       })
       toast.success('Recette ajoutée')
     }
+    const { scheduleWorkspaceCatalogPush } = await import(
+      '../lib/workspaceCatalogCloud'
+    )
+    scheduleWorkspaceCatalogPush()
     setRecipeQtyPerUnit('')
   }, [recipeIngredientId, recipeProductId, recipeQtyPerUnit, recipeRows, toast])
 
   const removeRecipeRow = useCallback(
     async (id: string) => {
       await db.productRecipeIngredients.delete(id)
+      const { scheduleWorkspaceCatalogPush } = await import(
+        '../lib/workspaceCatalogCloud'
+      )
+      scheduleWorkspaceCatalogPush()
       toast.info('Recette supprimée')
     },
     [toast],

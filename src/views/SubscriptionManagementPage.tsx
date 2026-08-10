@@ -1,9 +1,14 @@
-import { Suspense, lazy } from 'react'
+import { Suspense, lazy, useEffect, useState } from 'react'
 import { clearStaffSession } from '../auth/session'
-import { BRAND_NAME } from '../brand'
 import { BrandLogo } from '../components/BrandLogo'
 import { OfflineBanner } from '../components/OfflineBanner'
 import { useSubscription } from '../context/SubscriptionContext'
+import {
+  getCachedOrgWorkspaceBranding,
+  ORG_BRANDING_CHANGED_EVENT,
+  resolveOrgWorkspaceBranding,
+  type OrgWorkspaceBranding,
+} from '../lib/orgWorkspaceBranding'
 import { planLabel, statusLabel } from '../lib/subscription/plans'
 import { Badge } from '../ui/Badge'
 import { Button } from '../ui/Button'
@@ -35,6 +40,22 @@ export function SubscriptionManagementPage({
   onDisconnect,
 }: Props) {
   const { organization, subscription, usable, refresh } = useSubscription()
+  const [orgBranding, setOrgBranding] = useState<OrgWorkspaceBranding>(() =>
+    getCachedOrgWorkspaceBranding(),
+  )
+
+  useEffect(() => {
+    let cancelled = false
+    void resolveOrgWorkspaceBranding().then((next) => {
+      if (!cancelled) setOrgBranding(next)
+    })
+    const onChanged = () => setOrgBranding(getCachedOrgWorkspaceBranding())
+    window.addEventListener(ORG_BRANDING_CHANGED_EVENT, onChanged)
+    return () => {
+      cancelled = true
+      window.removeEventListener(ORG_BRANDING_CHANGED_EVENT, onChanged)
+    }
+  }, [])
 
   const handleDisconnect = () => {
     const ok = window.confirm(
@@ -46,6 +67,9 @@ export function SubscriptionManagementPage({
   }
 
   const orgName = organization?.name ?? subscription?.name ?? 'Votre magasin'
+  const headerTitle =
+    orgBranding.displayName?.trim() || orgName
+  const workspaceLogo = orgBranding.logoUrl?.trim() || undefined
   const planName = subscription ? planLabel(subscription.planId) : null
   const status = subscription ? statusLabel(subscription.status) : null
 
@@ -63,10 +87,15 @@ export function SubscriptionManagementPage({
       <header className="relative z-20 border-b border-[rgba(184,146,46,0.18)] bg-[#fffcf6]/90 backdrop-blur-md">
         <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-3 px-4 py-3 sm:px-6">
           <div className="flex min-w-0 items-center gap-3">
-            <BrandLogo size="sm" alt="" />
+            <BrandLogo
+              size="sm"
+              alt={headerTitle}
+              src={workspaceLogo}
+              ring="gold"
+            />
             <div className="min-w-0">
               <p className="truncate text-sm font-bold tracking-tight text-ink">
-                {BRAND_NAME}
+                {headerTitle}
               </p>
               <p className="truncate text-[11px] text-ink-subtle">
                 Espace propriétaire · Abonnement

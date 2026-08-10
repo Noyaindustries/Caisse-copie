@@ -669,6 +669,9 @@ export async function syncProductCategoriesFromProducts(): Promise<void> {
   }
   if (toAdd.length > 0) {
     await db.productCategories.bulkAdd(toAdd)
+    void import('../lib/catalogCategoriesCloud')
+      .then((m) => m.pushCatalogCategoriesToCloud())
+      .catch(() => undefined)
   }
 }
 

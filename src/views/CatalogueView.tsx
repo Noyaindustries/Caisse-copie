@@ -20,6 +20,8 @@ import { appendAuditEvent } from '../lib/auditLog'
 import { deleteProductPermanently } from '../lib/deleteProduct'
 import { assertBarcodeAvailable } from '../lib/productBarcode'
 import { storeStockRowId } from '../lib/storeStockId'
+import { enqueueStockSync } from '../lib/sync'
+import { scheduleWorkspaceCatalogPush } from '../lib/workspaceCatalogCloud'
 import { Badge } from '../ui/Badge'
 import { Button, IconButton } from '../ui/Button'
 import { Card, CardContent } from '../ui/Card'
@@ -232,37 +234,45 @@ export function CatalogueView({
     const prevRow = rowsWithStock.find((r) => r.id === p.id)
     const previousQty = prevRow?.stock ?? 0
     const previousThreshold = prevRow?.lowStockThreshold ?? p.lowStockThreshold
-    await db.products.put(p)
+    const stamped: Product = { ...p, updatedAt: Date.now() }
+    await db.products.put(stamped)
     await db.storeStocks.put({
-      id: storeStockRowId(activeStoreId, p.id),
+      id: storeStockRowId(activeStoreId, stamped.id),
       storeId: activeStoreId,
-      productId: p.id,
+      productId: stamped.id,
       stock: stockAtStore,
     })
     const stockChanged = previousQty !== stockAtStore
-    const thresholdChanged = previousThreshold !== p.lowStockThreshold
+    const thresholdChanged = previousThreshold !== stamped.lowStockThreshold
     if (stockChanged || thresholdChanged) {
+      void enqueueStockSync({
+        productId: stamped.id,
+        stock: stockAtStore,
+        lowStockThreshold: stamped.lowStockThreshold,
+        storeId: activeStoreId,
+      })
       void appendAuditEvent({
         kind: 'stock_adjusted',
         actor: auditActor,
         reason: stockChanged
-          ? `Catalogue : stock « ${p.name} » ${previousQty} → ${stockAtStore}`
-          : `Catalogue : seuil d’alerte « ${p.name} » ${previousThreshold} → ${p.lowStockThreshold}`,
+          ? `Catalogue : stock « ${stamped.name} » ${previousQty} → ${stockAtStore}`
+          : `Catalogue : seuil d’alerte « ${stamped.name} » ${previousThreshold} → ${stamped.lowStockThreshold}`,
         payload: {
           source: 'catalogue_edit',
           storeId: activeStoreId,
           storeName: activeStore?.name,
-          productId: p.id,
-          productName: p.name,
-          barcode: p.barcode,
+          productId: stamped.id,
+          productName: stamped.name,
+          barcode: stamped.barcode,
           previousQty,
           newQty: stockAtStore,
           previousLowStockThreshold: previousThreshold,
-          newLowStockThreshold: p.lowStockThreshold,
+          newLowStockThreshold: stamped.lowStockThreshold,
         },
       })
     }
-    toast.success('Article enregistré', p.name)
+    scheduleWorkspaceCatalogPush()
+    toast.success('Article enregistré', stamped.name)
   }
 
   const handleArchive = async (p: ProductWithStock) => {
@@ -276,14 +286,16 @@ export function CatalogueView({
       )
       return
     }
-    await db.products.update(p.id, { archived: true })
+    await db.products.update(p.id, { archived: true, updatedAt: Date.now() })
     setPendingArchiveId(null)
     setPendingArchiveUntil(0)
+    scheduleWorkspaceCatalogPush()
     toast.info('Article archivé', p.name)
   }
 
   const handleRestore = async (p: ProductWithStock) => {
-    await db.products.update(p.id, { archived: false })
+    await db.products.update(p.id, { archived: false, updatedAt: Date.now() })
+    scheduleWorkspaceCatalogPush()
     toast.success('Article réactivé', p.name)
   }
 
@@ -296,6 +308,7 @@ export function CatalogueView({
       await deleteProductPermanently(p, auditActor)
       if (editing?.id === p.id) setEditing(null)
       if (detailProduct?.id === p.id) setDetailProduct(null)
+      scheduleWorkspaceCatalogPush()
       toast.success('Article supprimé', p.name)
     } catch (err) {
       toast.error(

@@ -312,6 +312,8 @@ export interface Product {
   highlights?: string[]
   /** Masqué de la caisse ; réactivable depuis le catalogue. */
   archived: boolean
+  /** Horodatage local / cloud pour merge LWW du catalogue. */
+  updatedAt?: number
 }
 
 export type PaymentMethod = 'cash' | 'card' | 'mobile' | 'mixed'

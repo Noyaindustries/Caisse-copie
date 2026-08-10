@@ -215,6 +215,10 @@ export function MultiStoreView({
       }
       await db.stores.add(s)
       await ensureAllStoreStockRows()
+      const { scheduleWorkspaceCatalogPush } = await import(
+        '../lib/workspaceCatalogCloud'
+      )
+      scheduleWorkspaceCatalogPush()
       setNewStoreName('')
       setNewStoreCode('')
       toast.success('Magasin ajouté', name)

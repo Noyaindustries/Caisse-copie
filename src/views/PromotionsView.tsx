@@ -97,6 +97,10 @@ export function PromotionsView({ activeStoreId, canManagePromotions }: Props) {
         createdAt: nowTs,
         updatedAt: nowTs,
       })
+      const { scheduleWorkspaceCatalogPush } = await import(
+        '../lib/workspaceCatalogCloud'
+      )
+      scheduleWorkspaceCatalogPush()
       setCode('')
       setLabel('')
       setDiscountPct('10')
@@ -114,6 +118,10 @@ export function PromotionsView({ activeStoreId, canManagePromotions }: Props) {
   const togglePromotion = async (p: Promotion): Promise<void> => {
     if (!canManagePromotions) return
     await db.promotions.update(p.id, { active: !p.active, updatedAt: Date.now() })
+    const { scheduleWorkspaceCatalogPush } = await import(
+      '../lib/workspaceCatalogCloud'
+    )
+    scheduleWorkspaceCatalogPush()
   }
 
   return (

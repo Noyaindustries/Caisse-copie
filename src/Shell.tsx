@@ -368,6 +368,10 @@ export function Shell({ staff, online, onLogout }: Props) {
         console.warn('[Sync]', r.error)
       }
     })
+    // Migre le catalogue local déjà présent (produits, magasins, etc.) vers le cloud.
+    void import('./lib/workspaceCatalogCloud')
+      .then((m) => m.scheduleWorkspaceCatalogPush(1_500))
+      .catch(() => undefined)
   }, [online, refreshSyncMeta])
 
   useEffect(() => {
@@ -570,7 +574,11 @@ export function Shell({ staff, online, onLogout }: Props) {
     setSyncBusy(true)
     try {
       const r = await flushSyncQueue()
-      if (r.mode === 'cloud' || r.mode === 'local') {
+      const { pushWorkspaceCatalogToCloud } = await import(
+        './lib/workspaceCatalogCloud'
+      )
+      await pushWorkspaceCatalogToCloud()
+      if (r.mode === 'cloud' || r.mode === 'local' || r.mode === 'noop') {
         refreshSyncMeta()
         await touchTerminalSyncTimestamp()
         toast.success('Synchronisation terminée')
@@ -908,15 +916,30 @@ export function Shell({ staff, online, onLogout }: Props) {
   const handleSaveNewProduct = useCallback(
     async (product: Product, initialStock: number) => {
       await assertBarcodeAvailable(product.barcode)
-      await db.products.add(product)
+      const stamped: Product = {
+        ...product,
+        updatedAt: Date.now(),
+      }
+      await db.products.add(stamped)
       await ensureAllStoreStockRows()
       await db.storeStocks.put({
-        id: storeStockRowId(activeStoreId, product.id),
+        id: storeStockRowId(activeStoreId, stamped.id),
         storeId: activeStoreId,
-        productId: product.id,
+        productId: stamped.id,
         stock: initialStock,
       })
       await syncProductCategoriesFromProducts()
+      const { enqueueStockSync } = await import('./lib/sync')
+      await enqueueStockSync({
+        productId: stamped.id,
+        stock: initialStock,
+        lowStockThreshold: stamped.lowStockThreshold,
+        storeId: activeStoreId,
+      })
+      const { scheduleWorkspaceCatalogPush } = await import(
+        './lib/workspaceCatalogCloud'
+      )
+      scheduleWorkspaceCatalogPush()
     },
     [activeStoreId],
   )

@@ -419,6 +419,10 @@ export function TablesManagementView({
         status: 'free',
         sortOrder: nextSort,
       })
+      const { scheduleWorkspaceCatalogPush } = await import(
+        '../lib/workspaceCatalogCloud'
+      )
+      scheduleWorkspaceCatalogPush()
       toast.success('Table ajoutée', cleanName)
       setName('')
       setCapacity('4')
@@ -445,6 +449,10 @@ export function TablesManagementView({
       })
     }
     await db.diningTables.bulkAdd(batch)
+    const { scheduleWorkspaceCatalogPush } = await import(
+      '../lib/workspaceCatalogCloud'
+    )
+    scheduleWorkspaceCatalogPush()
     toast.success('Plan de salle initialisé', `${batch.length} tables ajoutées`)
     setStatusFilter('all')
   }

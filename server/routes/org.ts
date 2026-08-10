@@ -120,8 +120,12 @@ orgRouter.post('/org/reset-data', async (req, res) => {
       !Array.isArray(existingIntegration.config)
         ? (existingIntegration.config as Record<string, unknown>)
         : {}
+    const { stripWorkspaceCatalogFromConfig } = await import(
+      '../lib/workspaceCatalog.js'
+    )
+    // Reset métier : ne pas laisser le pull réhydrater l’ancien catalogue.
     const nextConfig = {
-      ...prevConfig,
+      ...stripWorkspaceCatalogFromConfig(prevConfig),
       forceClientWipeAt,
     } as Prisma.InputJsonValue
 
@@ -202,6 +206,59 @@ orgRouter.put('/org/catalog-categories', async (req, res) => {
   }
 })
 
+orgRouter.get('/org/workspace-catalog', async (req, res) => {
+  try {
+    const org = await requireOrg(req, res)
+    if (!org) return
+    const { getOrgWorkspaceCatalog } = await import('../lib/workspaceCatalog.js')
+    res.json(await getOrgWorkspaceCatalog(org.id))
+  } catch (err) {
+    console.error('[org/workspace-catalog-get]', err)
+    res.status(500).json({ error: 'Impossible de charger le catalogue.' })
+  }
+})
+
+orgRouter.put('/org/workspace-catalog', async (req, res) => {
+  try {
+    const org = await requireOrg(req, res)
+    if (!org) return
+    const {
+      catalogProductSchema,
+      workspaceStoreSchema,
+      workspacePromotionSchema,
+      workspaceDiningTableSchema,
+      workspaceKitchenIngredientSchema,
+      workspaceRecipeIngredientSchema,
+      saveOrgWorkspaceCatalog,
+    } = await import('../lib/workspaceCatalog.js')
+    const body = z
+      .object({
+        products: z.array(catalogProductSchema).max(5_000).default([]),
+        stores: z.array(workspaceStoreSchema).max(200).default([]),
+        promotions: z.array(workspacePromotionSchema).max(500).default([]),
+        diningTables: z.array(workspaceDiningTableSchema).max(500).default([]),
+        kitchenIngredients: z
+          .array(workspaceKitchenIngredientSchema)
+          .max(2_000)
+          .default([]),
+        productRecipes: z
+          .array(workspaceRecipeIngredientSchema)
+          .max(10_000)
+          .default([]),
+      })
+      .parse(req.body ?? {})
+    const catalog = await saveOrgWorkspaceCatalog(org.id, body)
+    res.json({ ok: true, ...catalog })
+  } catch (err) {
+    if (err instanceof z.ZodError) {
+      res.status(400).json({ error: 'Catalogue workspace invalide.' })
+      return
+    }
+    console.error('[org/workspace-catalog-put]', err)
+    res.status(500).json({ error: 'Enregistrement du catalogue impossible.' })
+  }
+})
+
 orgRouter.get('/org/integrations', async (req, res) => {
   const org = await requireOrg(req, res)
   if (!org) return
@@ -244,7 +301,7 @@ orgRouter.put('/org/integrations', async (req, res) => {
     if (wipeAt > 0) merged.forceClientWipeAt = wipeAt
     else delete merged.forceClientWipeAt
 
-    // Préserver le catalogue catégories si le client n’envoie pas ce champ.
+    // Préserver le catalogue catégories / workspace si le client n’envoie pas ces champs.
     if (
       !('catalogCategories' in incoming) &&
       Array.isArray(prev.catalogCategories)
@@ -252,6 +309,20 @@ orgRouter.put('/org/integrations', async (req, res) => {
       merged.catalogCategories = prev.catalogCategories
       if (typeof prev.catalogCategoriesUpdatedAt === 'number') {
         merged.catalogCategoriesUpdatedAt = prev.catalogCategoriesUpdatedAt
+      }
+    }
+    const workspaceKeys = [
+      'catalogProducts',
+      'workspaceStores',
+      'workspacePromotions',
+      'workspaceDiningTables',
+      'workspaceKitchenIngredients',
+      'workspaceProductRecipes',
+      'workspaceCatalogUpdatedAt',
+    ] as const
+    for (const key of workspaceKeys) {
+      if (!(key in incoming) && key in prev) {
+        merged[key] = prev[key]
       }
     }
 
