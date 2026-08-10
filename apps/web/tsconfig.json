@@ -12,5 +12,5 @@
     "allowJs": true,
     "plugins": [{ "name": "next" }]
   },
-  "include": ["app/**/*", "next-env.d.ts", "src/**/*"]
+  "include": ["app/**/*", "pages/**/*", "next-env.d.ts", "src/**/*"]
 }

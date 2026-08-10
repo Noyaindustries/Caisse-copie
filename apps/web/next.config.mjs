@@ -11,7 +11,22 @@ const nextConfig = {
   outputFileTracingRoot: repoRoot,
   allowedDevOrigins: ['127.0.0.1', 'localhost', '192.168.1.68'],
   // next-pwa injecte une config webpack → explicite pour Next 16
-  turbopack: {},
+  // root = monorepo pour résoudre `server/` hors de apps/web
+  turbopack: {
+    root: repoRoot,
+  },
+  // Backend Express/Prisma hors apps/web — ne pas bundler dans le client.
+  serverExternalPackages: [
+    '@prisma/client',
+    'prisma',
+    'express',
+    'cors',
+    'helmet',
+    'morgan',
+    'express-rate-limit',
+    '@sentry/node',
+    'dotenv',
+  ],
   experimental: {
     externalDir: true,
     // Next 16.3 active InnerScrollHandlerNew (<Fragment ref={...}>) ; React 19.2
@@ -48,6 +63,17 @@ const nextConfig = {
       '../../node_modules/.prisma/client/**/*',
       '../../node_modules/@prisma/client/**/*',
     ],
+  },
+  // server/*.ts importe en ESM avec suffixe .js → résoudre vers .ts
+  webpack: (config, { isServer }) => {
+    if (isServer) {
+      config.resolve.extensionAlias = {
+        ...config.resolve.extensionAlias,
+        '.js': ['.ts', '.tsx', '.js', '.jsx'],
+        '.mjs': ['.mts', '.mjs'],
+      }
+    }
+    return config
   },
 }
 
