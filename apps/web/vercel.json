@@ -1,7 +1,7 @@
 {
   "framework": "nextjs",
   "installCommand": "cd ../.. && npm ci",
-  "buildCommand": "cd ../.. && npx prisma generate && npm run build -w @caisseci/web",
+  "buildCommand": "cd ../.. && node scripts/vercel-build.mjs",
   "rewrites": [
     {
       "source": "/health",
