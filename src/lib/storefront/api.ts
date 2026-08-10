@@ -76,6 +76,7 @@ export async function patchStorefrontBranding(
       legalMentions: branding.legalMentions ?? '',
       deliveryFeeTTC: branding.deliveryFeeTTC,
       freeDeliveryThresholdTTC: branding.freeDeliveryThresholdTTC,
+      deliveryZones: branding.deliveryZones ?? [],
     }),
   })
   return parseJson(res)

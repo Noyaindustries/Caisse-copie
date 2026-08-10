@@ -1,5 +1,11 @@
 import type { ProductWithStock, PaymentMethod, Promotion } from '../../db/types'
 
+export type StorefrontDeliveryZone = {
+  id: string
+  name: string
+  feeTTC: number
+}
+
 export type StorefrontBranding = {
   shopName?: string
   logoUrl?: string
@@ -19,13 +25,15 @@ export type StorefrontBranding = {
   footerTagline?: string
   /** Mentions légales / texte bas de page. */
   legalMentions?: string
-  /** Frais de livraison TTC (FCFA). */
+  /** Frais de livraison TTC (FCFA) — utilisé si aucune zone. */
   deliveryFeeTTC?: number
   /**
    * Seuil panier TTC pour livraison offerte.
    * 0 = jamais offerte.
    */
   freeDeliveryThresholdTTC?: number
+  /** Zones de livraison (nom + prix). Si non vide, le client doit en choisir une. */
+  deliveryZones?: StorefrontDeliveryZone[]
 }
 
 /** Défauts historiques de la boutique (avant config par entreprise). */
@@ -33,6 +41,7 @@ export const DEFAULT_STOREFRONT_DELIVERY_FEE_TTC = 1000
 export const DEFAULT_STOREFRONT_FREE_DELIVERY_THRESHOLD_TTC = 15_000
 export const MAX_STOREFRONT_DELIVERY_FEE_TTC = 1_000_000
 export const MAX_STOREFRONT_FREE_DELIVERY_THRESHOLD_TTC = 10_000_000
+export const MAX_STOREFRONT_DELIVERY_ZONES = 40
 
 function normalizeNonNegativeInt(
   raw: unknown,
@@ -50,9 +59,53 @@ function normalizeNonNegativeInt(
   return undefined
 }
 
+export function normalizeStorefrontDeliveryZones(
+  raw: unknown,
+): StorefrontDeliveryZone[] | undefined {
+  if (!Array.isArray(raw)) return undefined
+  const zones: StorefrontDeliveryZone[] = []
+  for (const item of raw.slice(0, MAX_STOREFRONT_DELIVERY_ZONES)) {
+    if (!item || typeof item !== 'object') continue
+    const row = item as Record<string, unknown>
+    const id =
+      typeof row.id === 'string' ? row.id.trim().slice(0, 80) : ''
+    const name =
+      typeof row.name === 'string' ? row.name.trim().slice(0, 80) : ''
+    const feeTTC = normalizeNonNegativeInt(
+      row.feeTTC,
+      MAX_STOREFRONT_DELIVERY_FEE_TTC,
+    )
+    if (!id || !name || feeTTC == null) continue
+    zones.push({ id, name, feeTTC })
+  }
+  return zones.length > 0 ? zones : undefined
+}
+
+export function resolveStorefrontDeliveryZones(
+  branding: StorefrontBranding | undefined,
+): StorefrontDeliveryZone[] {
+  return branding?.deliveryZones ?? []
+}
+
+export function findStorefrontDeliveryZone(
+  branding: StorefrontBranding | undefined,
+  zoneId?: string | null,
+): StorefrontDeliveryZone | undefined {
+  if (!zoneId) return undefined
+  return resolveStorefrontDeliveryZones(branding).find((z) => z.id === zoneId)
+}
+
 export function resolveStorefrontDeliveryFeeTTC(
   branding: StorefrontBranding | undefined,
+  zoneId?: string | null,
 ): number {
+  const zones = resolveStorefrontDeliveryZones(branding)
+  if (zones.length > 0) {
+    const zone = findStorefrontDeliveryZone(branding, zoneId)
+    if (zone) return zone.feeTTC
+    // Sans zone choisie : 0 (l’UI / le checkout exigent une sélection).
+    return 0
+  }
   return branding?.deliveryFeeTTC ?? DEFAULT_STOREFRONT_DELIVERY_FEE_TTC
 }
 
@@ -125,6 +178,8 @@ export type PublicStorefrontOrderInput = {
   discountPct?: number
   promoCode?: string
   deliveryFeeTTC?: number
+  deliveryZoneId?: string
+  deliveryZoneName?: string
 }
 
 const HEX_COLOR_RE = /^#[0-9A-Fa-f]{6}$/
@@ -222,6 +277,9 @@ export function normalizeStorefrontBranding(
   if (freeDeliveryThresholdTTC != null) {
     branding.freeDeliveryThresholdTTC = freeDeliveryThresholdTTC
   }
+
+  const deliveryZones = normalizeStorefrontDeliveryZones(raw.deliveryZones)
+  if (deliveryZones) branding.deliveryZones = deliveryZones
 
   return Object.keys(branding).length > 0 ? branding : undefined
 }

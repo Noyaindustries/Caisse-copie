@@ -70,6 +70,10 @@ export async function pullCloudData(): Promise<CloudPullResult> {
     })
     await applyIntegrationsFromCloud(data.integrations)
     setLastSyncTimestamp(data.pulledAt)
+    // Après un reset serveur, le pull peut réimporter des restes : re-appliquer la purge locale.
+    const { ensureSeed, maybeApplyPendingLocalDataWipe } = await import('../db/db')
+    const wiped = await maybeApplyPendingLocalDataWipe()
+    if (wiped) await ensureSeed()
     return {
       ok: true,
       staffCount,

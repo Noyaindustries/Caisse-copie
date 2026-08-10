@@ -384,6 +384,8 @@ export interface OnlineOrder {
   discountPct?: number
   promoCode?: string
   deliveryFeeTTC?: number
+  deliveryZoneId?: string
+  deliveryZoneName?: string
   fulfillmentMode?: 'pickup' | 'delivery'
   status: OnlineOrderStatus
   sourcePlatform?: OnlineOrderPlatform

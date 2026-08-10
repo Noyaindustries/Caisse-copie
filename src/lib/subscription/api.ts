@@ -230,3 +230,16 @@ export async function saveOrgPaymentProviders(
   })
   return parseJson(res)
 }
+
+/** Purge métier serveur + jeton wipe client (compte / abonnement conservés). */
+export async function resetOrganizationData(confirmName: string): Promise<{
+  ok: boolean
+  forceClientWipeAt: number
+}> {
+  const res = await fetch(apiUrl('/org/reset-data'), {
+    method: 'POST',
+    headers: authHeaders(),
+    body: JSON.stringify({ confirmName }),
+  })
+  return parseJson(res)
+}

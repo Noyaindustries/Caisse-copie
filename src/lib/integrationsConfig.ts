@@ -1,4 +1,9 @@
 /** Clés localStorage pour la démo « intégrations » (sans backend). */
+import {
+  getStoredForceClientWipeAt,
+  setStoredForceClientWipeAt,
+} from './clientDataWipe'
+
 const KEY_API = 'caisseci-demo-partner-api-key'
 const KEY_COMPTA = 'caisseci-module-compta-demo'
 const KEY_ECOM = 'caisseci-module-ecom-demo'
@@ -267,6 +272,7 @@ export function setDeviceConnectivityDemo(config: DeviceConnectivityDemo): void 
 }
 
 function getIntegrationConfigSnapshot(): Record<string, unknown> {
+  const forceClientWipeAt = getStoredForceClientWipeAt()
   return {
     compta: isComptaModuleDemoOn(),
     ecom: isEcomModuleDemoOn(),
@@ -278,10 +284,14 @@ function getIntegrationConfigSnapshot(): Record<string, unknown> {
     onlinePlatforms: getConnectedPlatformsDemo(),
     onlineSyncMode: getOnlineSyncModeDemo(),
     devices: getDeviceConnectivityDemo(),
+    ...(forceClientWipeAt > 0 ? { forceClientWipeAt } : {}),
   }
 }
 
 export function applyIntegrationConfigFromCloud(config: Record<string, unknown>): void {
+  if (typeof config.forceClientWipeAt === 'number' && config.forceClientWipeAt > 0) {
+    setStoredForceClientWipeAt(config.forceClientWipeAt)
+  }
   if (typeof config.compta === 'boolean') setComptaModuleDemo(config.compta)
   if (typeof config.ecom === 'boolean') setEcomModuleDemo(config.ecom)
   if (typeof config.delivery === 'boolean') setDeliveryModuleDemo(config.delivery)

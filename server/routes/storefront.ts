@@ -32,11 +32,16 @@ import {
 } from '../lib/storeSlug.js'
 import {
   computeDeliveryFeeTTC,
+  findStorefrontDeliveryZone,
   MAX_STOREFRONT_DELIVERY_FEE_TTC,
+  MAX_STOREFRONT_DELIVERY_ZONES,
   MAX_STOREFRONT_FREE_DELIVERY_THRESHOLD_TTC,
   normalizeNonNegativeInt,
+  normalizeStorefrontDeliveryZones,
   resolveStorefrontDeliveryFeeTTC,
+  resolveStorefrontDeliveryZones,
   resolveStorefrontFreeDeliveryThresholdTTC,
+  type StorefrontDeliveryZone,
 } from '../lib/storefrontDelivery.js'
 
 export const storefrontRouter = Router()
@@ -157,6 +162,21 @@ const storefrontBrandingSchema = z.object({
     .max(MAX_STOREFRONT_FREE_DELIVERY_THRESHOLD_TTC)
     .nullable()
     .optional(),
+  deliveryZones: z
+    .array(
+      z.object({
+        id: z.string().trim().min(1).max(80),
+        name: z.string().trim().min(1).max(80),
+        feeTTC: z
+          .number()
+          .int()
+          .nonnegative()
+          .max(MAX_STOREFRONT_DELIVERY_FEE_TTC),
+      }),
+    )
+    .max(MAX_STOREFRONT_DELIVERY_ZONES)
+    .nullable()
+    .optional(),
 })
 
 const BRANDING_STRING_KEYS = [
@@ -180,7 +200,9 @@ const BRANDING_NUMBER_KEYS = [
   'freeDeliveryThresholdTTC',
 ] as const
 
-type StoredBranding = Record<string, string | number>
+type StoredBranding = {
+  [key: string]: string | number | StorefrontDeliveryZone[] | undefined
+}
 
 function readExistingBranding(menu: unknown): StoredBranding | undefined {
   if (!menu || typeof menu !== 'object') return undefined
@@ -201,6 +223,8 @@ function readExistingBranding(menu: unknown): StoredBranding | undefined {
     const n = normalizeNonNegativeInt(raw[key], max)
     if (n != null) next[key] = n
   }
+  const zones = normalizeStorefrontDeliveryZones(raw.deliveryZones)
+  if (zones) next.deliveryZones = zones
   return Object.keys(next).length > 0 ? next : undefined
 }
 
@@ -226,6 +250,11 @@ function mergeBrandingPatch(
     } else {
       next[key] = value
     }
+  }
+  if ('deliveryZones' in patch) {
+    const zones = normalizeStorefrontDeliveryZones(patch.deliveryZones)
+    if (zones) next.deliveryZones = zones
+    else delete next.deliveryZones
   }
   return Object.keys(next).length > 0 ? next : undefined
 }
@@ -254,6 +283,7 @@ const submitOrderSchema = z.object({
   discountPct: z.number().nonnegative().max(80).optional(),
   promoCode: z.string().trim().max(40).optional(),
   deliveryFeeTTC: z.number().nonnegative().max(1_000_000).optional(),
+  deliveryZoneId: z.string().trim().max(80).optional(),
 })
 
 function storefrontPath(key: string): string {
@@ -514,10 +544,24 @@ storefrontRouter.post('/billing/storefront/:storeCode/orders', async (req, res) 
     }, 0)
     const tva = netProductsTTC - subtotalHT
     const branding = readExistingBranding(org.storefrontMenu)
+    const deliveryZones = resolveStorefrontDeliveryZones(branding)
+    let deliveryZoneId: string | undefined
+    let deliveryZoneName: string | undefined
+    if (body.fulfillmentMode === 'delivery' && deliveryZones.length > 0) {
+      const zone = findStorefrontDeliveryZone(branding, body.deliveryZoneId)
+      if (!zone) {
+        res.status(400).json({
+          error: 'Choisissez une zone de livraison valide.',
+        })
+        return
+      }
+      deliveryZoneId = zone.id
+      deliveryZoneName = zone.name
+    }
     const deliveryFeeTTC = computeDeliveryFeeTTC({
       fulfillmentMode: body.fulfillmentMode,
       cartTTC: netProductsTTC,
-      feeTTC: resolveStorefrontDeliveryFeeTTC(branding),
+      feeTTC: resolveStorefrontDeliveryFeeTTC(branding, deliveryZoneId),
       freeThresholdTTC: resolveStorefrontFreeDeliveryThresholdTTC(branding),
     })
     const verifiedOrder = {
@@ -530,6 +574,8 @@ storefrontRouter.post('/billing/storefront/:storeCode/orders', async (req, res) 
       discountPct: discountPct || undefined,
       promoCode: promotion ? promoCode : undefined,
       deliveryFeeTTC: deliveryFeeTTC || undefined,
+      deliveryZoneId,
+      deliveryZoneName,
     }
     const externalId = randomUUID()
     const createdAt = Date.now()

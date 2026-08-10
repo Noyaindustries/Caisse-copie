@@ -77,6 +77,13 @@ function databaseNameForCurrentOrganization(): string {
 import { DEFAULT_PRODUCT_CATEGORIES } from './types'
 import { DEMO_KITCHEN_INGREDIENT_IDS, DEMO_PRODUCT_IDS, DEMO_PROMO_CODES, DEMO_STORE_ANNEX_ID } from './seed'
 import { DEFAULT_STORE_ID, SEED_STORES } from './seedStores'
+import { getOrganizationCredentials } from '../lib/subscription/store'
+import { setLastSyncTimestamp } from '../lib/syncMeta'
+import {
+  getAppliedLocalWipeAt,
+  getStoredForceClientWipeAt,
+  setAppliedLocalWipeAt,
+} from '../lib/clientDataWipe'
 
 export class CaisseDB extends Dexie {
   products!: Table<Product, string>
@@ -670,6 +677,65 @@ async function ensureStores(): Promise<void> {
 
 const DEMO_DATA_PURGED_KEY = 'caisseci-demo-data-purged-v1'
 
+/** Vide catalogue, ventes, compta, tickets, commandes, etc. (base IndexedDB courante). */
+export async function wipeLocalBusinessData(): Promise<void> {
+  await Promise.all([
+    db.products.clear(),
+    db.sales.clear(),
+    db.syncQueue.clear(),
+    db.storeStocks.clear(),
+    db.stockLocations.clear(),
+    db.locationStocks.clear(),
+    db.locationTransfers.clear(),
+    db.stockTransfers.clear(),
+    db.dayClosures.clear(),
+    db.cashOutflows.clear(),
+    db.refunds.clear(),
+    db.auditEvents.clear(),
+    db.onlineOrders.clear(),
+    db.productCategories.clear(),
+    db.timePunches.clear(),
+    db.diningTables.clear(),
+    db.promotions.clear(),
+    db.loyaltyCustomers.clear(),
+    db.loyaltyTransactions.clear(),
+    db.hrRequests.clear(),
+    db.crmInteractions.clear(),
+    db.ticketInvoices.clear(),
+    db.terminalNodes.clear(),
+    db.tableReservations.clear(),
+    db.kitchenIngredients.clear(),
+    db.kitchenIngredientStocks.clear(),
+    db.productRecipeIngredients.clear(),
+    db.onlineOrderMessages.clear(),
+  ])
+  // Magasins : on garde la structure minimale via ensureStores ensuite.
+  const stores = await db.stores.toArray()
+  const toDelete = stores.filter((s) => s.id !== DEFAULT_STORE_ID).map((s) => s.id)
+  if (toDelete.length > 0) await db.stores.bulkDelete(toDelete)
+  setLastSyncTimestamp(Date.now())
+}
+
+/**
+ * Applique une purge locale si le serveur a demandé un wipe plus récent
+ * (`forceClientWipeAt` via reset-data / intégrations).
+ */
+export async function maybeApplyPendingLocalDataWipe(): Promise<boolean> {
+  if (typeof window === 'undefined') return false
+  const creds = getOrganizationCredentials()
+  if (!creds) return false
+
+  const forceAt = getStoredForceClientWipeAt()
+  if (forceAt <= 0) return false
+
+  const appliedAt = getAppliedLocalWipeAt(creds.organizationId)
+  if (appliedAt >= forceAt) return false
+
+  await wipeLocalBusinessData()
+  setAppliedLocalWipeAt(creds.organizationId, forceAt)
+  return true
+}
+
 async function purgeLegacyDemoData(): Promise<void> {
   if (typeof window === 'undefined') return
   try {
@@ -910,6 +976,7 @@ export async function ensureAllLocationStockRows(): Promise<void> {
 }
 
 export async function ensureSeed(): Promise<void> {
+  await maybeApplyPendingLocalDataWipe()
   await ensureStores()
   await purgeLegacyDemoData()
 

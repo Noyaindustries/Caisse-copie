@@ -111,6 +111,19 @@ describe('normalizeStorefrontBranding', () => {
       normalizeStorefrontBranding({ deliveryFeeTTC: -1 }),
     ).toBeUndefined()
   })
+
+  it('normalise les zones de livraison', () => {
+    expect(
+      normalizeStorefrontBranding({
+        deliveryZones: [
+          { id: ' z1 ', name: ' Cocody ', feeTTC: '1500' },
+          { id: '', name: 'Ignoré', feeTTC: 1000 },
+        ],
+      }),
+    ).toEqual({
+      deliveryZones: [{ id: 'z1', name: 'Cocody', feeTTC: 1500 }],
+    })
+  })
 })
 
 describe('computeDeliveryFeeTTC', () => {
@@ -165,6 +178,18 @@ describe('computeDeliveryFeeTTC', () => {
     expect(resolveStorefrontFreeDeliveryThresholdTTC(undefined)).toBe(
       DEFAULT_STOREFRONT_FREE_DELIVERY_THRESHOLD_TTC,
     )
+  })
+
+  it('prend le tarif de la zone sélectionnée', () => {
+    const branding: StorefrontBranding = {
+      deliveryFeeTTC: 1000,
+      deliveryZones: [
+        { id: 'a', name: 'Cocody', feeTTC: 2000 },
+        { id: 'b', name: 'Plateau', feeTTC: 1500 },
+      ],
+    }
+    expect(resolveStorefrontDeliveryFeeTTC(branding, 'b')).toBe(1500)
+    expect(resolveStorefrontDeliveryFeeTTC(branding, null)).toBe(0)
   })
 })
 

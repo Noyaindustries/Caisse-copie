@@ -1152,7 +1152,15 @@ export function OnlineOrdersValidationView({
                         </>
                       ) : null}
                       {order.deliveryFeeTTC ? (
-                        <> · Livraison {formatFCFA(order.deliveryFeeTTC)}</>
+                        <>
+                          {' · '}Livraison
+                          {order.deliveryZoneName
+                            ? ` ${order.deliveryZoneName}`
+                            : ''}{' '}
+                          {formatFCFA(order.deliveryFeeTTC)}
+                        </>
+                      ) : order.deliveryZoneName ? (
+                        <> · Zone {order.deliveryZoneName}</>
                       ) : null}
                     </p>
                   </div>

@@ -5,6 +5,13 @@ import {
   saveAppSettings,
   type AppSettings,
 } from '../lib/appSettings'
+import { ensureSeed, wipeLocalBusinessData } from '../db/db'
+import {
+  setAppliedLocalWipeAt,
+  setStoredForceClientWipeAt,
+} from '../lib/clientDataWipe'
+import { resetOrganizationData } from '../lib/subscription/api'
+import { getOrganizationCredentials } from '../lib/subscription/store'
 import {
   getDeviceConnectivityDemo,
   getDeliveryProviderDemo,
@@ -57,6 +64,8 @@ type Props = {
   activeStoreId: string
   activeStoreName: string
   canManageIntegrations: boolean
+  canResetData?: boolean
+  organizationName?: string
   onOpenIntegrations?: () => void
   onOpenSubscription?: () => void
 }
@@ -65,6 +74,8 @@ export function ParametresView({
   activeStoreId,
   activeStoreName,
   canManageIntegrations,
+  canResetData = false,
+  organizationName = '',
   onOpenIntegrations,
   onOpenSubscription,
 }: Props) {
@@ -78,6 +89,8 @@ export function ParametresView({
     getDeviceConnectivityDemo(),
   )
   const [comptaOn, setComptaOn] = useState(() => isComptaModuleDemoOn())
+  const [resetConfirmName, setResetConfirmName] = useState('')
+  const [resetBusy, setResetBusy] = useState(false)
   const [ecomOn, setEcomOn] = useState(() => isEcomModuleDemoOn())
   const [deliveryOn, setDeliveryOn] = useState(() => isDeliveryModuleDemoOn())
   const [kitchenOn, setKitchenOn] = useState(() => isKitchenModuleDemoOn())
@@ -147,6 +160,37 @@ export function ParametresView({
       toast.error('Copie impossible')
     }
   }, [terminalId, toast])
+
+  const canConfirmReset =
+    Boolean(organizationName.trim()) &&
+    resetConfirmName.trim().toLowerCase() === organizationName.trim().toLowerCase()
+
+  const handleResetAllData = useCallback(async () => {
+    if (!canResetData || !canConfirmReset) return
+    setResetBusy(true)
+    try {
+      const result = await resetOrganizationData(resetConfirmName.trim())
+      setStoredForceClientWipeAt(result.forceClientWipeAt)
+      await wipeLocalBusinessData()
+      const orgId = getOrganizationCredentials()?.organizationId
+      if (orgId) setAppliedLocalWipeAt(orgId, result.forceClientWipeAt)
+      await ensureSeed()
+      toast.success(
+        'Données réinitialisées',
+        'Catalogue, ventes, compta et boutique ont été vidés. Le compte est conservé.',
+      )
+      window.setTimeout(() => {
+        window.location.reload()
+      }, 600)
+    } catch (err) {
+      toast.error(
+        'Réinitialisation impossible',
+        err instanceof Error ? err.message : 'Réessayez plus tard.',
+      )
+    } finally {
+      setResetBusy(false)
+    }
+  }, [canConfirmReset, canResetData, resetConfirmName, toast])
 
   return (
     <div className="space-y-5 pb-6">
@@ -239,6 +283,42 @@ export function ParametresView({
               </div>
             </CardContent>
           </Card>
+
+          {canResetData ? (
+            <Card className="lg:col-span-2 border-rose-200 bg-rose-50/40">
+              <CardContent className="space-y-3">
+                <h3 className="text-[14px] font-semibold text-rose-900">
+                  Zone dangereuse
+                </h3>
+                <p className="text-[12px] text-rose-900/80">
+                  Réinitialise catalogue, stocks, ventes, comptabilité, tickets,
+                  promotions, commandes boutique, personnel caisse et sync.
+                  Conservés : compte (email / mot de passe), licence et
+                  abonnement.
+                </p>
+                <Field
+                  label={`Tapez « ${organizationName} » pour confirmer`}
+                >
+                  <Input
+                    value={resetConfirmName}
+                    onChange={(e) => setResetConfirmName(e.target.value)}
+                    placeholder={organizationName}
+                    disabled={resetBusy}
+                    autoComplete="off"
+                  />
+                </Field>
+                <Button
+                  variant="danger"
+                  disabled={!canConfirmReset || resetBusy}
+                  onClick={() => void handleResetAllData()}
+                >
+                  {resetBusy
+                    ? 'Réinitialisation…'
+                    : 'Réinitialiser toutes les données'}
+                </Button>
+              </CardContent>
+            </Card>
+          ) : null}
         </div>
       ) : null}
 

@@ -205,7 +205,7 @@ export function Shell({ staff, online, onLogout }: Props) {
   } = useActiveStore()
 
   const toast = useToast()
-  const { canAccessView } = useSubscription()
+  const { canAccessView, organization } = useSubscription()
   useStorefrontAutoSync()
 
   const perms = useMemo(() => effectivePermissions(staff), [staff])
@@ -1651,6 +1651,8 @@ export function Shell({ staff, online, onLogout }: Props) {
                   activeStoreId={activeStoreId}
                   activeStoreName={activeStore?.name ?? 'Magasin'}
                   canManageIntegrations={perms.canManageIntegrations}
+                  canResetData={staff.role === 'admin'}
+                  organizationName={organization?.name ?? ''}
                   onOpenIntegrations={() => handleSelectView('integrations')}
                   onOpenSubscription={() => handleSelectView('subscription')}
                 />

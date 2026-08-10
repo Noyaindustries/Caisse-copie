@@ -34,8 +34,10 @@ import type {
 } from '../lib/storefront/types'
 import {
   computeDeliveryFeeTTC,
+  findStorefrontDeliveryZone,
   normalizeStorefrontBranding,
   resolveStorefrontDeliveryFeeTTC,
+  resolveStorefrontDeliveryZones,
   resolveStorefrontFreeDeliveryThresholdTTC,
   storefrontAccentColor,
   storefrontDisplayName,
@@ -221,6 +223,7 @@ export function LuxuryStorefrontView({
   const [fulfillmentMode, setFulfillmentMode] = useState<'pickup' | 'delivery'>(
     'pickup',
   )
+  const [deliveryZoneId, setDeliveryZoneId] = useState('')
   const [promoCode, setPromoCode] = useState('')
   const [promoFeedback, setPromoFeedback] = useState<string | null>(null)
   const [discountPct, setDiscountPct] = useState(0)
@@ -319,9 +322,17 @@ export function LuxuryStorefrontView({
     () => Math.max(0, grossTotals.totalTTC - totals.totalTTC),
     [grossTotals.totalTTC, totals.totalTTC],
   )
-  const configuredDeliveryFeeTTC = useMemo(
-    () => resolveStorefrontDeliveryFeeTTC(branding),
+  const deliveryZones = useMemo(
+    () => resolveStorefrontDeliveryZones(branding),
     [branding],
+  )
+  const selectedDeliveryZone = useMemo(
+    () => findStorefrontDeliveryZone(branding, deliveryZoneId),
+    [branding, deliveryZoneId],
+  )
+  const configuredDeliveryFeeTTC = useMemo(
+    () => resolveStorefrontDeliveryFeeTTC(branding, deliveryZoneId || null),
+    [branding, deliveryZoneId],
   )
   const freeDeliveryThresholdTTC = useMemo(
     () => resolveStorefrontFreeDeliveryThresholdTTC(branding),
@@ -654,6 +665,15 @@ export function LuxuryStorefrontView({
       setConfirmation('Adresse requise pour une livraison.')
       return
     }
+    if (
+      fulfillmentMode === 'delivery' &&
+      deliveryZones.length > 0 &&
+      !selectedDeliveryZone
+    ) {
+      setConfirmationTone('error')
+      setConfirmation('Choisissez votre zone de livraison.')
+      return
+    }
     if (!online && paymentMethod !== 'cash') {
       setConfirmationTone('error')
       setConfirmation(
@@ -704,6 +724,8 @@ export function LuxuryStorefrontView({
         discountPct: discountPct || undefined,
         promoCode: promoCode.trim().toUpperCase() || undefined,
         deliveryFeeTTC: deliveryFeeTTC || undefined,
+        deliveryZoneId: selectedDeliveryZone?.id,
+        deliveryZoneName: selectedDeliveryZone?.name,
         fulfillmentMode,
         status: 'pending',
         kitchenStatus: kitchenEnabled ? 'queued' : undefined,
@@ -784,6 +806,8 @@ export function LuxuryStorefrontView({
           discountPct: discountPct || undefined,
           promoCode: promoCode.trim().toUpperCase() || undefined,
           deliveryFeeTTC: deliveryFeeTTC || undefined,
+          deliveryZoneId: selectedDeliveryZone?.id,
+          deliveryZoneName: selectedDeliveryZone?.name,
         })
 
         if (result.requiresPayment && result.paymentUrl) {
@@ -844,12 +868,14 @@ export function LuxuryStorefrontView({
     customerPhone,
     desiredTimeSlot,
     deliveryFeeTTC,
+    deliveryZones.length,
     discountPct,
     fulfillmentMode,
     grandTotalTTC,
     online,
     paymentMethod,
     promoCode,
+    selectedDeliveryZone,
     isPublicStorefront,
     publicStorefront,
     displayProducts,
@@ -1158,11 +1184,18 @@ export function LuxuryStorefrontView({
               ) : null}
               {fulfillmentMode === 'delivery' ? (
                 <div className="mt-1 flex items-center justify-between text-stone-600">
-                  <span>Livraison</span>
                   <span>
-                    {deliveryFeeTTC > 0
-                      ? formatFCFA(deliveryFeeTTC)
-                      : 'Offerte'}
+                    Livraison
+                    {selectedDeliveryZone
+                      ? ` (${selectedDeliveryZone.name})`
+                      : ''}
+                  </span>
+                  <span>
+                    {deliveryZones.length > 0 && !selectedDeliveryZone
+                      ? 'Choisir une zone'
+                      : deliveryFeeTTC > 0
+                        ? formatFCFA(deliveryFeeTTC)
+                        : 'Offerte'}
                   </span>
                 </div>
               ) : null}
@@ -1203,17 +1236,21 @@ export function LuxuryStorefrontView({
               <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
                 <select
                   value={fulfillmentMode}
-                  onChange={(e) =>
-                    setFulfillmentMode(e.target.value as 'pickup' | 'delivery')
-                  }
+                  onChange={(e) => {
+                    const next = e.target.value as 'pickup' | 'delivery'
+                    setFulfillmentMode(next)
+                    if (next === 'pickup') setDeliveryZoneId('')
+                  }}
                   aria-label="Mode de réception"
                   className="storefront-input w-full rounded-xl px-3 py-2 text-sm"
                 >
                   <option value="pickup">Retrait boutique</option>
                   <option value="delivery">
-                    {configuredDeliveryFeeTTC > 0
-                      ? `Livraison locale (+${configuredDeliveryFeeTTC})`
-                      : 'Livraison locale (gratuite)'}
+                    {deliveryZones.length > 0
+                      ? 'Livraison locale'
+                      : configuredDeliveryFeeTTC > 0
+                        ? `Livraison locale (+${configuredDeliveryFeeTTC})`
+                        : 'Livraison locale (gratuite)'}
                   </option>
                 </select>
                 <div className="flex gap-1.5">
@@ -1248,10 +1285,29 @@ export function LuxuryStorefrontView({
                   ) : null}
                 </div>
               </div>
+              {fulfillmentMode === 'delivery' && deliveryZones.length > 0 ? (
+                <select
+                  value={deliveryZoneId}
+                  onChange={(e) => setDeliveryZoneId(e.target.value)}
+                  aria-label="Zone de livraison"
+                  className="storefront-input w-full rounded-xl px-3 py-2 text-sm"
+                >
+                  <option value="">Choisir une zone de livraison</option>
+                  {deliveryZones.map((zone) => (
+                    <option key={zone.id} value={zone.id}>
+                      {zone.name} (+{zone.feeTTC.toLocaleString('fr-FR')} FCFA)
+                    </option>
+                  ))}
+                </select>
+              ) : null}
               <textarea
                 value={customerAddress}
                 onChange={(e) => setCustomerAddress(e.target.value)}
-                placeholder="Adresse de livraison (optionnelle)"
+                placeholder={
+                  fulfillmentMode === 'delivery'
+                    ? 'Adresse de livraison'
+                    : 'Adresse de livraison (optionnelle)'
+                }
                 rows={2}
                 className="storefront-input w-full resize-none rounded-xl px-3 py-2 text-sm"
               />

@@ -8,7 +8,9 @@ import {
   DEFAULT_STOREFRONT_DELIVERY_FEE_TTC,
   DEFAULT_STOREFRONT_FREE_DELIVERY_THRESHOLD_TTC,
   MAX_STOREFRONT_DELIVERY_FEE_TTC,
+  MAX_STOREFRONT_DELIVERY_ZONES,
   MAX_STOREFRONT_FREE_DELIVERY_THRESHOLD_TTC,
+  type StorefrontDeliveryZone,
 } from '../../lib/storefront/types'
 import { cacheOrgWorkspaceBranding } from '../../lib/orgWorkspaceBranding'
 import { storefrontDisplayName } from '../../lib/storefront/types'
@@ -76,6 +78,9 @@ export function StorefrontBrandingSection({
   const [freeDeliveryThresholdTTC, setFreeDeliveryThresholdTTC] = useState(
     String(DEFAULT_STOREFRONT_FREE_DELIVERY_THRESHOLD_TTC),
   )
+  const [deliveryZones, setDeliveryZones] = useState<
+    Array<{ id: string; name: string; feeTTC: string }>
+  >([])
 
   useEffect(() => {
     let cancelled = false
@@ -111,6 +116,13 @@ export function StorefrontBrandingSection({
             data.branding.freeDeliveryThresholdTTC ??
               DEFAULT_STOREFRONT_FREE_DELIVERY_THRESHOLD_TTC,
           ),
+        )
+        setDeliveryZones(
+          (data.branding.deliveryZones ?? []).map((z) => ({
+            id: z.id,
+            name: z.name,
+            feeTTC: String(z.feeTTC),
+          })),
         )
         setStoreNameHint(data.storeName)
         const displayName = storefrontDisplayName(
@@ -213,6 +225,35 @@ export function StorefrontBrandingSection({
       )
       return
     }
+    if (deliveryZones.length > MAX_STOREFRONT_DELIVERY_ZONES) {
+      toast.error(`Maximum ${MAX_STOREFRONT_DELIVERY_ZONES} zones.`)
+      return
+    }
+    const normalizedZones: StorefrontDeliveryZone[] = []
+    for (const row of deliveryZones) {
+      const name = row.name.trim()
+      const fee = Math.round(Number(row.feeTTC.trim().replace(/\s/g, '')))
+      if (!name && !row.feeTTC.trim()) continue
+      if (!name) {
+        toast.error('Chaque zone doit avoir un nom.')
+        return
+      }
+      if (
+        !Number.isFinite(fee) ||
+        fee < 0 ||
+        fee > MAX_STOREFRONT_DELIVERY_FEE_TTC
+      ) {
+        toast.error(
+          `Prix de zone invalide pour « ${name} » (0 – ${MAX_STOREFRONT_DELIVERY_FEE_TTC.toLocaleString('fr-FR')} FCFA).`,
+        )
+        return
+      }
+      normalizedZones.push({
+        id: row.id || crypto.randomUUID(),
+        name: name.slice(0, 80),
+        feeTTC: fee,
+      })
+    }
     setSaving(true)
     try {
       const branding: StorefrontBranding = {
@@ -231,8 +272,16 @@ export function StorefrontBrandingSection({
         legalMentions: legalMentions.trim() || undefined,
         deliveryFeeTTC: feeParsed,
         freeDeliveryThresholdTTC: thresholdParsed,
+        deliveryZones: normalizedZones,
       }
       await patchStorefrontBranding(branding)
+      setDeliveryZones(
+        normalizedZones.map((z) => ({
+          id: z.id,
+          name: z.name,
+          feeTTC: String(z.feeTTC),
+        })),
+      )
       const displayName = storefrontDisplayName(
         branding,
         storeNameHint,
@@ -512,12 +561,16 @@ export function StorefrontBrandingSection({
           <div className="sm:col-span-2 border-t border-border pt-4">
             <h3 className="text-sm font-semibold text-ink">Livraison</h3>
             <p className="mt-1 text-xs text-ink-muted">
-              Tarifs appliqués sur la boutique en ligne. Seuil à 0 = jamais de
-              livraison offerte.
+              Sans zones : tarif unique ci-dessous. Avec zones : le client
+              choisit sa zone sur la boutique. Seuil à 0 = jamais de livraison
+              offerte.
             </p>
           </div>
 
-          <Field label="Frais de livraison (FCFA TTC)">
+          <Field
+            label="Frais de livraison (FCFA TTC)"
+            hint="Utilisé si aucune zone n’est définie"
+          >
             <Input
               inputMode="numeric"
               value={deliveryFeeTTC}
@@ -538,6 +591,95 @@ export function StorefrontBrandingSection({
               disabled={!online || !usable}
             />
           </Field>
+
+          <div className="sm:col-span-2 space-y-3">
+            <div className="flex items-center justify-between gap-2">
+              <div>
+                <p className="text-sm font-medium text-ink">Zones de livraison</p>
+                <p className="text-xs text-ink-muted">
+                  Ex. Cocody, Plateau — chaque zone a son prix.
+                </p>
+              </div>
+              <Button
+                type="button"
+                variant="secondary"
+                disabled={
+                  !online ||
+                  !usable ||
+                  deliveryZones.length >= MAX_STOREFRONT_DELIVERY_ZONES
+                }
+                onClick={() =>
+                  setDeliveryZones((prev) => [
+                    ...prev,
+                    {
+                      id: crypto.randomUUID(),
+                      name: '',
+                      feeTTC: String(DEFAULT_STOREFRONT_DELIVERY_FEE_TTC),
+                    },
+                  ])
+                }
+              >
+                Ajouter une zone
+              </Button>
+            </div>
+            {deliveryZones.length === 0 ? (
+              <p className="text-xs text-ink-muted">
+                Aucune zone : le tarif unique s’applique.
+              </p>
+            ) : (
+              <ul className="space-y-2">
+                {deliveryZones.map((zone, index) => (
+                  <li
+                    key={zone.id}
+                    className="grid grid-cols-1 gap-2 sm:grid-cols-[1fr_140px_auto]"
+                  >
+                    <Input
+                      value={zone.name}
+                      onChange={(e) => {
+                        const name = e.target.value
+                        setDeliveryZones((prev) =>
+                          prev.map((z, i) =>
+                            i === index ? { ...z, name } : z,
+                          ),
+                        )
+                      }}
+                      placeholder="Nom de la zone"
+                      maxLength={80}
+                      disabled={!online || !usable}
+                      aria-label={`Nom zone ${index + 1}`}
+                    />
+                    <Input
+                      inputMode="numeric"
+                      value={zone.feeTTC}
+                      onChange={(e) => {
+                        const feeTTC = e.target.value
+                        setDeliveryZones((prev) =>
+                          prev.map((z, i) =>
+                            i === index ? { ...z, feeTTC } : z,
+                          ),
+                        )
+                      }}
+                      placeholder="Prix FCFA"
+                      disabled={!online || !usable}
+                      aria-label={`Prix zone ${index + 1}`}
+                    />
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      disabled={!online || !usable}
+                      onClick={() =>
+                        setDeliveryZones((prev) =>
+                          prev.filter((_, i) => i !== index),
+                        )
+                      }
+                    >
+                      Retirer
+                    </Button>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
 
           <div className="sm:col-span-2">
             <Button
