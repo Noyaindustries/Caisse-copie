@@ -1024,12 +1024,13 @@ export function CatalogueView({
                         Voir les articles →
                       </button>
                       {canManageCatalog ? (
-                        <div className="ml-auto flex items-center gap-0.5">
+                        <div className="ml-auto flex flex-wrap items-center justify-end gap-1">
                           <IconButton
                             type="button"
                             size="sm"
                             variant="ghost"
                             aria-label="Monter"
+                            title="Monter"
                             disabled={categoryEditBusy || index === 0}
                             onClick={() => void handleMoveCategory(c.id, -1)}
                           >
@@ -1040,6 +1041,7 @@ export function CatalogueView({
                             size="sm"
                             variant="ghost"
                             aria-label="Descendre"
+                            title="Descendre"
                             disabled={
                               categoryEditBusy ||
                               index === categoryStats.length - 1
@@ -1048,30 +1050,30 @@ export function CatalogueView({
                           >
                             <IconChevronDown />
                           </IconButton>
-                          <IconButton
+                          <Button
                             type="button"
                             size="sm"
-                            variant="ghost"
-                            aria-label="Renommer"
+                            variant="secondary"
                             disabled={categoryEditBusy}
+                            iconLeft={<IconEdit />}
                             onClick={() =>
                               void handleRenameCategory(c.id, c.name)
                             }
                           >
-                            <IconEdit />
-                          </IconButton>
-                          <IconButton
+                            Renommer
+                          </Button>
+                          <Button
                             type="button"
                             size="sm"
-                            variant="ghost"
-                            aria-label="Supprimer"
+                            variant="danger"
                             disabled={categoryEditBusy}
+                            iconLeft={<IconTrash />}
                             onClick={() =>
                               void handleDeleteCategory(c.id, c.name, c.total)
                             }
                           >
-                            <IconTrash />
-                          </IconButton>
+                            Supprimer
+                          </Button>
                         </div>
                       ) : null}
                     </div>
