@@ -4,7 +4,8 @@ import {
   patchStorefrontBranding,
 } from '../../lib/storefront/api'
 import type { StorefrontBranding } from '../../lib/storefront/types'
-import { setCachedReceiptLogoUrl } from '../../lib/receiptLogo'
+import { cacheOrgWorkspaceBranding } from '../../lib/orgWorkspaceBranding'
+import { storefrontDisplayName } from '../../lib/storefront/types'
 import { hasOrgAuth } from '../../lib/subscription/authHeaders'
 import {
   isBlobUploadAvailable,
@@ -89,7 +90,15 @@ export function StorefrontBrandingSection({
         setFooterTagline(data.branding.footerTagline ?? '')
         setLegalMentions(data.branding.legalMentions ?? '')
         setStoreNameHint(data.storeName)
-        setCachedReceiptLogoUrl(data.branding.logoUrl)
+        const displayName = storefrontDisplayName(
+          data.branding,
+          data.storeName,
+          '',
+        )
+        cacheOrgWorkspaceBranding({
+          logoUrl: data.branding.logoUrl,
+          displayName: displayName || data.storeName,
+        })
       } catch (err) {
         if (!cancelled) {
           toast.error(
@@ -173,7 +182,15 @@ export function StorefrontBrandingSection({
         legalMentions: legalMentions.trim() || undefined,
       }
       await patchStorefrontBranding(branding)
-      setCachedReceiptLogoUrl(branding.logoUrl)
+      const displayName = storefrontDisplayName(
+        branding,
+        storeNameHint,
+        '',
+      )
+      cacheOrgWorkspaceBranding({
+        logoUrl: branding.logoUrl,
+        displayName: displayName || storeNameHint || branding.shopName,
+      })
       if (color) setPrimaryColor(color)
       toast.success('Apparence boutique enregistrée.')
     } catch (err) {

@@ -12,6 +12,11 @@ import { Badge } from '../ui/Badge'
 import { cn } from '../ui/cn'
 import { Tooltip } from '../ui/Tooltip'
 import { BRAND_NAME } from '../brand'
+import {
+  getCachedOrgWorkspaceBranding,
+  ORG_BRANDING_CHANGED_EVENT,
+  resolveOrgWorkspaceBranding,
+} from '../lib/orgWorkspaceBranding'
 import { BrandLogo } from './BrandLogo'
 import {
   IconAnalytique,
@@ -129,21 +134,54 @@ function SidebarBody({
   const isMobile = variant === 'mobile'
   const canManageSubscription =
     user.role === 'admin' || user.role === 'gerant'
+  const [orgBranding, setOrgBranding] = useState(() =>
+    getCachedOrgWorkspaceBranding(),
+  )
+
+  useEffect(() => {
+    let cancelled = false
+    const refresh = () => {
+      void resolveOrgWorkspaceBranding().then((next) => {
+        if (!cancelled) setOrgBranding(next)
+      })
+    }
+    refresh()
+    const onChanged = () => {
+      setOrgBranding(getCachedOrgWorkspaceBranding())
+      refresh()
+    }
+    window.addEventListener(ORG_BRANDING_CHANGED_EVENT, onChanged)
+    return () => {
+      cancelled = true
+      window.removeEventListener(ORG_BRANDING_CHANGED_EVENT, onChanged)
+    }
+  }, [])
+
+  const workspaceTitle =
+    orgBranding.displayName?.trim() ||
+    activeStore?.name?.trim() ||
+    BRAND_NAME
+  const workspaceLogo = orgBranding.logoUrl?.trim() || undefined
 
   return (
     <>
-      {/* Brand */}
+      {/* Brand entreprise (vitrine), pas le logo SaaS plateforme */}
       <div
         className={cn(
           'flex h-16 items-center gap-2.5 border-b border-zinc-100 px-3',
           collapsed ? 'justify-center' : 'px-4',
         )}
       >
-        <BrandLogo size="md" alt="" ring="subtle" />
+        <BrandLogo
+          size="md"
+          alt={workspaceTitle}
+          ring="subtle"
+          src={workspaceLogo}
+        />
         {!collapsed ? (
           <div className="min-w-0">
             <p className="truncate text-[13px] font-semibold tracking-tight text-zinc-900">
-              {BRAND_NAME}
+              {workspaceTitle}
             </p>
             <p className="truncate text-[10px] uppercase tracking-wider text-zinc-400">
               Point de vente
