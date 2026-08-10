@@ -29,9 +29,11 @@ export const metadata: Metadata = {
   },
   icons: {
     icon: [
+      { url: '/branding/pwa-icon-192.png', sizes: '192x192', type: 'image/png' },
+      { url: '/branding/pwa-icon-512.png', sizes: '512x512', type: 'image/png' },
       { url: '/branding/logo-circle.svg', type: 'image/svg+xml' },
-      { url: '/branding/caisse-ci-logo.png', type: 'image/png' },
     ],
+    apple: [{ url: '/branding/apple-touch-icon.png', sizes: '180x180' }],
   },
 }
 
