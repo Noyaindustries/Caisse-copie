@@ -6,6 +6,8 @@
     "dev": "next dev --webpack -p 3000",
     "build": "next build --webpack",
     "start": "next start"
+  },
+  "dependencies": {
+    "sharp": "^0.35.3"
   }
 }
-

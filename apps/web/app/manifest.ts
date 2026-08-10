@@ -1,14 +1,32 @@
 import type { MetadataRoute } from 'next'
+import { getSiteBranding } from '../../../server/lib/siteBranding'
 
 /**
- * Chrome exige des PNG 192×192 et 512×512 avec purpose "any"
- * pour afficher le logo à l’installation PWA. SVG seul / maskable seul
- * → icône manquante ou générique.
+ * Chrome exige des PNG 192×192 et 512×512 avec purpose "any".
+ * Les URLs dynamiques `/pwa-icons/…` utilisent le logo admin (branding site)
+ * quand il est défini, sinon le logo Caisse CI par défaut.
  */
-export default function manifest(): MetadataRoute.Manifest {
+export default async function manifest(): Promise<MetadataRoute.Manifest> {
+  let brandName = 'Caisse CI'
+  let version = '1'
+  try {
+    const branding = await getSiteBranding()
+    if (branding.brandName?.trim()) brandName = branding.brandName.trim()
+    if (branding.updatedAt) {
+      const ts = Date.parse(branding.updatedAt)
+      version = Number.isFinite(ts) ? String(ts) : branding.updatedAt
+    } else if (branding.logoUrl) {
+      version = String(Date.now())
+    }
+  } catch {
+    /* DB indisponible au build → icônes par défaut */
+  }
+
+  const q = `v=${encodeURIComponent(version)}`
+
   return {
-    name: 'Caisse CI — Point de vente',
-    short_name: 'Caisse CI',
+    name: `${brandName} — Point de vente`,
+    short_name: brandName.length > 12 ? brandName.slice(0, 12) : brandName,
     description:
       'Caisse enregistreuse hors ligne pour commerces en Côte d’Ivoire',
     theme_color: '#003399',
@@ -21,25 +39,25 @@ export default function manifest(): MetadataRoute.Manifest {
     categories: ['business', 'finance', 'productivity'],
     icons: [
       {
-        src: '/branding/pwa-icon-192.png',
+        src: `/pwa-icons/192?${q}`,
         sizes: '192x192',
         type: 'image/png',
         purpose: 'any',
       },
       {
-        src: '/branding/pwa-icon-512.png',
+        src: `/pwa-icons/512?${q}`,
         sizes: '512x512',
         type: 'image/png',
         purpose: 'any',
       },
       {
-        src: '/branding/pwa-icon-maskable-192.png',
+        src: `/pwa-icons/192?maskable=1&${q}`,
         sizes: '192x192',
         type: 'image/png',
         purpose: 'maskable',
       },
       {
-        src: '/branding/pwa-icon-maskable-512.png',
+        src: `/pwa-icons/512?maskable=1&${q}`,
         sizes: '512x512',
         type: 'image/png',
         purpose: 'maskable',
