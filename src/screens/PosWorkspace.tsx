@@ -49,30 +49,16 @@ export function PosWorkspace({ mode }: { mode: PosMode }) {
       <ActiveStoreProvider canSwitchStore={canSwitchStore}>
         {!staff ? (
           forceStaffLogin ? (
-            <div className="flex min-h-svh flex-col overflow-y-auto bg-zinc-50">
+            <div className="flex min-h-svh flex-col bg-zinc-50">
               {!online ? <OfflineBanner /> : null}
-              <div className="mx-auto flex w-full max-w-5xl flex-wrap items-center gap-2 px-4 pt-6">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setShowStaffLogin(false)
-                    if (mode === 'staff') navigate(ROUTES.home)
-                  }}
-                  className="ui-btn ui-btn-secondary"
-                >
-                  ← Retour boutique en ligne
-                </button>
-                <button
-                  type="button"
-                  onClick={() => navigate(ROUTES.subscription)}
-                  className="ui-btn ui-btn-primary"
-                >
-                  Mon abonnement
-                </button>
-              </div>
-              <div className="flex flex-1 flex-col">
-                <LoginScreen onSuccess={handleLogin} />
-              </div>
+              <LoginScreen
+                onSuccess={handleLogin}
+                onBackToStorefront={() => {
+                  setShowStaffLogin(false)
+                  if (mode === 'staff') navigate(ROUTES.home)
+                }}
+                onOpenSubscription={() => navigate(ROUTES.subscription)}
+              />
             </div>
           ) : (
             <LuxuryStorefrontView

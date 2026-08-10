@@ -8,6 +8,7 @@ import {
   type ReactNode,
 } from 'react'
 import { BRAND_LOGO_SRC, BRAND_NAME } from '../brand'
+import { DocumentFavicon } from '../components/DocumentFavicon'
 import { apiUrl } from '../lib/apiUrl'
 
 export type SiteBranding = {
@@ -75,6 +76,7 @@ export function SiteBrandingProvider({ children }: { children: ReactNode }) {
 
   return (
     <SiteBrandingContext.Provider value={value}>
+      <DocumentFavicon />
       {children}
     </SiteBrandingContext.Provider>
   )

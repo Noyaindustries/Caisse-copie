@@ -85,8 +85,6 @@ function ProductDetailModalContent({
 
   const description = productDescription(product)
   const highlights = productHighlights(product)
-  const vatPct = product.vatRatePct ?? 18
-  const priceHT = Math.round(product.priceTTC / (1 + vatPct / 100))
   const soldOut = product.stock <= 0
   const maxQty = product.stock
   const canAddMore = qty + cartQty <= product.stock
@@ -196,11 +194,6 @@ function ProductDetailModalContent({
                   >
                     {formatFCFA(product.priceTTC)}
                   </span>
-                  <span className={cn('text-[12px]', sub)}>
-                    dont TVA {vatPct} % ·{' '}
-                    <span className="font-mono-nums">{formatFCFA(priceHT)}</span>{' '}
-                    HT
-                  </span>
                 </div>
               </div>
 
@@ -244,30 +237,6 @@ function ProductDetailModalContent({
                     : 'border-zinc-200 bg-zinc-50',
                 )}
               >
-                <div>
-                  <dt className={cn('text-[10px] uppercase tracking-wider', sub)}>
-                    Code-barres
-                  </dt>
-                  <dd className={cn('mt-0.5 font-mono-nums', strong)}>
-                    {product.barcode}
-                  </dd>
-                </div>
-                <div>
-                  <dt className={cn('text-[10px] uppercase tracking-wider', sub)}>
-                    TVA
-                  </dt>
-                  <dd className={cn('mt-0.5 font-mono-nums', strong)}>
-                    {vatPct} %
-                  </dd>
-                </div>
-                <div>
-                  <dt className={cn('text-[10px] uppercase tracking-wider', sub)}>
-                    Prix HT
-                  </dt>
-                  <dd className={cn('mt-0.5 font-mono-nums', strong)}>
-                    {formatFCFA(priceHT)}
-                  </dd>
-                </div>
                 <div>
                   <dt className={cn('text-[10px] uppercase tracking-wider', sub)}>
                     Stock

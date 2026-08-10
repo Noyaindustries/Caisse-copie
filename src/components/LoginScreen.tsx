@@ -20,12 +20,18 @@ import { IconArrowLeft, IconArrowRight, IconEye, IconEyeOff, IconShield } from '
 
 type Props = {
   onSuccess: (profile: StaffProfile, authMethod: StaffAuthMethod) => void
+  onBackToStorefront?: () => void
+  onOpenSubscription?: () => void
 }
 
 const MAX_FAILED_ATTEMPTS = 5
 const LOCKOUT_MS = 30_000
 
-export function LoginScreen({ onSuccess }: Props) {
+export function LoginScreen({
+  onSuccess,
+  onBackToStorefront,
+  onOpenSubscription,
+}: Props) {
   const { organization } = useSubscription()
   const [profiles, setProfiles] = useState<StaffProfile[]>(() =>
     listActiveStaffProfiles(),
@@ -151,6 +157,31 @@ export function LoginScreen({ onSuccess }: Props) {
       <div className="flex min-h-0 flex-col overflow-y-auto overscroll-y-contain bg-zinc-50">
       <div className="mx-auto my-auto w-full max-w-md p-6">
         <div className="w-full">
+          {onBackToStorefront || onOpenSubscription ? (
+            <div className="mb-5 flex flex-wrap items-center gap-2">
+              {onBackToStorefront ? (
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="secondary"
+                  iconLeft={<IconArrowLeft />}
+                  onClick={onBackToStorefront}
+                >
+                  Boutique
+                </Button>
+              ) : null}
+              {onOpenSubscription ? (
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="ghost"
+                  onClick={onOpenSubscription}
+                >
+                  Mon abonnement
+                </Button>
+              ) : null}
+            </div>
+          ) : null}
           <div className="mb-6">
             <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-3 py-1 text-[11px] font-semibold text-emerald-700">
               <IconShield className="h-3 w-3" />

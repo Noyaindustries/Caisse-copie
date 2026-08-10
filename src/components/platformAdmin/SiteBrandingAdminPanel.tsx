@@ -78,7 +78,7 @@ export function SiteBrandingAdminPanel({ theme, inputClass }: Props) {
       const next = await uploadSiteBrandingLogo(dataUrl)
       apply(next)
       await refreshPublicBranding()
-      setMessage('Logo mis à jour — visible sur la page d’accueil.')
+      setMessage('Logo mis à jour — visible sur l’accueil et l’onglet du navigateur.')
     } catch (error) {
       setMessage(error instanceof Error ? error.message : 'Upload impossible.')
     } finally {
@@ -128,8 +128,8 @@ export function SiteBrandingAdminPanel({ theme, inputClass }: Props) {
 
       <Card className={theme.card}>
         <CardHeader
-          title="Logo page d’accueil"
-          subtitle="Remplace le logo Caisse CI sur le site marketing (/)"
+          title="Logo du site"
+          subtitle="Remplace le logo Caisse CI sur l’accueil et l’icône de l’onglet navigateur"
         />
         <CardContent className="space-y-5">
           <div className="flex flex-wrap items-center gap-4">
