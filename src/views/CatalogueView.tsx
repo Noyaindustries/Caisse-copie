@@ -35,6 +35,7 @@ import { cn } from '../ui/cn'
 import { EmptyState } from '../ui/EmptyState'
 import { Field, Input, Select } from '../ui/Input'
 import { Kpi } from '../ui/Kpi'
+import { Modal } from '../ui/Modal'
 import { PageHeader } from '../ui/PageHeader'
 import { Switch } from '../ui/Switch'
 import { Table, TBody, Td, Th, THead, Tr } from '../ui/Table'
@@ -144,6 +145,17 @@ export function CatalogueView({
   const [newCategoryName, setNewCategoryName] = useState('')
   const [categoryAddBusy, setCategoryAddBusy] = useState(false)
   const [categoryEditBusy, setCategoryEditBusy] = useState(false)
+  const [renameTarget, setRenameTarget] = useState<{
+    id: string
+    name: string
+  } | null>(null)
+  const [renameValue, setRenameValue] = useState('')
+  const [deleteTarget, setDeleteTarget] = useState<{
+    id: string
+    name: string
+    productCount: number
+  } | null>(null)
+  const [deleteReassignTo, setDeleteReassignTo] = useState('')
   const [pendingArchiveId, setPendingArchiveId] = useState<string | null>(null)
   const [pendingArchiveUntil, setPendingArchiveUntil] = useState(0)
   const fileRef = useRef<HTMLInputElement>(null)
@@ -221,67 +233,73 @@ export function CatalogueView({
     }
   }, [newCategoryName, toast])
 
-  const handleRenameCategory = useCallback(
-    async (categoryId: string, currentName: string) => {
-      const next = window.prompt('Nouveau nom de catégorie', currentName)
-      if (next == null) return
-      setCategoryEditBusy(true)
-      try {
-        const name = await renameProductCategoryLabel(categoryId, next)
-        if (cat === currentName) setCat(name)
-        toast.success('Catégorie renommée', name)
-      } catch (e) {
-        toast.error(
-          'Renommage impossible',
-          e instanceof Error ? e.message : String(e),
-        )
-      } finally {
-        setCategoryEditBusy(false)
-      }
+  const openRenameCategory = useCallback(
+    (categoryId: string, currentName: string) => {
+      setRenameTarget({ id: categoryId, name: currentName })
+      setRenameValue(currentName)
     },
-    [cat, toast],
+    [],
   )
 
-  const handleDeleteCategory = useCallback(
-    async (categoryId: string, name: string, productCount: number) => {
-      let reassignTo: string | undefined
-      if (productCount > 0) {
-        const others = productCategoryRows
-          .filter((r) => r.id !== categoryId)
-          .map((r) => r.name)
-        if (others.length === 0) {
-          toast.error(
-            'Suppression impossible',
-            'Créez une autre catégorie pour y déplacer les articles.',
-          )
-          return
-        }
-        const picked = window.prompt(
-          `« ${name} » contient ${productCount} article(s).\nIndiquez la catégorie de remplacement :\n${others.join(', ')}`,
-          others[0],
-        )
-        if (picked == null) return
-        reassignTo = picked
-      } else {
-        const ok = window.confirm(`Supprimer la catégorie « ${name} » ?`)
-        if (!ok) return
-      }
-      setCategoryEditBusy(true)
-      try {
-        await deleteProductCategoryLabel(categoryId, reassignTo)
-        if (cat === name) setCat('Tous')
-        toast.success('Catégorie supprimée', name)
-      } catch (e) {
+  const submitRenameCategory = useCallback(async () => {
+    if (!renameTarget) return
+    setCategoryEditBusy(true)
+    try {
+      const name = await renameProductCategoryLabel(
+        renameTarget.id,
+        renameValue,
+      )
+      if (cat === renameTarget.name) setCat(name)
+      setRenameTarget(null)
+      toast.success('Catégorie renommée', name)
+    } catch (e) {
+      toast.error(
+        'Renommage impossible',
+        e instanceof Error ? e.message : String(e),
+      )
+    } finally {
+      setCategoryEditBusy(false)
+    }
+  }, [cat, renameTarget, renameValue, toast])
+
+  const openDeleteCategory = useCallback(
+    (categoryId: string, name: string, productCount: number) => {
+      const others = productCategoryRows
+        .filter((r) => r.id !== categoryId)
+        .map((r) => r.name)
+      if (productCount > 0 && others.length === 0) {
         toast.error(
           'Suppression impossible',
-          e instanceof Error ? e.message : String(e),
+          'Créez une autre catégorie pour y déplacer les articles.',
         )
-      } finally {
-        setCategoryEditBusy(false)
+        return
       }
+      setDeleteTarget({ id: categoryId, name, productCount })
+      setDeleteReassignTo(others[0] ?? '')
     },
-    [cat, productCategoryRows, toast],
+    [productCategoryRows, toast],
   )
+
+  const submitDeleteCategory = useCallback(async () => {
+    if (!deleteTarget) return
+    setCategoryEditBusy(true)
+    try {
+      await deleteProductCategoryLabel(
+        deleteTarget.id,
+        deleteTarget.productCount > 0 ? deleteReassignTo : undefined,
+      )
+      if (cat === deleteTarget.name) setCat('Tous')
+      setDeleteTarget(null)
+      toast.success('Catégorie supprimée', deleteTarget.name)
+    } catch (e) {
+      toast.error(
+        'Suppression impossible',
+        e instanceof Error ? e.message : String(e),
+      )
+    } finally {
+      setCategoryEditBusy(false)
+    }
+  }, [cat, deleteReassignTo, deleteTarget, toast])
 
   const handleMoveCategory = useCallback(
     async (categoryId: string, direction: -1 | 1) => {
@@ -1056,9 +1074,7 @@ export function CatalogueView({
                             variant="secondary"
                             disabled={categoryEditBusy}
                             iconLeft={<IconEdit />}
-                            onClick={() =>
-                              void handleRenameCategory(c.id, c.name)
-                            }
+                            onClick={() => openRenameCategory(c.id, c.name)}
                           >
                             Renommer
                           </Button>
@@ -1069,7 +1085,7 @@ export function CatalogueView({
                             disabled={categoryEditBusy}
                             iconLeft={<IconTrash />}
                             onClick={() =>
-                              void handleDeleteCategory(c.id, c.name, c.total)
+                              openDeleteCategory(c.id, c.name, c.total)
                             }
                           >
                             Supprimer
@@ -1112,6 +1128,118 @@ export function CatalogueView({
         onClose={() => setDetailProduct(null)}
         onSelect={(p) => setDetailProduct(p)}
       />
+
+      <Modal
+        open={Boolean(renameTarget)}
+        onClose={() => {
+          if (!categoryEditBusy) setRenameTarget(null)
+        }}
+        title="Renommer la catégorie"
+        subtitle={
+          renameTarget
+            ? `Ancien nom : ${renameTarget.name}`
+            : undefined
+        }
+        size="sm"
+        footer={
+          <div className="flex justify-end gap-2">
+            <Button
+              type="button"
+              variant="ghost"
+              disabled={categoryEditBusy}
+              onClick={() => setRenameTarget(null)}
+            >
+              Annuler
+            </Button>
+            <Button
+              type="button"
+              variant="primary"
+              loading={categoryEditBusy}
+              disabled={!renameValue.trim()}
+              onClick={() => void submitRenameCategory()}
+            >
+              Enregistrer
+            </Button>
+          </div>
+        }
+      >
+        <Field label="Nouveau nom">
+          <Input
+            autoFocus
+            value={renameValue}
+            onChange={(e) => setRenameValue(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') {
+                e.preventDefault()
+                void submitRenameCategory()
+              }
+            }}
+            placeholder="Ex. Boissons, Épicerie…"
+          />
+        </Field>
+      </Modal>
+
+      <Modal
+        open={Boolean(deleteTarget)}
+        onClose={() => {
+          if (!categoryEditBusy) setDeleteTarget(null)
+        }}
+        title="Supprimer la catégorie"
+        subtitle={
+          deleteTarget
+            ? deleteTarget.productCount > 0
+              ? `« ${deleteTarget.name} » contient ${deleteTarget.productCount} article(s).`
+              : `Supprimer définitivement « ${deleteTarget.name} » ?`
+            : undefined
+        }
+        size="sm"
+        footer={
+          <div className="flex justify-end gap-2">
+            <Button
+              type="button"
+              variant="ghost"
+              disabled={categoryEditBusy}
+              onClick={() => setDeleteTarget(null)}
+            >
+              Annuler
+            </Button>
+            <Button
+              type="button"
+              variant="danger"
+              loading={categoryEditBusy}
+              disabled={
+                Boolean(deleteTarget && deleteTarget.productCount > 0) &&
+                !deleteReassignTo.trim()
+              }
+              onClick={() => void submitDeleteCategory()}
+            >
+              Supprimer
+            </Button>
+          </div>
+        }
+      >
+        {deleteTarget && deleteTarget.productCount > 0 ? (
+          <Field label="Déplacer les articles vers">
+            <Select
+              value={deleteReassignTo}
+              onChange={(e) => setDeleteReassignTo(e.target.value)}
+            >
+              {productCategoryRows
+                .filter((r) => r.id !== deleteTarget.id)
+                .map((r) => (
+                  <option key={r.id} value={r.name}>
+                    {r.name}
+                  </option>
+                ))}
+            </Select>
+          </Field>
+        ) : (
+          <p className="text-[13px] text-zinc-600">
+            Cette action est irréversible. Les filtres catalogue seront mis à
+            jour.
+          </p>
+        )}
+      </Modal>
     </div>
   )
 }
