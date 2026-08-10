@@ -206,7 +206,12 @@ describe('orderStorefrontCategories', () => {
         ],
         ['Plats', 'Boissons', 'Inconnu'],
       ),
-    ).toEqual(['Plats', 'Boissons', 'Autres', 'Desserts'])
+    ).toEqual([
+      { name: 'Plats' },
+      { name: 'Boissons' },
+      { name: 'Autres' },
+      { name: 'Desserts' },
+    ])
   })
 })
 

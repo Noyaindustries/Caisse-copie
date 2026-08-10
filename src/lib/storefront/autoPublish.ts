@@ -19,7 +19,7 @@ function fingerprintPayload(input: {
   storeName: string
   products: ProductWithStock[]
   promotions: Promotion[]
-  categories?: string[]
+  categories?: Array<string | { name: string; imageUrl?: string }>
 }): string {
   const products = input.products
     .map((p) =>
@@ -55,10 +55,13 @@ function fingerprintPayload(input: {
       ].join(':'),
     )
     .sort()
+  const categories = (input.categories ?? []).map((c) =>
+    typeof c === 'string' ? c : `${c.name}|${c.imageUrl ?? ''}`,
+  )
   return JSON.stringify({
     storeId: input.storeId,
     storeName: input.storeName,
-    categories: input.categories ?? [],
+    categories,
     products,
     promotions,
   })
@@ -94,7 +97,7 @@ export async function buildActiveStorefrontMenu(storeId: string): Promise<{
   storeName: string
   products: ProductWithStock[]
   promotions: Promotion[]
-  categories: string[]
+  categories: Array<{ name: string; imageUrl?: string }>
 } | null> {
   const store = await db.stores.get(storeId)
   const products = await db.products.toArray()
@@ -115,7 +118,14 @@ export async function buildActiveStorefrontMenu(storeId: string): Promise<{
   const categoryRows = await db.productCategories.orderBy('sortOrder').toArray()
   const categories = orderStorefrontCategories(
     displayProducts,
-    categoryRows.map((row) => row.name),
+    categoryRows.map((row) => ({
+      name: row.name,
+      ...(row.imageUrl?.trim()
+        ? { imageUrl: row.imageUrl.trim() }
+        : row.imageDataUrl?.trim()
+          ? { imageUrl: row.imageDataUrl.trim() }
+          : {}),
+    })),
   )
 
   const credentials = getOrganizationCredentials()

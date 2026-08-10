@@ -128,7 +128,7 @@ export async function publishStorefrontMenu(
     storeName: string
     products: ProductWithStock[]
     promotions: Promotion[]
-    categories?: string[]
+    categories?: Array<string | { name: string; imageUrl?: string }>
   },
 ): Promise<{ storefrontUrl: string; productCount: number; publishedAt: string }> {
   const res = await fetch(apiUrl('/billing/storefront/publish'), {
@@ -137,7 +137,14 @@ export async function publishStorefrontMenu(
     body: JSON.stringify({
       storeId: input.storeId,
       storeName: input.storeName,
-      categories: input.categories ?? [],
+      categories: (input.categories ?? []).map((c) =>
+        typeof c === 'string'
+          ? { name: c }
+          : {
+              name: c.name,
+              ...(c.imageUrl?.trim() ? { imageUrl: c.imageUrl.trim() } : {}),
+            },
+      ),
       products: input.products.map((p) => ({
         id: p.id,
         name: p.name,

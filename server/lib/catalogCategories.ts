@@ -6,6 +6,18 @@ export const catalogCategorySchema = z.object({
   id: z.string().min(1).max(80),
   name: z.string().min(1).max(80),
   sortOrder: z.number().int().min(0).max(10_000),
+  imageUrl: z
+    .string()
+    .max(2_000)
+    .refine(
+      (value) =>
+        !value ||
+        /^https?:\/\//i.test(value) ||
+        value.startsWith('/uploads/') ||
+        value.startsWith('data:image/'),
+      { message: 'URL image catégorie invalide' },
+    )
+    .optional(),
 })
 
 export type CatalogCategoryDto = z.infer<typeof catalogCategorySchema>

@@ -98,12 +98,31 @@ const publishedPromotionSchema = z.object({
   updatedAt: z.number().int().nonnegative(),
 })
 
+const publishedCategorySchema = z.union([
+  z.string().trim().min(1).max(80),
+  z.object({
+    name: z.string().trim().min(1).max(80),
+    imageUrl: z
+      .string()
+      .max(1_500_000)
+      .refine(
+        (value) =>
+          !value ||
+          value.startsWith('data:image/') ||
+          /^https?:\/\//i.test(value) ||
+          value.startsWith('/uploads/'),
+        { message: 'URL image catégorie invalide' },
+      )
+      .optional(),
+  }),
+])
+
 const publishMenuSchema = z.object({
   storeId: z.string().min(1).max(120),
   storeName: z.string().min(1).max(160),
   products: z.array(publishedProductSchema).max(5_000),
   promotions: z.array(publishedPromotionSchema).max(200).default([]),
-  categories: z.array(z.string().trim().min(1).max(80)).max(200).optional(),
+  categories: z.array(publishedCategorySchema).max(200).optional(),
 })
 
 // data:image base64 (logo/bannière ≤ 500 Ko) ≈ 700k chars ; https reste court.

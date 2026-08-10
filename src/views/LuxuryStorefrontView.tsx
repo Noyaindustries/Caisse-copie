@@ -32,6 +32,7 @@ import {
 import type {
   PublicStorefrontOrderInput,
   StorefrontBranding,
+  StorefrontCategoryRef,
   StorefrontPaymentMethod,
 } from '../lib/storefront/types'
 import {
@@ -55,7 +56,7 @@ type PublicStorefrontConfig = {
   storeId: string
   products: ProductWithStock[]
   promotions?: Promotion[]
-  categories?: string[]
+  categories?: Array<string | StorefrontCategoryRef>
   waveEnabled?: boolean
   branding?: StorefrontBranding
   submitOrder: (
@@ -281,7 +282,14 @@ export function LuxuryStorefrontView({
   const storefrontCategories = useMemo(() => {
     const preferred = isPublicStorefront
       ? publicStorefront?.categories
-      : localCategoryRows.map((row) => row.name)
+      : localCategoryRows.map((row) => ({
+          name: row.name,
+          ...(row.imageUrl?.trim()
+            ? { imageUrl: row.imageUrl.trim() }
+            : row.imageDataUrl?.trim()
+              ? { imageUrl: row.imageDataUrl.trim() }
+              : {}),
+        }))
     return orderStorefrontCategories(featuredProducts, preferred)
   }, [
     featuredProducts,
@@ -302,8 +310,8 @@ export function LuxuryStorefrontView({
     }
     const sections: Array<[string, ProductWithStock[]]> = []
     for (const category of storefrontCategories) {
-      const products = grouped.get(category)
-      if (products?.length) sections.push([category, products])
+      const products = grouped.get(category.name)
+      if (products?.length) sections.push([category.name, products])
     }
     return sections
   }, [featuredProducts, storefrontCategories])
@@ -314,7 +322,7 @@ export function LuxuryStorefrontView({
 
   useEffect(() => {
     if (selectedCategory === 'all') return
-    if (!storefrontCategories.includes(selectedCategory)) {
+    if (!storefrontCategories.some((c) => c.name === selectedCategory)) {
       setSelectedCategory('all')
     }
   }, [selectedCategory, storefrontCategories])
@@ -1529,37 +1537,55 @@ export function LuxuryStorefrontView({
                 <div className="storefront-category-nav-track">
                   <button
                     type="button"
-                    className={`storefront-category-chip${
+                    className={`storefront-category-card${
                       selectedCategory === 'all'
-                        ? ' storefront-category-chip--active'
+                        ? ' storefront-category-card--active'
                         : ''
                     }`}
                     aria-pressed={selectedCategory === 'all'}
                     onClick={() => selectCategory('all')}
                   >
-                    Tous
-                    <span className="storefront-category-chip-count">
+                    <span className="storefront-category-card-avatar storefront-category-card-avatar--all">
+                      Tous
+                    </span>
+                    <span className="storefront-category-card-label">Tous</span>
+                    <span className="storefront-category-card-count">
                       {featuredProducts.length}
                     </span>
                   </button>
                   {storefrontCategories.map((category) => {
                     const count =
-                      featuredByCategory.find(([name]) => name === category)?.[1]
+                      featuredByCategory.find(([name]) => name === category.name)?.[1]
                         .length ?? 0
                     return (
                       <button
-                        key={category}
+                        key={category.name}
                         type="button"
-                        className={`storefront-category-chip${
-                          selectedCategory === category
-                            ? ' storefront-category-chip--active'
+                        className={`storefront-category-card${
+                          selectedCategory === category.name
+                            ? ' storefront-category-card--active'
                             : ''
                         }`}
-                        aria-pressed={selectedCategory === category}
-                        onClick={() => selectCategory(category)}
+                        aria-pressed={selectedCategory === category.name}
+                        onClick={() => selectCategory(category.name)}
                       >
-                        {category}
-                        <span className="storefront-category-chip-count">
+                        <span className="storefront-category-card-avatar">
+                          {category.imageUrl ? (
+                            <img
+                              src={category.imageUrl}
+                              alt=""
+                              className="storefront-category-card-img"
+                            />
+                          ) : (
+                            <span className="storefront-category-card-initial">
+                              {category.name.slice(0, 1).toUpperCase()}
+                            </span>
+                          )}
+                        </span>
+                        <span className="storefront-category-card-label">
+                          {category.name}
+                        </span>
+                        <span className="storefront-category-card-count">
                           {count}
                         </span>
                       </button>

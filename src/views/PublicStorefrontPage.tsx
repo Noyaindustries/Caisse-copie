@@ -51,7 +51,9 @@ export function PublicStorefrontPage({ storeCode, online }: Props) {
   const [usable, setUsable] = useState(true)
   const [waveEnabled, setWaveEnabled] = useState(false)
   const [branding, setBranding] = useState<StorefrontBranding | undefined>()
-  const [categories, setCategories] = useState<string[]>([])
+  const [categories, setCategories] = useState<
+    Array<string | { name: string; imageUrl?: string }>
+  >([])
   const [paymentBanner, setPaymentBanner] = useState<{
     tone: 'success' | 'error'
     message: string

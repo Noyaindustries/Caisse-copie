@@ -18,6 +18,10 @@ export interface ProductCategoryRow {
   id: string
   name: string
   sortOrder: number
+  /** Image catalogue / boutique (URL https Blob ou chemin /uploads/). */
+  imageUrl?: string
+  /** Aperçu local (data URL) si Blob indisponible. */
+  imageDataUrl?: string
 }
 
 /** Produit + stock sur un magasin donné (affichage caisse / listes). */

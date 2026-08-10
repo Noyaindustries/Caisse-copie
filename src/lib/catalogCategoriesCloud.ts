@@ -9,6 +9,7 @@ export type CatalogCategoryCloud = {
   id: string
   name: string
   sortOrder: number
+  imageUrl?: string
 }
 
 function canSyncCloud(): boolean {
@@ -25,6 +26,7 @@ export async function pushCatalogCategoriesToCloud(): Promise<boolean> {
       id: r.id,
       name: r.name,
       sortOrder: r.sortOrder,
+      ...(r.imageUrl?.trim() ? { imageUrl: r.imageUrl.trim() } : {}),
     }))
     const res = await fetch(apiUrl('/org/catalog-categories'), {
       method: 'PUT',
@@ -44,7 +46,7 @@ export async function pushCatalogCategoriesToCloud(): Promise<boolean> {
 
 /**
  * Fusionne les catégories cloud dans Dexie (union par nom, casse ignorée).
- * Les libellés cloud absents localement sont ajoutés.
+ * Les libellés cloud absents localement sont ajoutés ; imageUrl distante est reprise.
  */
 export async function mergeCatalogCategoriesFromCloud(
   remote: CatalogCategoryCloud[] | null | undefined,
@@ -54,12 +56,23 @@ export async function mergeCatalogCategoriesFromCloud(
   const byLower = new Map(local.map((r) => [r.name.toLowerCase(), r]))
   let maxOrder = local.reduce((m, r) => Math.max(m, r.sortOrder), -1)
   const toAdd: ProductCategoryRow[] = []
+  let changed = 0
 
   for (const item of remote) {
     const name = item.name.replace(/\s+/g, ' ').trim()
     if (!name || name.toLowerCase() === 'tous') continue
     const key = name.toLowerCase()
-    if (byLower.has(key)) continue
+    const existing = byLower.get(key)
+    const remoteImage = item.imageUrl?.trim()
+    if (existing) {
+      if (remoteImage && existing.imageUrl !== remoteImage) {
+        await db.productCategories.update(existing.id, {
+          imageUrl: remoteImage,
+        })
+        changed += 1
+      }
+      continue
+    }
     maxOrder += 1
     const row: ProductCategoryRow = {
       id: item.id || crypto.randomUUID(),
@@ -68,6 +81,7 @@ export async function mergeCatalogCategoriesFromCloud(
         typeof item.sortOrder === 'number' && Number.isFinite(item.sortOrder)
           ? item.sortOrder
           : maxOrder,
+      ...(remoteImage ? { imageUrl: remoteImage } : {}),
     }
     byLower.set(key, row)
     toAdd.push(row)
@@ -75,8 +89,9 @@ export async function mergeCatalogCategoriesFromCloud(
 
   if (toAdd.length > 0) {
     await db.productCategories.bulkAdd(toAdd)
+    changed += toAdd.length
   }
-  return toAdd.length
+  return changed
 }
 
 /** Tire les catégories cloud et les fusionne (appel ponctuel hors pull sync). */

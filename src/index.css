@@ -693,6 +693,98 @@ body {
     color: #1c1917;
   }
 
+  .storefront-category-card {
+    display: inline-flex;
+    flex-shrink: 0;
+    width: 4.75rem;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.35rem;
+    border: 0;
+    background: transparent;
+    padding: 0.15rem 0.2rem 0.35rem;
+    color: #44403c;
+    transition: transform 160ms ease, color 160ms ease;
+  }
+
+  .storefront-category-card:hover {
+    transform: translateY(-2px);
+  }
+
+  .storefront-category-card-avatar {
+    display: grid;
+    place-items: center;
+    width: 3.75rem;
+    height: 3.75rem;
+    overflow: hidden;
+    border-radius: 999px;
+    border: 2px solid color-mix(in oklab, #d6d3d1 75%, transparent);
+    background: #fff;
+    box-shadow: 0 10px 22px -16px color-mix(in oklab, #1c1917 45%, transparent);
+    transition:
+      border-color 160ms ease,
+      box-shadow 160ms ease;
+  }
+
+  .storefront-category-card-avatar--all {
+    font-size: 0.7rem;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: #78716c;
+    background: color-mix(in oklab, var(--storefront-accent, #b8922e) 12%, white);
+  }
+
+  .storefront-category-card-img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+
+  .storefront-category-card-initial {
+    font-size: 1.1rem;
+    font-weight: 700;
+    color: color-mix(in oklab, var(--storefront-accent, #b8922e) 80%, #1c1917);
+  }
+
+  .storefront-category-card-label {
+    max-width: 4.5rem;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: 0.68rem;
+    font-weight: 650;
+    line-height: 1.2;
+    text-align: center;
+  }
+
+  .storefront-category-card-count {
+    min-width: 1.15rem;
+    border-radius: 999px;
+    background: color-mix(in oklab, #1c1917 7%, transparent);
+    padding: 0.05rem 0.3rem;
+    font-size: 0.6rem;
+    font-variant-numeric: tabular-nums;
+    font-weight: 700;
+    color: #78716c;
+  }
+
+  .storefront-category-card--active .storefront-category-card-avatar {
+    border-color: color-mix(in oklab, var(--storefront-accent, #b8922e) 85%, #d6d3d1);
+    box-shadow:
+      0 0 0 3px color-mix(in oklab, var(--storefront-accent, #b8922e) 28%, transparent),
+      0 12px 24px -16px color-mix(in oklab, #1c1917 50%, transparent);
+  }
+
+  .storefront-category-card--active .storefront-category-card-label {
+    color: #1c1917;
+  }
+
+  .storefront-category-card--active .storefront-category-card-count {
+    background: color-mix(in oklab, var(--storefront-accent, #b8922e) 35%, white);
+    color: #1c1917;
+  }
+
   .storefront-category-heading {
     display: flex;
     align-items: baseline;

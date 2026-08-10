@@ -7,6 +7,7 @@ import {
   db,
   moveProductCategory,
   renameProductCategoryLabel,
+  setProductCategoryImage,
 } from '../db/db'
 import type { CategoryTab } from '../components/Sidebar'
 import type { Product, ProductWithStock } from '../db/types'
@@ -28,6 +29,7 @@ import { assertBarcodeAvailable } from '../lib/productBarcode'
 import { storeStockRowId } from '../lib/storeStockId'
 import { enqueueStockSync } from '../lib/sync'
 import { scheduleWorkspaceCatalogPush } from '../lib/workspaceCatalogCloud'
+import { resolveProductImageFields } from '../lib/uploads/blob'
 import { Badge } from '../ui/Badge'
 import { Button, IconButton } from '../ui/Button'
 import { Card, CardContent } from '../ui/Card'
@@ -203,6 +205,7 @@ export function CatalogueView({
         id: row.id,
         name: row.name,
         sortOrder: row.sortOrder,
+        imageSrc: row.imageUrl?.trim() || row.imageDataUrl?.trim() || undefined,
         total: items.length,
         active: items.filter((p) => !p.archived).length,
         rupture: items.filter((p) => !p.archived && p.stock <= 0).length,
@@ -309,6 +312,57 @@ export function CatalogueView({
       } catch (e) {
         toast.error(
           'Réordonnancement impossible',
+          e instanceof Error ? e.message : String(e),
+        )
+      } finally {
+        setCategoryEditBusy(false)
+      }
+    },
+    [toast],
+  )
+
+  const handleCategoryImagePick = useCallback(
+    async (categoryId: string, file: File | null) => {
+      if (!file) return
+      if (file.size > 500 * 1024) {
+        toast.error('Image trop volumineuse', 'Maximum 500 Ko.')
+        return
+      }
+      setCategoryEditBusy(true)
+      try {
+        const dataUrl = await new Promise<string>((resolve, reject) => {
+          const reader = new FileReader()
+          reader.onload = () => {
+            if (typeof reader.result === 'string') resolve(reader.result)
+            else reject(new Error('Lecture image impossible.'))
+          }
+          reader.onerror = () => reject(new Error('Lecture image impossible.'))
+          reader.readAsDataURL(file)
+        })
+        const fields = await resolveProductImageFields(categoryId, dataUrl)
+        await setProductCategoryImage(categoryId, fields)
+        toast.success('Image catégorie enregistrée')
+      } catch (e) {
+        toast.error(
+          'Image non enregistrée',
+          e instanceof Error ? e.message : String(e),
+        )
+      } finally {
+        setCategoryEditBusy(false)
+      }
+    },
+    [toast],
+  )
+
+  const handleClearCategoryImage = useCallback(
+    async (categoryId: string) => {
+      setCategoryEditBusy(true)
+      try {
+        await setProductCategoryImage(categoryId, null)
+        toast.success('Image catégorie retirée')
+      } catch (e) {
+        toast.error(
+          'Retrait impossible',
           e instanceof Error ? e.message : String(e),
         )
       } finally {
@@ -1013,15 +1067,30 @@ export function CatalogueView({
                 <li key={c.id}>
                   <div className="catalogue-cat-row flex w-full flex-col gap-2 p-4 text-left">
                     <div className="flex items-start justify-between gap-2">
-                      <button
-                        type="button"
-                        onClick={() => openCategory(c.name)}
-                        className="min-w-0 flex-1 text-left"
-                      >
-                        <p className="text-[14px] font-semibold text-zinc-900">
-                          {c.name}
-                        </p>
-                      </button>
+                      <div className="flex min-w-0 flex-1 items-center gap-3">
+                        <div className="relative h-14 w-14 shrink-0 overflow-hidden rounded-full border border-zinc-200 bg-zinc-50">
+                          {c.imageSrc ? (
+                            <img
+                              src={c.imageSrc}
+                              alt=""
+                              className="h-full w-full object-cover"
+                            />
+                          ) : (
+                            <span className="grid h-full w-full place-items-center text-sm font-bold text-zinc-400">
+                              {c.name.slice(0, 1).toUpperCase()}
+                            </span>
+                          )}
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => openCategory(c.name)}
+                          className="min-w-0 flex-1 text-left"
+                        >
+                          <p className="text-[14px] font-semibold text-zinc-900">
+                            {c.name}
+                          </p>
+                        </button>
+                      </div>
                       <Badge tone="neutral">{c.total} art.</Badge>
                     </div>
                     <div className="flex flex-wrap gap-1.5 text-[11px]">
@@ -1043,6 +1112,33 @@ export function CatalogueView({
                       </button>
                       {canManageCatalog ? (
                         <div className="ml-auto flex flex-wrap items-center justify-end gap-1">
+                          <label className="inline-flex cursor-pointer">
+                            <input
+                              type="file"
+                              accept="image/*"
+                              className="sr-only"
+                              disabled={categoryEditBusy}
+                              onChange={(e) => {
+                                const file = e.target.files?.[0] ?? null
+                                e.target.value = ''
+                                void handleCategoryImagePick(c.id, file)
+                              }}
+                            />
+                            <span className="ui-btn ui-btn-secondary inline-flex h-8 items-center rounded-md px-2.5 text-[12px] font-semibold">
+                              {c.imageSrc ? 'Changer photo' : 'Ajouter photo'}
+                            </span>
+                          </label>
+                          {c.imageSrc ? (
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="ghost"
+                              disabled={categoryEditBusy}
+                              onClick={() => void handleClearCategoryImage(c.id)}
+                            >
+                              Retirer
+                            </Button>
+                          ) : null}
                           <IconButton
                             type="button"
                             size="sm"

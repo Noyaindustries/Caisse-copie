@@ -132,38 +132,73 @@ export function computeDeliveryFeeTTC(opts: {
   return fee
 }
 
+export type StorefrontCategoryRef = {
+  name: string
+  imageUrl?: string
+}
+
 export type PublishedStorefrontMenu = {
   storeId: string
   storeName: string
   publishedAt: string
   products: ProductWithStock[]
   promotions: Promotion[]
-  /** Noms de catégories ordonnés (catalogue). */
-  categories?: string[]
+  /**
+   * Catégories ordonnées (noms seuls ou objets avec image).
+   * Anciens menus : `string[]` — toujours supportés à la lecture.
+   */
+  categories?: Array<string | StorefrontCategoryRef>
   branding?: StorefrontBranding
+}
+
+/** Normalise categories publiées (string legacy ou { name, imageUrl }). */
+export function normalizeStorefrontCategoryRefs(
+  raw: unknown,
+): StorefrontCategoryRef[] {
+  if (!Array.isArray(raw)) return []
+  const out: StorefrontCategoryRef[] = []
+  const seen = new Set<string>()
+  for (const item of raw) {
+    let name = ''
+    let imageUrl: string | undefined
+    if (typeof item === 'string') {
+      name = item.trim()
+    } else if (item && typeof item === 'object') {
+      const row = item as Record<string, unknown>
+      name = typeof row.name === 'string' ? row.name.trim() : ''
+      if (typeof row.imageUrl === 'string' && row.imageUrl.trim()) {
+        imageUrl = row.imageUrl.trim()
+      }
+    }
+    if (!name || seen.has(name.toLowerCase())) continue
+    seen.add(name.toLowerCase())
+    out.push(imageUrl ? { name, imageUrl } : { name })
+  }
+  return out
 }
 
 /** Ordonne les catégories présentes dans les produits (préférence catalogue, puis alpha). */
 export function orderStorefrontCategories(
   products: Array<{ category?: string | null }>,
-  preferredOrder?: string[] | null,
-): string[] {
+  preferredOrder?: Array<string | StorefrontCategoryRef> | null,
+): StorefrontCategoryRef[] {
   const present = new Set<string>()
   for (const product of products) {
     const name = product.category?.trim() || 'Autres'
     if (name) present.add(name)
   }
-  const ordered: string[] = []
+  const preferred = normalizeStorefrontCategoryRefs(preferredOrder)
+  const ordered: StorefrontCategoryRef[] = []
   const seen = new Set<string>()
-  for (const raw of preferredOrder ?? []) {
-    const name = raw.trim()
-    if (!name || !present.has(name) || seen.has(name)) continue
-    ordered.push(name)
-    seen.add(name)
+  for (const ref of preferred) {
+    if (!present.has(ref.name) || seen.has(ref.name)) continue
+    ordered.push(ref)
+    seen.add(ref.name)
   }
   const rest = [...present]
     .filter((name) => !seen.has(name))
     .sort((a, b) => a.localeCompare(b, 'fr'))
+    .map((name) => ({ name }))
   return [...ordered, ...rest]
 }
 

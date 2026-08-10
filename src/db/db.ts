@@ -753,6 +753,38 @@ export async function moveProductCategory(
   scheduleCategoryCloudPush()
 }
 
+/** Met à jour l’image d’une catégorie (URL Blob ou data URL locale). */
+export async function setProductCategoryImage(
+  categoryId: string,
+  fields: { imageUrl?: string; imageDataUrl?: string } | null,
+): Promise<void> {
+  const row = await db.productCategories.get(categoryId)
+  if (!row) throw new Error('Catégorie introuvable.')
+  if (!fields) {
+    await db.productCategories.update(categoryId, {
+      imageUrl: undefined,
+      imageDataUrl: undefined,
+    })
+    // Dexie ne retire pas toujours les champs undefined : replace explicite.
+    await db.productCategories.put({
+      id: row.id,
+      name: row.name,
+      sortOrder: row.sortOrder,
+    })
+  } else {
+    await db.productCategories.put({
+      id: row.id,
+      name: row.name,
+      sortOrder: row.sortOrder,
+      ...(fields.imageUrl ? { imageUrl: fields.imageUrl } : {}),
+      ...(fields.imageDataUrl && !fields.imageUrl
+        ? { imageDataUrl: fields.imageDataUrl }
+        : {}),
+    })
+  }
+  scheduleCategoryCloudPush()
+}
+
 /** Enregistre en index les catégories présentes sur les produits (import CSV, etc.). */
 export async function syncProductCategoriesFromProducts(): Promise<void> {
   const [rows, products] = await Promise.all([
