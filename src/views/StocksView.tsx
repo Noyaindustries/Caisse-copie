@@ -7,7 +7,7 @@ import {
   type CSSProperties,
 } from 'react'
 import { useActiveStore } from '../context/ActiveStoreContext'
-import { db, loadKitchenStockDemo } from '../db/db'
+import { db } from '../db/db'
 import type {
   KitchenStockUnit,
   ProductWithStock,
@@ -111,7 +111,6 @@ export function StocksView({ isAdmin, auditActor }: Props) {
   const [quickBusy, setQuickBusy] = useState(false)
   const [bulkQty, setBulkQty] = useState('10')
   const [bulkBusy, setBulkBusy] = useState(false)
-  const [kitchenDemoBusy, setKitchenDemoBusy] = useState(false)
   const kitchenIngredients = useLiveQuery(() => db.kitchenIngredients.toArray(), [], []) ?? []
   const kitchenIngredientStocks =
     useLiveQuery(
@@ -719,27 +718,6 @@ export function StocksView({ isAdmin, auditActor }: Props) {
     toast.success('Export mouvements prêt', `${stockMovements.length} ligne(s)`)
   }, [stockMovements, activeStore?.shortCode, activeStoreId, toast])
 
-  const loadKitchenDemo = useCallback(async () => {
-    setKitchenDemoBusy(true)
-    try {
-      const changed = await loadKitchenStockDemo()
-      if (changed) {
-        toast.success(
-          'Stock cuisine chargé',
-          'Ingrédients, quantités et recettes de démo sont prêts.',
-        )
-        setStockScope('cuisine')
-      } else {
-        toast.info('Stock cuisine', 'Les données cuisine existent déjà.')
-        setStockScope('cuisine')
-      }
-    } catch {
-      toast.error('Échec', 'Impossible de charger les exemples cuisine.')
-    } finally {
-      setKitchenDemoBusy(false)
-    }
-  }, [toast])
-
   const scopeTabs = useMemo(
     () => [
       { id: 'catalogue' as const, label: 'Produits catalogue' },
@@ -919,17 +897,8 @@ export function StocksView({ isAdmin, auditActor }: Props) {
                 {kitchenRows.length === 0 ? (
                   <EmptyState
                     title="Aucun ingrédient cuisine"
-                    description="Ajoutez des matières premières, liez un produit du catalogue, ou chargez les exemples (poulet, poisson, attiéké, recettes des plats p1–p3)."
+                    description="Ajoutez des matières premières ou liez un produit du catalogue."
                     variant="flat"
-                    action={
-                      <Button
-                        variant="accent"
-                        disabled={kitchenDemoBusy}
-                        onClick={() => void loadKitchenDemo()}
-                      >
-                        {kitchenDemoBusy ? 'Chargement…' : 'Charger les exemples cuisine'}
-                      </Button>
-                    }
                   />
                 ) : (
                   <div className="space-y-2">

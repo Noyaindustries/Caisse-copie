@@ -17,8 +17,6 @@ type Props = {
   projectedUsage?: Map<string, number>
   canAdjust?: boolean
   compact?: boolean
-  onLoadDemo?: () => void | Promise<void>
-  loadDemoBusy?: boolean
 }
 
 function statusTone(status: ReturnType<typeof ingredientStatus>) {
@@ -39,8 +37,6 @@ export function KitchenIngredientStockPanel({
   projectedUsage,
   canAdjust = false,
   compact = false,
-  onLoadDemo,
-  loadDemoBusy = false,
 }: Props) {
   const stats = kitchenIngredientStats(rows)
 
@@ -57,19 +53,8 @@ export function KitchenIngredientStockPanel({
         <CardContent className="space-y-3">
           <p className="text-[12px] text-ink-subtle">
             Aucun ingrédient cuisine configuré. Gérez-les dans{' '}
-            <strong className="text-ink">Stocks → Ingrédients cuisine</strong>, ou chargez les
-            exemples de démo.
+            <strong className="text-ink">Stocks → Ingrédients cuisine</strong>.
           </p>
-          {onLoadDemo ? (
-            <Button
-              size="sm"
-              variant="accent"
-              disabled={loadDemoBusy}
-              onClick={() => void onLoadDemo()}
-            >
-              {loadDemoBusy ? 'Chargement…' : 'Charger les exemples cuisine'}
-            </Button>
-          ) : null}
         </CardContent>
       </Card>
     )

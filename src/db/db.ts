@@ -75,7 +75,7 @@ function databaseNameForCurrentOrganization(): string {
   }
 }
 import { DEFAULT_PRODUCT_CATEGORIES } from './types'
-import { SEED_INITIAL_STOCK_MAIN, SEED_PRODUCTS } from './seed'
+import { DEMO_KITCHEN_INGREDIENT_IDS, DEMO_PRODUCT_IDS, DEMO_PROMO_CODES, DEMO_STORE_ANNEX_ID } from './seed'
 import { DEFAULT_STORE_ID, SEED_STORES } from './seedStores'
 
 export class CaisseDB extends Dexie {
@@ -668,13 +668,125 @@ async function ensureStores(): Promise<void> {
   }
 }
 
-const KITCHEN_DEMO_STOCK_BY_INGREDIENT: Record<string, number> = {
-  'ing-poulet': 15,
-  'ing-poisson': 6,
-  'ing-huile': 5,
-  'ing-oignon': 8,
-  'ing-attieke': 20,
-  'ing-riz': 25,
+const DEMO_DATA_PURGED_KEY = 'caisseci-demo-data-purged-v1'
+
+async function purgeLegacyDemoData(): Promise<void> {
+  if (typeof window === 'undefined') return
+  try {
+    if (localStorage.getItem(DEMO_DATA_PURGED_KEY) === '1') return
+  } catch {
+    // Continuer la purge même si localStorage est indisponible.
+  }
+
+  const demoProductIds = new Set(DEMO_PRODUCT_IDS)
+  const demoIngredientIds = new Set(DEMO_KITCHEN_INGREDIENT_IDS)
+  const demoPromoCodes = new Set(
+    DEMO_PROMO_CODES.map((code) => code.toUpperCase()),
+  )
+
+  await db.products.bulkDelete([...DEMO_PRODUCT_IDS])
+
+  const storeStocks = await db.storeStocks.toArray()
+  await db.storeStocks.bulkDelete(
+    storeStocks
+      .filter(
+        (row) =>
+          demoProductIds.has(row.productId) ||
+          row.storeId === DEMO_STORE_ANNEX_ID,
+      )
+      .map((row) => row.id),
+  )
+
+  const locationStocks = await db.locationStocks.toArray()
+  await db.locationStocks.bulkDelete(
+    locationStocks
+      .filter(
+        (row) =>
+          demoProductIds.has(row.productId) ||
+          row.storeId === DEMO_STORE_ANNEX_ID,
+      )
+      .map((row) => row.id),
+  )
+
+  const stockTransfers = await db.stockTransfers.toArray()
+  await db.stockTransfers.bulkDelete(
+    stockTransfers
+      .filter(
+        (row) =>
+          demoProductIds.has(row.productId) ||
+          row.fromStoreId === DEMO_STORE_ANNEX_ID ||
+          row.toStoreId === DEMO_STORE_ANNEX_ID,
+      )
+      .map((row) => row.id),
+  )
+
+  const locationTransfers = await db.locationTransfers.toArray()
+  await db.locationTransfers.bulkDelete(
+    locationTransfers
+      .filter(
+        (row) =>
+          demoProductIds.has(row.productId) ||
+          row.storeId === DEMO_STORE_ANNEX_ID,
+      )
+      .map((row) => row.id),
+  )
+
+  await db.kitchenIngredients.bulkDelete([...DEMO_KITCHEN_INGREDIENT_IDS])
+
+  const kitchenStocks = await db.kitchenIngredientStocks.toArray()
+  await db.kitchenIngredientStocks.bulkDelete(
+    kitchenStocks
+      .filter(
+        (row) =>
+          demoIngredientIds.has(row.ingredientId) ||
+          row.storeId === DEMO_STORE_ANNEX_ID,
+      )
+      .map((row) => row.id),
+  )
+
+  const recipes = await db.productRecipeIngredients.toArray()
+  await db.productRecipeIngredients.bulkDelete(
+    recipes
+      .filter(
+        (row) =>
+          demoProductIds.has(row.productId) ||
+          demoIngredientIds.has(row.ingredientId),
+      )
+      .map((row) => row.id),
+  )
+
+  const promotions = await db.promotions.toArray()
+  await db.promotions.bulkDelete(
+    promotions
+      .filter((row) => demoPromoCodes.has(row.code.trim().toUpperCase()))
+      .map((row) => row.id),
+  )
+
+  const stockLocations = await db.stockLocations.toArray()
+  await db.stockLocations.bulkDelete(
+    stockLocations
+      .filter((row) => row.storeId === DEMO_STORE_ANNEX_ID)
+      .map((row) => row.id),
+  )
+
+  const diningTables = await db.diningTables.toArray()
+  await db.diningTables.bulkDelete(
+    diningTables
+      .filter(
+        (row) =>
+          row.storeId === DEMO_STORE_ANNEX_ID ||
+          /^Table [1-8]$/.test(row.name),
+      )
+      .map((row) => row.id),
+  )
+
+  await db.stores.delete(DEMO_STORE_ANNEX_ID)
+
+  try {
+    localStorage.setItem(DEMO_DATA_PURGED_KEY, '1')
+  } catch {
+    // Ignore — la purge a déjà été appliquée en base.
+  }
 }
 
 async function ensureKitchenIngredientStocksForAllStores(): Promise<void> {
@@ -695,10 +807,7 @@ async function ensureKitchenIngredientStocksForAllStores(): Promise<void> {
         id,
         storeId: store.id,
         ingredientId: ingredient.id,
-        stock:
-          store.id === DEFAULT_STORE_ID
-            ? (KITCHEN_DEMO_STOCK_BY_INGREDIENT[ingredient.id] ?? 0)
-            : 0,
+        stock: 0,
       })
     }
   }
@@ -709,193 +818,16 @@ async function ensureKitchenIngredientStocksForAllStores(): Promise<void> {
 }
 
 async function ensureKitchenStockSeed(): Promise<void> {
+  // Plus de catalogue cuisine démo automatique.
   if ((await db.kitchenIngredients.count()) > 0) {
     await ensureKitchenIngredientStocksForAllStores()
-    return
   }
-
-  const ingredients: KitchenIngredient[] = [
-    {
-      id: 'ing-poulet',
-      name: 'Poulet',
-      unit: 'kg',
-      lowStockThreshold: 5,
-      archived: false,
-    },
-    {
-      id: 'ing-poisson',
-      name: 'Poisson',
-      unit: 'kg',
-      lowStockThreshold: 4,
-      archived: false,
-    },
-    {
-      id: 'ing-huile',
-      name: 'Huile',
-      unit: 'l',
-      lowStockThreshold: 2,
-      archived: false,
-    },
-    {
-      id: 'ing-oignon',
-      name: 'Oignons',
-      unit: 'kg',
-      lowStockThreshold: 3,
-      archived: false,
-    },
-    {
-      id: 'ing-attieke',
-      name: 'Attiéké',
-      unit: 'kg',
-      lowStockThreshold: 8,
-      archived: false,
-    },
-    {
-      id: 'ing-riz',
-      name: 'Riz',
-      unit: 'kg',
-      lowStockThreshold: 10,
-      archived: false,
-    },
-  ]
-
-  const stocks: KitchenIngredientStock[] = ingredients.map((ingredient) => ({
-    id: kitchenIngredientStockRowId(DEFAULT_STORE_ID, ingredient.id),
-    storeId: DEFAULT_STORE_ID,
-    ingredientId: ingredient.id,
-    stock: KITCHEN_DEMO_STOCK_BY_INGREDIENT[ingredient.id] ?? 0,
-  }))
-
-  const recipes: ProductRecipeIngredient[] = [
-    { id: 'recipe-p1-poulet', productId: 'p1', ingredientId: 'ing-poulet', qtyPerUnit: 0.2 },
-    { id: 'recipe-p1-huile', productId: 'p1', ingredientId: 'ing-huile', qtyPerUnit: 0.05 },
-    { id: 'recipe-p1-oignon', productId: 'p1', ingredientId: 'ing-oignon', qtyPerUnit: 0.1 },
-    { id: 'recipe-p1-riz', productId: 'p1', ingredientId: 'ing-riz', qtyPerUnit: 0.15 },
-    { id: 'recipe-p2-poisson', productId: 'p2', ingredientId: 'ing-poisson', qtyPerUnit: 0.25 },
-    { id: 'recipe-p2-attieke', productId: 'p2', ingredientId: 'ing-attieke', qtyPerUnit: 0.3 },
-    { id: 'recipe-p3-poisson', productId: 'p3', ingredientId: 'ing-poisson', qtyPerUnit: 0.18 },
-    { id: 'recipe-p3-attieke', productId: 'p3', ingredientId: 'ing-attieke', qtyPerUnit: 0.25 },
-  ]
-
-  await db.kitchenIngredients.bulkAdd(ingredients)
-  await db.kitchenIngredientStocks.bulkAdd(stocks)
-  await db.productRecipeIngredients.bulkAdd(recipes)
-  await ensureKitchenIngredientStocksForAllStores()
 }
 
-/** Charge ingrédients, stocks et recettes de démo (si la liste est vide). */
+/** Ancienne entrée « charger démo cuisine » — ne crée plus de données test. */
 export async function loadKitchenStockDemo(): Promise<boolean> {
-  const ingredientCountBefore = await db.kitchenIngredients.count()
-  const stockCountBefore = await db.kitchenIngredientStocks.count()
   await ensureKitchenStockSeed()
-  const ingredientCountAfter = await db.kitchenIngredients.count()
-  const stockCountAfter = await db.kitchenIngredientStocks.count()
-  return (
-    ingredientCountAfter > ingredientCountBefore ||
-    stockCountAfter > stockCountBefore
-  )
-}
-
-async function ensureTimePunchSeed(): Promise<void> {
-  if ((await db.timePunches.count()) > 0) return
-
-  const now = Date.now()
-  const dayMs = 24 * 60 * 60 * 1000
-
-  const atDayTime = (
-    dayOffset: number,
-    hour: number,
-    minute: number,
-  ): number => {
-    const d = new Date(now + dayOffset * dayMs)
-    d.setHours(hour, minute, 0, 0)
-    return d.getTime()
-  }
-
-  const mk = (
-    profileId: string,
-    profileDisplayName: string,
-    kind: TimePunch['kind'],
-    dayOffset: number,
-    hour: number,
-    minute: number,
-    note?: string,
-  ): TimePunch => ({
-    id: crypto.randomUUID(),
-    createdAt: atDayTime(dayOffset, hour, minute),
-    profileId,
-    profileDisplayName,
-    storeId: DEFAULT_STORE_ID,
-    storeName: 'Magasin principal',
-    kind,
-    note,
-    source: 'self',
-  })
-
-  const rows: TimePunch[] = [
-    mk('profile-caissier', 'Awa Konaté', 'in', 0, 7, 55),
-    mk('profile-caissier', 'Awa Konaté', 'in', -1, 8, 5),
-    mk('profile-caissier', 'Awa Konaté', 'out', -1, 17, 30),
-    mk('profile-caissier', 'Awa Konaté', 'in', -2, 8, 20, 'Retard transport'),
-    mk('profile-caissier', 'Awa Konaté', 'out', -2, 16, 45),
-    mk('profile-gerant', 'Koffi N’Guessan', 'in', 0, 8, 2),
-    mk('profile-gerant', 'Koffi N’Guessan', 'in', -1, 7, 45),
-    mk('profile-gerant', 'Koffi N’Guessan', 'out', -1, 18, 0),
-    mk('profile-admin', 'Kouadio Yao', 'in', -1, 9, 0),
-    mk('profile-admin', 'Kouadio Yao', 'out', -1, 19, 15),
-  ]
-
-  await db.timePunches.bulkAdd(rows)
-}
-
-async function ensureDiningTablesSeed(): Promise<void> {
-  if ((await db.diningTables.count()) > 0) return
-  const stores = await db.stores.toArray()
-  const rows: DiningTable[] = []
-  for (const store of stores) {
-    for (let i = 1; i <= 8; i += 1) {
-      rows.push({
-        id: crypto.randomUUID(),
-        storeId: store.id,
-        name: `Table ${i}`,
-        capacity: i <= 4 ? 2 : 4,
-        area: i <= 4 ? 'Salle' : 'Terrasse',
-        status: 'free',
-        sortOrder: i - 1,
-      })
-    }
-  }
-  if (rows.length > 0) {
-    await db.diningTables.bulkAdd(rows)
-  }
-}
-
-async function ensurePromotionsSeed(): Promise<void> {
-  if ((await db.promotions.count()) > 0) return
-  const now = Date.now()
-  const rows: Promotion[] = [
-    {
-      id: crypto.randomUUID(),
-      code: 'PROMO5',
-      label: 'Remise bienvenue 5%',
-      discountPct: 5,
-      active: true,
-      usageCount: 0,
-      createdAt: now,
-      updatedAt: now,
-    },
-    {
-      id: crypto.randomUUID(),
-      code: 'PROMO10',
-      label: 'Offre fidélité 10%',
-      discountPct: 10,
-      active: true,
-      usageCount: 0,
-      createdAt: now,
-      updatedAt: now,
-    },
-  ]
-  await db.promotions.bulkAdd(rows)
+  return false
 }
 
 async function ensureStockLocationsSeed(): Promise<void> {
@@ -979,42 +911,12 @@ export async function ensureAllLocationStockRows(): Promise<void> {
 
 export async function ensureSeed(): Promise<void> {
   await ensureStores()
-  // Ne pas réinjecter le catalogue démo à chaque démarrage : sinon les
-  // suppressions (et modifications) d’articles seed reviendraient au reload.
-  if ((await db.products.count()) === 0) {
-    await db.products.bulkPut(SEED_PRODUCTS)
-  }
+  await purgeLegacyDemoData()
 
-  const existingMainStocks = new Set(
-    (
-      await db.storeStocks.where('storeId').equals(DEFAULT_STORE_ID).toArray()
-    ).map((row) => row.productId),
-  )
-  const mainStocks: StoreStock[] = Object.entries(SEED_INITIAL_STOCK_MAIN)
-    .filter(([productId]) => !existingMainStocks.has(productId))
-    .map(([productId, stock]) => ({
-      id: storeStockRowId(DEFAULT_STORE_ID, productId),
-      storeId: DEFAULT_STORE_ID,
-      productId,
-      stock,
-    }))
-  if (mainStocks.length > 0) {
-    // Uniquement pour des produits encore présents (évite des stocks orphelins).
-    const productIds = new Set((await db.products.toArray()).map((p) => p.id))
-    const stocksForExisting = mainStocks.filter((s) =>
-      productIds.has(s.productId),
-    )
-    if (stocksForExisting.length > 0) {
-      await db.storeStocks.bulkPut(stocksForExisting)
-    }
-  }
-
+  // Structure uniquement — aucun catalogue / stock / promo / cuisine démo.
   await ensureAllStoreStockRows()
   await ensureStockLocationsSeed()
   await ensureAllLocationStockRows()
   await syncProductCategoriesFromProducts()
-  await ensureDiningTablesSeed()
-  await ensurePromotionsSeed()
   await ensureKitchenStockSeed()
-  await ensureTimePunchSeed()
 }

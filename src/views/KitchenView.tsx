@@ -1,7 +1,7 @@
 import { useLiveQuery } from 'dexie-react-hooks'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { getAppSettings } from '../lib/appSettings'
-import { db, loadKitchenStockDemo } from '../db/db'
+import { db } from '../db/db'
 import type { KitchenPriority, KitchenStatus, OnlineOrder } from '../db/types'
 import { formatFCFA } from '../lib/money'
 import {
@@ -109,7 +109,6 @@ export function KitchenView({ activeStoreId, canManageKitchenActions = true }: P
   const [kdsHardwareOn, setKdsHardwareOn] = useState(
     () => getDeviceConnectivityDemo().kitchenScreens,
   )
-  const [kitchenDemoBusy, setKitchenDemoBusy] = useState(false)
   const kitchenOn = isKitchenModuleDemoOn()
   const stationDefault = getKitchenStationDemo()
   const orders =
@@ -334,23 +333,6 @@ export function KitchenView({ activeStoreId, canManageKitchenActions = true }: P
     [lowKitchenIngredients],
   )
 
-  const loadKitchenDemo = useCallback(async () => {
-    if (!canManageKitchenActions) return
-    setKitchenDemoBusy(true)
-    try {
-      const changed = await loadKitchenStockDemo()
-      if (changed) {
-        toast.success('Stock cuisine chargé', 'Ingrédients et recettes de démo prêts.')
-      } else {
-        toast.info('Stock cuisine', 'Les données existent déjà.')
-      }
-    } catch {
-      toast.error('Échec', 'Impossible de charger les exemples cuisine.')
-    } finally {
-      setKitchenDemoBusy(false)
-    }
-  }, [canManageKitchenActions, toast])
-
   const patchKitchen = useCallback(
     async (order: OnlineOrder, status: KitchenStatus) => {
       await db.onlineOrders.update(order.id, {
@@ -564,8 +546,6 @@ export function KitchenView({ activeStoreId, canManageKitchenActions = true }: P
         rows={kitchenIngredientRows}
         projectedUsage={kitchenOn ? projectedIngredientUsage : undefined}
         canAdjust={canManageKitchenActions}
-        onLoadDemo={canManageKitchenActions ? loadKitchenDemo : undefined}
-        loadDemoBusy={kitchenDemoBusy}
       />
       {kitchenOn && !kdsHardwareOn ? (
         <Card>
