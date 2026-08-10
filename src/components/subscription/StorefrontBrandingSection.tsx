@@ -410,7 +410,7 @@ export function StorefrontBrandingSection({
           </Field>
           <Field
             label="Bannière d’accueil"
-            hint="Image pleine largeur du bandeau boutique (JPEG/PNG/WebP, max 1,5 Mo)."
+            hint="Format large recommandé (ex. 1600×600). L’image s’affiche entière sur mobile et ordinateur — évitez de coller du texte important tout à gauche ou tout à droite."
           >
             <div className="space-y-2">
               {bannerUrl ? (

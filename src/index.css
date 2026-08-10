@@ -561,7 +561,7 @@ body {
       );
   }
 
-  /* Bannière photo : image pleine largeur, texte en dessous (lisible sur mobile). */
+  /* Bannière photo : image entière visible (pas de crop du texte graphique). */
   .storefront-hero--banner {
     display: flex;
     flex-direction: column;
@@ -571,30 +571,38 @@ body {
 
   .storefront-hero-media {
     position: relative;
+    display: flex;
     width: 100%;
-    height: min(42svh, 280px);
+    align-items: center;
+    justify-content: center;
     overflow: hidden;
-    background: #e7e5e4;
-  }
-
-  @media (min-width: 640px) {
-    .storefront-hero-media {
-      height: min(48svh, 420px);
-    }
-  }
-
-  @media (min-width: 1024px) {
-    .storefront-hero-media {
-      height: min(52svh, 520px);
-    }
+    background: #0a0a0a;
+    line-height: 0;
   }
 
   .storefront-hero-banner {
     display: block;
     width: 100%;
-    height: 100%;
-    object-fit: cover;
+    height: auto;
+    max-height: min(58svh, 360px);
+    object-fit: contain;
     object-position: center;
+  }
+
+  @media (min-width: 640px) {
+    .storefront-hero-banner {
+      max-height: min(52svh, 480px);
+    }
+  }
+
+  @media (min-width: 1024px) {
+    .storefront-hero-banner {
+      max-height: min(56svh, 560px);
+    }
+  }
+
+  .storefront-hero--banner .storefront-hero-content {
+    background: #fffaf3;
   }
 
   .storefront-hero-content {
