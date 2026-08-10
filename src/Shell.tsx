@@ -824,14 +824,6 @@ export function Shell({ staff, online, onLogout }: Props) {
         },
       })
     }
-    if (c === 'PROMO10') {
-      apply(10)
-      return
-    }
-    if (c === 'PROMO5') {
-      apply(5)
-      return
-    }
     const now = Date.now()
     const promo = promotions.find((p) => p.code.toUpperCase() === c)
     if (!promo) {

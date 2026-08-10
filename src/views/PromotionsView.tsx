@@ -63,8 +63,8 @@ export function PromotionsView({ activeStoreId, canManagePromotions }: Props) {
       toast.error('Code invalide', 'Utilisez 3-24 caractères: A-Z, 0-9, _, -')
       return
     }
-    if (!Number.isFinite(pct) || pct <= 0 || pct > 100) {
-      toast.error('Remise invalide', 'La remise doit être entre 1 et 100%.')
+    if (!Number.isFinite(pct) || pct <= 0 || pct > 80) {
+      toast.error('Remise invalide', 'La remise doit être entre 1 et 80%.')
       return
     }
     if (max != null && (!Number.isFinite(max) || max <= 0)) {
@@ -143,7 +143,7 @@ export function PromotionsView({ activeStoreId, canManagePromotions }: Props) {
                   placeholder="Offre weekend"
                 />
               </Field>
-              <Field label="Remise (%)" required>
+              <Field label="Remise (%)" required hint="1–80">
                 <Input
                   inputMode="numeric"
                   value={discountPct}
