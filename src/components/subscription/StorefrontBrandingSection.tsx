@@ -93,6 +93,7 @@ export function StorefrontBrandingSection({
       try {
         const data = await fetchStorefrontBranding()
         if (cancelled) return
+        if (!data) return
         setShopName(data.branding.shopName ?? '')
         setPrimaryColor(data.branding.primaryColor ?? '#B8922E')
         setWelcomeMessage(data.branding.welcomeMessage ?? '')

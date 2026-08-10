@@ -14,6 +14,7 @@ export type CloudPullResult = {
   salesImported: number
   stockMerged: number
   mergeConflicts: number
+  categoriesMerged: number
   error?: string
 }
 
@@ -46,6 +47,11 @@ type PullResponse = {
     updatedAt: number
   }>
   integrations: Record<string, unknown>
+  catalogCategories?: Array<{
+    id: string
+    name: string
+    sortOrder: number
+  }>
 }
 
 export async function pullCloudData(): Promise<CloudPullResult> {
@@ -74,6 +80,13 @@ export async function pullCloudData(): Promise<CloudPullResult> {
     const { ensureSeed, maybeApplyPendingLocalDataWipe } = await import('../db/db')
     const wiped = await maybeApplyPendingLocalDataWipe()
     if (wiped) await ensureSeed()
+    // Après wipe éventuel : restaurer / fusionner les catégories cloud.
+    const { mergeCatalogCategoriesFromCloud } = await import(
+      './catalogCategoriesCloud'
+    )
+    const categoriesMerged = await mergeCatalogCategoriesFromCloud(
+      data.catalogCategories,
+    )
     return {
       ok: true,
       staffCount,
@@ -81,6 +94,7 @@ export async function pullCloudData(): Promise<CloudPullResult> {
       salesImported: merge.salesImported,
       stockMerged: merge.stockMerged,
       mergeConflicts: merge.conflicts,
+      categoriesMerged,
     }
   } catch (err) {
     return emptyResult(err instanceof Error ? err.message : 'Pull cloud échoué')
@@ -95,6 +109,7 @@ function emptyResult(error: string): CloudPullResult {
     salesImported: 0,
     stockMerged: 0,
     mergeConflicts: 0,
+    categoriesMerged: 0,
     error,
   }
 }
@@ -111,4 +126,16 @@ async function applyIntegrationsFromCloud(config: Record<string, unknown>): Prom
   if (Object.keys(config).length === 0) return
   const { applyIntegrationConfigFromCloud } = await import('./integrationsConfig')
   applyIntegrationConfigFromCloud(config)
+  if (Array.isArray(config.catalogCategories)) {
+    const { mergeCatalogCategoriesFromCloud } = await import(
+      './catalogCategoriesCloud'
+    )
+    await mergeCatalogCategoriesFromCloud(
+      config.catalogCategories as Array<{
+        id: string
+        name: string
+        sortOrder: number
+      }>,
+    )
+  }
 }

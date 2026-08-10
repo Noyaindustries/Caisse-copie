@@ -98,6 +98,7 @@ const withPWACfg = withPWA({
   runtimeCaching: [
     {
       // Ne jamais servir l’API depuis le cache (auth, billing, sync).
+      // Pas de plugin JS inline : next-pwa/Workbox ne peut pas les sérialiser au build.
       urlPattern: ({ url }) => url.pathname.startsWith('/api/'),
       handler: 'NetworkOnly',
     },

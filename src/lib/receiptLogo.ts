@@ -48,6 +48,7 @@ export async function resolveReceiptLogoUrl(): Promise<string | null> {
 
   try {
     const data = await fetchStorefrontBranding()
+    if (!data) return null
     const logo = data.branding.logoUrl?.trim() || null
     setCachedReceiptLogoUrl(logo)
     return logo

@@ -61,6 +61,7 @@ export async function resolveOrgWorkspaceBranding(): Promise<OrgWorkspaceBrandin
   }
   try {
     const data = await fetchStorefrontBranding()
+    if (!data) return getCachedOrgWorkspaceBranding()
     const logoUrl = data.branding.logoUrl?.trim() || null
     const displayName = storefrontDisplayName(
       data.branding,

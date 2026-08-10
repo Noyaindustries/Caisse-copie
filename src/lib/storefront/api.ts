@@ -47,11 +47,16 @@ export async function fetchStorefrontBranding(): Promise<{
   publishedAt: string | null
   storefrontUrl: string
   storeCode: string
-}> {
-  const res = await fetch(apiUrl('/billing/storefront/branding'), {
-    headers: buildOrgAuthHeaders(),
-  })
-  return parseJson(res)
+} | null> {
+  try {
+    const res = await fetch(apiUrl('/billing/storefront/branding'), {
+      headers: buildOrgAuthHeaders(),
+    })
+    if (!res.ok) return null
+    return parseJson(res)
+  } catch {
+    return null
+  }
 }
 
 export async function patchStorefrontBranding(

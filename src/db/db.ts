@@ -635,6 +635,9 @@ export async function addProductCategoryLabel(raw: string): Promise<string> {
     name,
     sortOrder: maxOrder + 1,
   })
+  void import('../lib/catalogCategoriesCloud')
+    .then((m) => m.pushCatalogCategoriesToCloud())
+    .catch(() => undefined)
   return name
 }
 
@@ -986,4 +989,7 @@ export async function ensureSeed(): Promise<void> {
   await ensureAllLocationStockRows()
   await syncProductCategoriesFromProducts()
   await ensureKitchenStockSeed()
+  void import('../lib/catalogCategoriesCloud')
+    .then((m) => m.pullCatalogCategoriesFromCloud())
+    .catch(() => undefined)
 }

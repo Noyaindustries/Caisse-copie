@@ -165,6 +165,43 @@ orgRouter.post('/org/reset-data', async (req, res) => {
   }
 })
 
+orgRouter.get('/org/catalog-categories', async (req, res) => {
+  try {
+    const org = await requireOrg(req, res)
+    if (!org) return
+    const { getOrgCatalogCategories } = await import('../lib/catalogCategories.js')
+    res.json({ categories: await getOrgCatalogCategories(org.id) })
+  } catch (err) {
+    console.error('[org/catalog-categories-get]', err)
+    res.status(500).json({ error: 'Impossible de charger les catégories.' })
+  }
+})
+
+orgRouter.put('/org/catalog-categories', async (req, res) => {
+  try {
+    const org = await requireOrg(req, res)
+    if (!org) return
+    const {
+      catalogCategorySchema,
+      saveOrgCatalogCategories,
+    } = await import('../lib/catalogCategories.js')
+    const body = z
+      .object({
+        categories: z.array(catalogCategorySchema).max(200),
+      })
+      .parse(req.body ?? {})
+    const categories = await saveOrgCatalogCategories(org.id, body.categories)
+    res.json({ ok: true, categories })
+  } catch (err) {
+    if (err instanceof z.ZodError) {
+      res.status(400).json({ error: 'Liste de catégories invalide.' })
+      return
+    }
+    console.error('[org/catalog-categories-put]', err)
+    res.status(500).json({ error: 'Enregistrement des catégories impossible.' })
+  }
+})
+
 orgRouter.get('/org/integrations', async (req, res) => {
   const org = await requireOrg(req, res)
   if (!org) return
@@ -206,6 +243,17 @@ orgRouter.put('/org/integrations', async (req, res) => {
     const wipeAt = Math.max(prevWipe, nextWipe)
     if (wipeAt > 0) merged.forceClientWipeAt = wipeAt
     else delete merged.forceClientWipeAt
+
+    // Préserver le catalogue catégories si le client n’envoie pas ce champ.
+    if (
+      !('catalogCategories' in incoming) &&
+      Array.isArray(prev.catalogCategories)
+    ) {
+      merged.catalogCategories = prev.catalogCategories
+      if (typeof prev.catalogCategoriesUpdatedAt === 'number') {
+        merged.catalogCategoriesUpdatedAt = prev.catalogCategoriesUpdatedAt
+      }
+    }
 
     const config = merged as Prisma.InputJsonValue
 
