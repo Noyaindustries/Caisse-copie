@@ -6,8 +6,17 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const repoRoot = path.join(__dirname, '../..')
 const apiOrigin = process.env.API_PROXY_TARGET ?? 'http://localhost:4000'
 
+/**
+ * Sur Vercel avec Root Directory = monorepo (`.`), Next doit écrire `.next`
+ * à la racine — sinon la plateforme cherche `/vercel/path0/.next` et échoue.
+ * Activer via CAISSECI_NEXT_DIST_ROOT=1 (scripts/vercel-build.mjs).
+ * Si Root Directory = apps/web : ne pas définir cette variable.
+ */
+const distDir = process.env.CAISSECI_NEXT_DIST_ROOT === '1' ? '../../.next' : '.next'
+
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  distDir,
   outputFileTracingRoot: repoRoot,
   allowedDevOrigins: ['127.0.0.1', 'localhost', '192.168.1.68'],
   // next-pwa injecte une config webpack → explicite pour Next 16
