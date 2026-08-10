@@ -26,6 +26,8 @@ import {
   IconArrowRight,
   IconCheck,
   IconCheckCircle,
+  IconEye,
+  IconEyeOff,
   IconKey,
   IconShield,
   IconSparkles,
@@ -35,6 +37,51 @@ import {
 } from '../ui/icons'
 
 type Mode = 'create' | 'login' | 'attach'
+
+function PasswordInput({
+  id,
+  value,
+  onChange,
+  placeholder = '••••••••',
+  autoComplete,
+  required,
+  minLength,
+}: {
+  id: string
+  value: string
+  onChange: (value: string) => void
+  placeholder?: string
+  autoComplete?: string
+  required?: boolean
+  minLength?: number
+}) {
+  const [visible, setVisible] = useState(false)
+  return (
+    <div className="flex items-center gap-2">
+      <Input
+        id={id}
+        type={visible ? 'text' : 'password'}
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        placeholder={placeholder}
+        required={required}
+        autoComplete={autoComplete}
+        minLength={minLength}
+        className="flex-1"
+      />
+      <Button
+        type="button"
+        size="sm"
+        variant="ghost"
+        aria-label={visible ? 'Masquer le mot de passe' : 'Afficher le mot de passe'}
+        aria-pressed={visible}
+        onClick={() => setVisible((v) => !v)}
+      >
+        {visible ? <IconEyeOff /> : <IconEye />}
+      </Button>
+    </div>
+  )
+}
 
 const PLAN_ACCENT: Record<
   PlanId,
@@ -479,15 +526,15 @@ export function OrganizationSetup({
   const displayPlans = plans.length > 0 ? plans : DEFAULT_PLANS
 
   return (
-    <div className="flex min-h-svh overflow-x-hidden bg-surface-muted">
-      {/* Panneau marque — desktop */}
-      <div className="hidden w-[42%] max-w-xl shrink-0 lg:block">
+    <div className="flex h-svh max-h-svh overflow-hidden bg-surface-muted">
+      {/* Panneau marque — desktop (fixe, hors scroll) */}
+      <div className="hidden h-full w-[42%] max-w-xl shrink-0 lg:block">
         <BrandPanel trialDays={trialDays} />
       </div>
 
-      {/* Formulaire — colonne scrollable (évite le piège justify-center) */}
-      <div className="flex min-h-svh flex-1 flex-col overflow-y-auto overscroll-y-contain">
-        <div className="mx-auto flex w-full max-w-2xl flex-1 flex-col justify-center px-4 py-8 sm:px-8 lg:px-12">
+      {/* Formulaire — seule colonne scrollable */}
+      <div className="flex min-h-0 flex-1 flex-col overflow-y-auto overscroll-y-contain">
+        <div className="mx-auto my-auto w-full max-w-2xl px-4 py-8 sm:px-8 lg:px-12">
         <button
           type="button"
           onClick={() => onNavigate(ROUTES.home)}
@@ -602,26 +649,22 @@ export function OrganizationSetup({
                       />
                     </Field>
                     <Field label="Mot de passe" hint="8 caractères minimum">
-                      <Input
+                      <PasswordInput
                         id="org-password"
-                        type="password"
                         value={password}
-                        onChange={(e) => setPassword(e.target.value)}
-                        placeholder="••••••••"
-                        required
+                        onChange={setPassword}
                         autoComplete="new-password"
+                        required
                         minLength={8}
                       />
                     </Field>
                     <Field label="Confirmer le mot de passe">
-                      <Input
+                      <PasswordInput
                         id="org-password-confirm"
-                        type="password"
                         value={confirmPassword}
-                        onChange={(e) => setConfirmPassword(e.target.value)}
-                        placeholder="••••••••"
-                        required
+                        onChange={setConfirmPassword}
                         autoComplete="new-password"
+                        required
                         minLength={8}
                       />
                     </Field>
@@ -651,14 +694,12 @@ export function OrganizationSetup({
                       />
                     </Field>
                     <Field label="Mot de passe">
-                      <Input
+                      <PasswordInput
                         id="login-password"
-                        type="password"
                         value={password}
-                        onChange={(e) => setPassword(e.target.value)}
-                        placeholder="••••••••"
-                        required
+                        onChange={setPassword}
                         autoComplete="current-password"
+                        required
                       />
                     </Field>
                   </div>
@@ -702,14 +743,12 @@ export function OrganizationSetup({
                     />
                   </Field>
                   <Field label="Mot de passe du gérant">
-                    <Input
+                    <PasswordInput
                       id="attach-password"
-                      type="password"
                       value={password}
-                      onChange={(e) => setPassword(e.target.value)}
-                      placeholder="••••••••"
-                      required
+                      onChange={setPassword}
                       autoComplete="current-password"
+                      required
                     />
                   </Field>
                   <p className="text-center text-xs text-ink-subtle">

@@ -117,7 +117,7 @@ export function LoginScreen({ onSuccess }: Props) {
   }
 
   return (
-    <div className="grid min-h-svh max-w-[100vw] grid-cols-1 overflow-x-clip lg:grid-cols-2">
+    <div className="grid h-svh max-h-svh max-w-[100vw] grid-cols-1 overflow-hidden lg:grid-cols-2">
       <div className="relative hidden overflow-hidden bg-zinc-900 lg:block">
         <div className="absolute inset-0 opacity-[0.06]">
           <div className="absolute -left-1/4 top-1/4 h-[600px] w-[600px] rounded-full bg-emerald-400 blur-3xl" />
@@ -148,9 +148,9 @@ export function LoginScreen({ onSuccess }: Props) {
         </div>
       </div>
 
-      <div className="min-h-svh overflow-y-auto overscroll-y-contain bg-zinc-50">
-      <div className="flex min-h-svh items-center justify-center p-6">
-        <div className="w-full max-w-md">
+      <div className="flex min-h-0 flex-col overflow-y-auto overscroll-y-contain bg-zinc-50">
+      <div className="mx-auto my-auto w-full max-w-md p-6">
+        <div className="w-full">
           <div className="mb-6">
             <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-3 py-1 text-[11px] font-semibold text-emerald-700">
               <IconShield className="h-3 w-3" />
