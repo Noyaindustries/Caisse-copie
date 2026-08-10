@@ -36,7 +36,7 @@ import {
   markStorefrontOrderPaid,
   markStorefrontOrderPaymentRefused,
 } from '../lib/storefrontWave.js'
-import { SUBSCRIPTION_PLANS, type PlanId } from '../lib/subscriptionPlans.js'
+import { resolvePlan, type PlanId } from '../lib/subscriptionPlans.js'
 import { publicAppUrl } from '../lib/stripe.js'
 import {
   subscriptionCancelUrl,
@@ -131,7 +131,7 @@ async function resolveWaveCheckoutContext(
       typeof payment.notifyPayload === 'object' && payment.notifyPayload !== null
         ? (payment.notifyPayload as { waveLaunchUrl?: string })
         : {}
-    const plan = SUBSCRIPTION_PLANS[parsePlanId(payment.planId)]
+    const plan = resolvePlan(parsePlanId(payment.planId))
     return {
       amountFcfa: payment.amountFcfa,
       merchantLabel: `Wave — ${plan.name}`,
@@ -227,7 +227,7 @@ mobileMoneyRouter.post('/billing/mobile-money/checkout', async (req, res) => {
       return
     }
 
-    const plan = SUBSCRIPTION_PLANS[planId]
+    const plan = resolvePlan(planId)
     const transactionId = generateTransactionId()
     const baseUrl = publicAppUrl(req)
     const returnUrl = subscriptionSuccessUrl(baseUrl, transactionId)
@@ -738,7 +738,7 @@ mobileMoneyRouter.get('/billing/mobile-money/demo', async (req, res) => {
     return
   }
 
-  const plan = SUBSCRIPTION_PLANS[parsePlanId(payment.planId)]
+  const plan = resolvePlan(parsePlanId(payment.planId))
   const channel = channelById(payment.channel)
 
   res.type('html').send(`<!DOCTYPE html>

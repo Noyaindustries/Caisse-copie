@@ -3,7 +3,7 @@ import { Prisma } from '@prisma/client'
 import { z } from 'zod'
 import { prisma } from '../lib/prisma.js'
 import { requireActiveOrg, requireOrg } from '../lib/orgAuth.js'
-import { SUBSCRIPTION_PLANS, parsePlanId } from '../lib/subscriptionPlans.js'
+import { parsePlanId, resolvePlan } from '../lib/subscriptionPlans.js'
 import { logEvent } from '../lib/structuredLog.js'
 
 export const orgRouter = Router()
@@ -62,7 +62,7 @@ orgRouter.get('/org/backup', async (req, res) => {
       email: org.email,
       storeCode: org.storeCode,
       planId: parsePlanId(org.planId),
-      plan: SUBSCRIPTION_PLANS[parsePlanId(org.planId)],
+      plan: resolvePlan(parsePlanId(org.planId)),
       status: org.status,
       trialEndsAt: org.trialEndsAt?.toISOString() ?? null,
       currentPeriodEnd: org.currentPeriodEnd?.toISOString() ?? null,

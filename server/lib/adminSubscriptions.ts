@@ -237,6 +237,65 @@ export async function setOrganizationStatus(ref: OrgRef, statusRaw: string) {
   console.log(`Statut mis à jour : ${org.licenseKey} → ${status}`)
 }
 
+/**
+ * Met à jour l’abonnement en une fois (plan, statut, dates).
+ * Les champs absents ne sont pas modifiés ; `null` sur une date l’efface.
+ */
+export async function updateOrganizationSubscription(
+  ref: OrgRef,
+  input: {
+    planId?: string
+    status?: string
+    trialEndsAt?: string | null
+    currentPeriodEnd?: string | null
+  },
+): Promise<Organization> {
+  const org = await requireOrganizationByRef(ref)
+  const data: {
+    planId?: PlanId
+    status?: SubscriptionStatus
+    trialEndsAt?: Date | null
+    currentPeriodEnd?: Date | null
+    billingProvider?: string
+  } = {}
+
+  if (input.planId !== undefined) {
+    data.planId = parsePlanId(input.planId)
+  }
+  if (input.status !== undefined) {
+    data.status = parseStatus(input.status)
+  }
+  if (input.trialEndsAt !== undefined) {
+    data.trialEndsAt = parseOptionalDateInput(input.trialEndsAt)
+  }
+  if (input.currentPeriodEnd !== undefined) {
+    data.currentPeriodEnd = parseOptionalDateInput(input.currentPeriodEnd)
+  }
+  if (data.status === 'active' || data.status === 'trialing') {
+    data.billingProvider = org.billingProvider ?? 'admin'
+  }
+
+  if (Object.keys(data).length === 0) {
+    throw new Error('Aucun champ d’abonnement à mettre à jour.')
+  }
+
+  return prisma.organization.update({
+    where: { id: org.id },
+    data,
+  })
+}
+
+function parseOptionalDateInput(value: string | null): Date | null {
+  if (value === null || value.trim() === '') return null
+  const raw = value.trim()
+  const iso = raw.includes('T') ? raw : `${raw}T23:59:59.999`
+  const date = new Date(iso)
+  if (!Number.isFinite(date.getTime())) {
+    throw new Error(`Date invalide : ${value}`)
+  }
+  return date
+}
+
 export async function activateOrganizationSubscription(
   ref: OrgRef,
   planIdRaw: string,
@@ -306,6 +365,93 @@ export async function grantMobileMoneyActivation(ref: OrgRef, planIdRaw: string)
   const planId = parsePlanId(planIdRaw)
   await activateMobileMoneySubscription(org.id, planId, 'mobile_money')
   console.log(`Activation type mobile money : ${org.licenseKey} — ${planId}`)
+}
+
+export type DeleteOrganizationResult = {
+  id: string
+  name: string
+  email: string
+  licenseKey: string
+  deleted: {
+    storefrontOrders: number
+    staffMembers: number
+    sessions: number
+    auditLogs: number
+    mobilePayments: number
+    reminderLogs: number
+    syncBatches: number
+    syncItems: number
+    integrations: number
+  }
+}
+
+/**
+ * Supprime définitivement une organisation et toutes ses données liées.
+ * MongoDB n’applique pas toujours les cascades Prisma : suppression manuelle.
+ */
+export async function deleteOrganizationCompletely(
+  ref: OrgRef,
+): Promise<DeleteOrganizationResult> {
+  const org = await requireOrganizationByRef(ref)
+
+  const syncBatches = await prisma.syncBatch.findMany({
+    where: { organizationId: org.id },
+    select: { id: true },
+  })
+  const syncBatchIds = syncBatches.map((b) => b.id)
+
+  const syncItems =
+    syncBatchIds.length > 0
+      ? await prisma.syncItem.deleteMany({
+          where: { syncBatchId: { in: syncBatchIds } },
+        })
+      : { count: 0 }
+
+  const [
+    orders,
+    staff,
+    sessions,
+    audit,
+    payments,
+    reminders,
+    batches,
+    integrations,
+  ] = await prisma.$transaction([
+    prisma.storefrontOrder.deleteMany({ where: { organizationId: org.id } }),
+    prisma.staffMember.deleteMany({ where: { organizationId: org.id } }),
+    prisma.orgSession.deleteMany({ where: { organizationId: org.id } }),
+    prisma.auditLog.deleteMany({ where: { organizationId: org.id } }),
+    prisma.mobileMoneyPayment.deleteMany({ where: { organizationId: org.id } }),
+    prisma.subscriptionReminderLog.deleteMany({
+      where: { organizationId: org.id },
+    }),
+    prisma.syncBatch.deleteMany({ where: { organizationId: org.id } }),
+    prisma.orgIntegration.deleteMany({ where: { organizationId: org.id } }),
+  ])
+
+  await prisma.organization.delete({ where: { id: org.id } })
+
+  console.log(
+    `Organisation supprimée : ${org.licenseKey} — ${org.name} <${org.email}>`,
+  )
+
+  return {
+    id: org.id,
+    name: org.name,
+    email: org.email,
+    licenseKey: org.licenseKey,
+    deleted: {
+      storefrontOrders: orders.count,
+      staffMembers: staff.count,
+      sessions: sessions.count,
+      auditLogs: audit.count,
+      mobilePayments: payments.count,
+      reminderLogs: reminders.count,
+      syncBatches: batches.count,
+      syncItems: syncItems.count,
+      integrations: integrations.count,
+    },
+  }
 }
 
 export async function runAdminReminders(organizationId?: string) {

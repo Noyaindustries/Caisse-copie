@@ -8,8 +8,8 @@ import {
   listOrganizations,
   requireOrganizationByRef,
   serializeOrganizationForAdmin,
-  setOrganizationPlan,
-  setOrganizationStatus,
+  updateOrganizationSubscription,
+  deleteOrganizationCompletely,
 } from '../lib/adminSubscriptions.js'
 import {
   platformAdminConfigured,
@@ -37,8 +37,13 @@ import {
   uploadPlatformSiteLogo,
 } from '../lib/blobStorage.js'
 import { prisma } from '../lib/prisma.js'
-import { SUBSCRIPTION_PLANS, type PlanId, type SubscriptionStatus } from '../lib/subscriptionPlans.js'
+import { resolvePlansRecord, type PlanId, type SubscriptionStatus } from '../lib/subscriptionPlans.js'
 import { runSubscriptionReminders } from '../lib/subscriptionReminders.js'
+import {
+  getSubscriptionPlansAdminStatus,
+  refreshSubscriptionPlanSettings,
+  updateSubscriptionPlanPrices,
+} from '../lib/subscriptionPlanSettings.js'
 
 export const platformAdminRouter = Router()
 
@@ -110,7 +115,7 @@ platformAdminRouter.get('/platform-admin/stats', async (_req, res) => {
     byStatus,
     byPlan,
     recentSignups,
-    plans: SUBSCRIPTION_PLANS,
+    plans: resolvePlansRecord(),
   })
 })
 
@@ -153,9 +158,42 @@ platformAdminRouter.get('/platform-admin/organizations/:ref', async (req, res) =
   res.json({ organization: serializeOrganizationForAdmin(org) })
 })
 
+platformAdminRouter.delete(
+  '/platform-admin/organizations/:ref',
+  async (req: Request<{ ref: string }>, res: Response) => {
+    const ref = req.params.ref
+    const confirmName =
+      typeof req.body?.confirmName === 'string' ? req.body.confirmName.trim() : ''
+
+    try {
+      const org = await requireOrganizationByRef(ref)
+      if (!confirmName || confirmName.toLowerCase() !== org.name.trim().toLowerCase()) {
+        res.status(400).json({
+          error: `Confirmation invalide. Saisissez exactement le nom « ${org.name} ».`,
+        })
+        return
+      }
+      const result = await deleteOrganizationCompletely(org.licenseKey)
+      res.json({ ok: true, deleted: result })
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : 'Suppression impossible.'
+      res.status(400).json({ error: message })
+    }
+  },
+)
+
 type PatchBody = {
   planId?: string
   status?: string
+  trialEndsAt?: string | null
+  currentPeriodEnd?: string | null
+  subscription?: {
+    planId?: string
+    status?: string
+    trialEndsAt?: string | null
+    currentPeriodEnd?: string | null
+  }
   activate?: { planId: string; days?: number }
   extendTrialDays?: number
   extendPeriodDays?: number
@@ -170,11 +208,21 @@ platformAdminRouter.patch(
     try {
       await requireOrganizationByRef(ref)
 
-      if (req.body.planId) {
-        await setOrganizationPlan(ref, req.body.planId)
+      const subscriptionPatch = req.body.subscription ?? {
+        planId: req.body.planId,
+        status: req.body.status,
+        trialEndsAt: req.body.trialEndsAt,
+        currentPeriodEnd: req.body.currentPeriodEnd,
       }
-      if (req.body.status) {
-        await setOrganizationStatus(ref, req.body.status)
+
+      const hasSubscriptionField =
+        subscriptionPatch.planId !== undefined ||
+        subscriptionPatch.status !== undefined ||
+        subscriptionPatch.trialEndsAt !== undefined ||
+        subscriptionPatch.currentPeriodEnd !== undefined
+
+      if (hasSubscriptionField) {
+        await updateOrganizationSubscription(ref, subscriptionPatch)
       }
       if (req.body.activate?.planId) {
         await activateOrganizationSubscription(
@@ -310,4 +358,41 @@ platformAdminRouter.post('/platform-admin/site-branding/logo', async (req, res) 
     const status = message.includes('non configuré') ? 503 : 400
     res.status(status).json({ error: message })
   }
+})
+
+platformAdminRouter.get('/platform-admin/subscription-plans', async (_req, res) => {
+  try {
+    res.json(await getSubscriptionPlansAdminStatus())
+  } catch (error) {
+    const message =
+      error instanceof Error ? error.message : 'Impossible de charger les prix.'
+    res.status(500).json({ error: message })
+  }
+})
+
+platformAdminRouter.put('/platform-admin/subscription-plans', async (req, res) => {
+  try {
+    const body = (req.body ?? {}) as Record<string, unknown>
+    const readPrice = (raw: unknown): number | undefined => {
+      if (raw === undefined || raw === null || raw === '') return undefined
+      const n = typeof raw === 'number' ? raw : Number(String(raw).replace(/\s/g, ''))
+      if (!Number.isFinite(n)) return undefined
+      return n
+    }
+    const status = await updateSubscriptionPlanPrices({
+      starter: readPrice(body.starter ?? body.starterPriceFcfa),
+      pro: readPrice(body.pro ?? body.proPriceFcfa),
+      business: readPrice(body.business ?? body.businessPriceFcfa),
+    })
+    res.json(status)
+  } catch (error) {
+    const message =
+      error instanceof Error ? error.message : 'Enregistrement des prix impossible.'
+    res.status(400).json({ error: message })
+  }
+})
+
+// Assure les prix en cache après boot (routes admin).
+void refreshSubscriptionPlanSettings().catch(() => {
+  /* ignore — retry au prochain GET */
 })

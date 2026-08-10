@@ -118,6 +118,14 @@ export async function patchOrganization(
   body: {
     planId?: PlanId
     status?: SubscriptionStatus
+    trialEndsAt?: string | null
+    currentPeriodEnd?: string | null
+    subscription?: {
+      planId?: PlanId
+      status?: SubscriptionStatus
+      trialEndsAt?: string | null
+      currentPeriodEnd?: string | null
+    }
     activate?: { planId: PlanId; days?: number }
     extendTrialDays?: number
     extendPeriodDays?: number
@@ -134,6 +142,29 @@ export async function patchOrganization(
   )
   const data = await parseJson<{ organization: AdminOrganization }>(res)
   return data.organization
+}
+
+export async function deleteOrganization(
+  ref: string,
+  confirmName: string,
+): Promise<{
+  ok: true
+  deleted: {
+    id: string
+    name: string
+    email: string
+    licenseKey: string
+  }
+}> {
+  const res = await fetch(
+    apiUrl(`/platform-admin/organizations/${encodeURIComponent(ref)}`),
+    {
+      method: 'DELETE',
+      headers: adminHeaders(),
+      body: JSON.stringify({ confirmName }),
+    },
+  )
+  return parseJson(res)
 }
 
 export async function runPlatformReminders(organizationId?: string): Promise<{
@@ -233,6 +264,39 @@ export async function uploadSiteBrandingLogo(
     method: 'POST',
     headers: adminHeaders(),
     body: JSON.stringify({ dataUrl }),
+  })
+  return parseJson(res)
+}
+
+export type SubscriptionPlansAdminStatus = {
+  plans: Array<{
+    id: PlanId
+    name: string
+    description: string
+    priceFcfa: number
+  }>
+  prices: Record<PlanId, number>
+  defaults: Record<PlanId, number>
+  source: 'db' | 'defaults'
+  updatedAt: string | null
+}
+
+export async function fetchSubscriptionPlansAdmin(): Promise<SubscriptionPlansAdminStatus> {
+  const res = await fetch(apiUrl('/platform-admin/subscription-plans'), {
+    headers: adminHeaders(),
+  })
+  return parseJson(res)
+}
+
+export async function saveSubscriptionPlansAdmin(body: {
+  starter?: number
+  pro?: number
+  business?: number
+}): Promise<SubscriptionPlansAdminStatus> {
+  const res = await fetch(apiUrl('/platform-admin/subscription-plans'), {
+    method: 'PUT',
+    headers: adminHeaders(),
+    body: JSON.stringify(body),
   })
   return parseJson(res)
 }

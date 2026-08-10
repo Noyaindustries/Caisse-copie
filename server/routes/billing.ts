@@ -4,8 +4,9 @@ import type Stripe from 'stripe'
 import type { Organization } from '@prisma/client'
 import { prisma } from '../lib/prisma.js'
 import {
-  SUBSCRIPTION_PLANS,
   TRIAL_DAYS,
+  resolveAllPlans,
+  resolvePlan,
   type PlanId,
   type SubscriptionStatus,
   isSubscriptionUsable,
@@ -132,7 +133,7 @@ function orgPayload(org: {
     /** Clé d’URL boutique (nom d’entreprise) — préférer à storeCode côté client. */
     storefrontKey: storefrontPublicKey({ storeSlug, storeCode }),
     planId,
-    plan: SUBSCRIPTION_PLANS[planId],
+    plan: resolvePlan(planId),
     status,
     usable,
     trialEndsAt: org.trialEndsAt?.toISOString() ?? null,
@@ -177,9 +178,17 @@ async function requireBillingOrg(req: Request, res: Response) {
   return org
 }
 
-billingRouter.get('/billing/plans', (_req, res) => {
+billingRouter.get('/billing/plans', async (_req, res) => {
+  try {
+    const { refreshSubscriptionPlanSettings } = await import(
+      '../lib/subscriptionPlanSettings.js'
+    )
+    await refreshSubscriptionPlanSettings()
+  } catch {
+    /* conserve le cache mémoire */
+  }
   res.json({
-    plans: Object.values(SUBSCRIPTION_PLANS),
+    plans: resolveAllPlans(),
     trialDays: TRIAL_DAYS,
     stripeEnabled: stripeConfigured(),
     mobileMoneyEnabled: mobileMoneyEnabled(),
@@ -426,7 +435,7 @@ billingRouter.get('/billing/payments/history', async (req, res) => {
         id: p.id,
         transactionId: p.transactionId,
         planId: parsePlanId(p.planId),
-        planName: SUBSCRIPTION_PLANS[parsePlanId(p.planId)].name,
+        planName: resolvePlan(parsePlanId(p.planId)).name,
         channel: p.channel,
         channelLabel: channelLabel(p.channel),
         amountFcfa: p.amountFcfa,
@@ -473,7 +482,7 @@ billingRouter.post('/billing/checkout', async (req, res) => {
       })
     }
 
-    const plan = SUBSCRIPTION_PLANS[planId]
+    const plan = resolvePlan(planId)
     const baseUrl = publicAppUrl(req)
     const session = await stripe.checkout.sessions.create({
       mode: 'subscription',

@@ -66,6 +66,46 @@ export const SUBSCRIPTION_PLANS: Record<PlanId, PlanDefinition> = {
   },
 }
 
+/** Prix override (admin SaaS) — appliqués via setPlanPriceOverrides. */
+let planPriceOverrides: Partial<Record<PlanId, number>> = {}
+
+export function setPlanPriceOverrides(
+  overrides: Partial<Record<PlanId, number>>,
+): void {
+  const next: Partial<Record<PlanId, number>> = {}
+  for (const id of PLAN_ORDER) {
+    const value = overrides[id]
+    if (typeof value === 'number' && Number.isFinite(value) && value >= 0) {
+      next[id] = Math.round(value)
+    }
+  }
+  planPriceOverrides = next
+}
+
+export function getPlanPriceOverrides(): Partial<Record<PlanId, number>> {
+  return { ...planPriceOverrides }
+}
+
+/** Plan avec prix effectif (défaut ou override admin). */
+export function resolvePlan(planId: PlanId): PlanDefinition {
+  const base = SUBSCRIPTION_PLANS[planId]
+  const override = planPriceOverrides[planId]
+  if (override == null) return base
+  return { ...base, priceFcfa: override }
+}
+
+export function resolveAllPlans(): PlanDefinition[] {
+  return PLAN_ORDER.map((id) => resolvePlan(id))
+}
+
+export function resolvePlansRecord(): Record<PlanId, PlanDefinition> {
+  return {
+    starter: resolvePlan('starter'),
+    pro: resolvePlan('pro'),
+    business: resolvePlan('business'),
+  }
+}
+
 export const TRIAL_DAYS = 30
 export const OFFLINE_GRACE_HOURS = 168
 

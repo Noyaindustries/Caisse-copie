@@ -49,6 +49,19 @@ const server = app.listen(port, () => {
         err instanceof Error ? err.message : err,
       )
     })
+  void import('./lib/subscriptionPlanSettings.js')
+    .then(({ refreshSubscriptionPlanSettings }) => refreshSubscriptionPlanSettings())
+    .then((prices) => {
+      console.log(
+        `Prix abonnements : Starter ${prices.starter} · Pro ${prices.pro} · Business ${prices.business} FCFA`,
+      )
+    })
+    .catch((err) => {
+      console.warn(
+        '[subscription-plans] Init :',
+        err instanceof Error ? err.message : err,
+      )
+    })
 })
 
 server.on('error', (err: NodeJS.ErrnoException) => {

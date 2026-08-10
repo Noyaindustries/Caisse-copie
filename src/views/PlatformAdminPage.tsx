@@ -9,6 +9,7 @@ import {
   loginPlatformAdmin,
   logoutPlatformAdmin,
   patchOrganization,
+  deleteOrganization,
   runPlatformReminders,
   type AdminOrganization,
   type PlatformStats,
@@ -17,6 +18,7 @@ import { getPlatformAdminSecret } from '../lib/platformAdmin/session'
 import { adminThemeClasses, useAdminTheme, type AdminThemeClasses } from '../lib/platformAdmin/theme'
 import { PaymentProvidersAdminPanel } from '../components/platformAdmin/PaymentProvidersAdminPanel'
 import { SiteBrandingAdminPanel } from '../components/platformAdmin/SiteBrandingAdminPanel'
+import { SubscriptionPlansAdminPanel } from '../components/platformAdmin/SubscriptionPlansAdminPanel'
 import type { PlanId, SubscriptionStatus } from '../lib/subscription/types'
 import { Badge, type BadgeTone } from '../ui/Badge'
 import { Button } from '../ui/Button'
@@ -32,9 +34,10 @@ import {
   IconSync,
   IconShield,
   IconStore,
+  IconTrash,
 } from '../ui/icons'
 
-type AdminSection = 'organizations' | 'payments' | 'branding'
+type AdminSection = 'organizations' | 'payments' | 'branding' | 'plans'
 
 const STATUS_OPTIONS: SubscriptionStatus[] = [
   'trialing',
@@ -53,6 +56,31 @@ function formatDate(iso: string | null): string {
     month: 'short',
     year: 'numeric',
   })
+}
+
+function toDateInputValue(iso: string | null): string {
+  if (!iso) return ''
+  const d = new Date(iso)
+  if (!Number.isFinite(d.getTime())) return ''
+  const y = d.getFullYear()
+  const m = String(d.getMonth() + 1).padStart(2, '0')
+  const day = String(d.getDate()).padStart(2, '0')
+  return `${y}-${m}-${day}`
+}
+
+function planLabel(plan: PlanId): string {
+  switch (plan) {
+    case 'starter':
+      return 'Starter'
+    case 'pro':
+      return 'Pro'
+    case 'business':
+      return 'Business'
+    default: {
+      const _exhaustive: never = plan
+      return _exhaustive
+    }
+  }
 }
 
 function statusTone(status: SubscriptionStatus): BadgeTone {
@@ -93,14 +121,21 @@ function DetailPanel({
   actionBusy,
   editPlan,
   editStatus,
+  editTrialEndsAt,
+  editPeriodEnd,
   activateDays,
   extendDays,
+  deleteConfirmName,
   theme,
   onEditPlan,
   onEditStatus,
+  onEditTrialEndsAt,
+  onEditPeriodEnd,
   onActivateDays,
   onExtendDays,
+  onDeleteConfirmName,
   onRunAction,
+  onDeleteOrganization,
   onSmsReminder,
 }: {
   selected: AdminOrganization | null
@@ -108,14 +143,21 @@ function DetailPanel({
   actionBusy: boolean
   editPlan: PlanId
   editStatus: SubscriptionStatus
+  editTrialEndsAt: string
+  editPeriodEnd: string
   activateDays: string
   extendDays: string
+  deleteConfirmName: string
   theme: AdminThemeClasses
   onEditPlan: (plan: PlanId) => void
   onEditStatus: (status: SubscriptionStatus) => void
+  onEditTrialEndsAt: (value: string) => void
+  onEditPeriodEnd: (value: string) => void
   onActivateDays: (value: string) => void
   onExtendDays: (value: string) => void
+  onDeleteConfirmName: (value: string) => void
   onRunAction: (fn: () => Promise<AdminOrganization>) => void
+  onDeleteOrganization: () => void
   onSmsReminder: () => void
 }) {
   const inputClass = theme.input
@@ -145,6 +187,8 @@ function DetailPanel({
           <dd>{formatDate(selected.currentPeriodEnd)}</dd>
           <dt className={theme.subtle}>Paiement</dt>
           <dd>{selected.billingProvider ?? '—'}</dd>
+          <dt className={theme.subtle}>Accès</dt>
+          <dd>{selected.usable ? 'Oui' : 'Non'}</dd>
         </dl>
       </div>
 
@@ -161,39 +205,31 @@ function DetailPanel({
         </p>
       ) : null}
 
-      <fieldset className="space-y-2">
+      <fieldset className="space-y-3">
         <legend className={cn('text-xs font-semibold uppercase tracking-wide', theme.subtle)}>
-          Abonnement
+          Modifier l’abonnement
         </legend>
-        <div className="flex gap-2">
+        <label className="block space-y-1">
+          <span className={cn('text-[11px] font-medium', theme.subtle)}>Plan</span>
           <select
             value={editPlan}
             onChange={(e) => onEditPlan(e.target.value as PlanId)}
-            className={cn(inputClass, 'flex-1 py-1.5')}
+            className={cn(inputClass, 'w-full py-1.5')}
             aria-label="Plan"
           >
             {PLAN_OPTIONS.map((p) => (
               <option key={p} value={p}>
-                {p}
+                {planLabel(p)}
               </option>
             ))}
           </select>
-          <Button
-            type="button"
-            size="sm"
-            disabled={actionBusy}
-            onClick={() =>
-              onRunAction(() => patchOrganization(selected.licenseKey, { planId: editPlan }))
-            }
-          >
-            Plan
-          </Button>
-        </div>
-        <div className="flex gap-2">
+        </label>
+        <label className="block space-y-1">
+          <span className={cn('text-[11px] font-medium', theme.subtle)}>Statut</span>
           <select
             value={editStatus}
             onChange={(e) => onEditStatus(e.target.value as SubscriptionStatus)}
-            className={cn(inputClass, 'flex-1 py-1.5')}
+            className={cn(inputClass, 'w-full py-1.5')}
             aria-label="Statut"
           >
             {STATUS_OPTIONS.map((s) => (
@@ -202,24 +238,53 @@ function DetailPanel({
               </option>
             ))}
           </select>
-          <Button
-            type="button"
-            size="sm"
-            disabled={actionBusy}
-            onClick={() =>
-              onRunAction(() =>
-                patchOrganization(selected.licenseKey, { status: editStatus }),
-              )
-            }
-          >
-            Statut
-          </Button>
-        </div>
+        </label>
+        <label className="block space-y-1">
+          <span className={cn('text-[11px] font-medium', theme.subtle)}>Fin d’essai</span>
+          <input
+            type="date"
+            value={editTrialEndsAt}
+            onChange={(e) => onEditTrialEndsAt(e.target.value)}
+            className={cn(inputClass, 'w-full py-1.5')}
+            aria-label="Fin d’essai"
+          />
+        </label>
+        <label className="block space-y-1">
+          <span className={cn('text-[11px] font-medium', theme.subtle)}>Fin de période</span>
+          <input
+            type="date"
+            value={editPeriodEnd}
+            onChange={(e) => onEditPeriodEnd(e.target.value)}
+            className={cn(inputClass, 'w-full py-1.5')}
+            aria-label="Fin de période"
+          />
+        </label>
+        <Button
+          type="button"
+          size="sm"
+          variant="accent"
+          className="w-full"
+          disabled={actionBusy}
+          onClick={() =>
+            onRunAction(() =>
+              patchOrganization(selected.licenseKey, {
+                subscription: {
+                  planId: editPlan,
+                  status: editStatus,
+                  trialEndsAt: editTrialEndsAt || null,
+                  currentPeriodEnd: editPeriodEnd || null,
+                },
+              }),
+            )
+          }
+        >
+          Enregistrer l’abonnement
+        </Button>
       </fieldset>
 
       <fieldset className="space-y-2">
         <legend className={cn('text-xs font-semibold uppercase tracking-wide', theme.subtle)}>
-          Durées
+          Actions rapides
         </legend>
         <div className="flex flex-wrap items-center gap-2">
           <input
@@ -243,7 +308,7 @@ function DetailPanel({
               )
             }
           >
-            Activer
+            Activer {activateDays || 30} j
           </Button>
         </div>
         <div className="flex flex-wrap items-center gap-2">
@@ -308,6 +373,44 @@ function DetailPanel({
           Rappel SMS (cette org.)
         </Button>
       </div>
+
+      <fieldset className={cn('space-y-3 rounded-xl border p-4', theme.detailBox)}>
+        <legend className={cn('px-1 text-xs font-semibold uppercase tracking-wide text-rose-600 dark:text-rose-400')}>
+          Zone danger
+        </legend>
+        <p className={cn('text-xs leading-relaxed', theme.muted)}>
+          Suppression définitive de l’entreprise, du personnel, des commandes boutique,
+          sessions et historiques liés. Irréversible.
+        </p>
+        <label className="block space-y-1">
+          <span className={cn('text-[11px] font-medium', theme.subtle)}>
+            Tapez « {selected.name} » pour confirmer
+          </span>
+          <input
+            type="text"
+            value={deleteConfirmName}
+            onChange={(e) => onDeleteConfirmName(e.target.value)}
+            className={cn(inputClass, 'w-full py-1.5')}
+            placeholder={selected.name}
+            autoComplete="off"
+            aria-label="Confirmation du nom d’entreprise"
+          />
+        </label>
+        <Button
+          type="button"
+          size="sm"
+          variant="danger"
+          className="w-full"
+          disabled={
+            actionBusy ||
+            deleteConfirmName.trim().toLowerCase() !== selected.name.trim().toLowerCase()
+          }
+          iconLeft={<IconTrash className="h-3.5 w-3.5" />}
+          onClick={onDeleteOrganization}
+        >
+          Supprimer l’entreprise
+        </Button>
+      </fieldset>
     </div>
   )
 }
@@ -339,6 +442,9 @@ export function PlatformAdminPage({ onExit }: Props) {
   const [extendDays, setExtendDays] = useState('14')
   const [editPlan, setEditPlan] = useState<PlanId>('starter')
   const [editStatus, setEditStatus] = useState<SubscriptionStatus>('trialing')
+  const [editTrialEndsAt, setEditTrialEndsAt] = useState('')
+  const [editPeriodEnd, setEditPeriodEnd] = useState('')
+  const [deleteConfirmName, setDeleteConfirmName] = useState('')
   const [section, setSection] = useState<AdminSection>('organizations')
 
   useEffect(() => {
@@ -354,6 +460,9 @@ export function PlatformAdminPage({ onExit }: Props) {
     if (!selected) return
     setEditPlan(selected.planId)
     setEditStatus(selected.status)
+    setEditTrialEndsAt(toDateInputValue(selected.trialEndsAt))
+    setEditPeriodEnd(toDateInputValue(selected.currentPeriodEnd))
+    setDeleteConfirmName('')
   }, [selected])
 
   const reload = useCallback(async () => {
@@ -429,6 +538,68 @@ export function PlatformAdminPage({ onExit }: Props) {
     } finally {
       setActionBusy(false)
     }
+  }
+
+  const handleDeleteOrganization = async () => {
+    if (!selected) return
+    setActionBusy(true)
+    setActionMessage(null)
+    try {
+      const result = await deleteOrganization(selected.licenseKey, deleteConfirmName)
+      setSelected(null)
+      setDeleteConfirmName('')
+      setActionMessage(`Entreprise « ${result.deleted.name} » supprimée.`)
+      await reload()
+    } catch (error) {
+      setActionMessage(
+        error instanceof Error ? error.message : 'Suppression échouée',
+      )
+    } finally {
+      setActionBusy(false)
+    }
+  }
+
+  const runSmsReminder = () => {
+    if (!selected) return
+    void (async () => {
+      setActionBusy(true)
+      try {
+        const result = await runPlatformReminders(selected.id)
+        setActionMessage(
+          `Rappels SMS : ${result.sent} envoyé(s) / ${result.checked} contrôlé(s)`,
+        )
+      } catch (error) {
+        setActionMessage(
+          error instanceof Error ? error.message : 'Rappels échoués',
+        )
+      } finally {
+        setActionBusy(false)
+      }
+    })()
+  }
+
+  const detailPanelProps = {
+    selected,
+    actionMessage,
+    actionBusy,
+    editPlan,
+    editStatus,
+    editTrialEndsAt,
+    editPeriodEnd,
+    activateDays,
+    extendDays,
+    deleteConfirmName,
+    theme,
+    onEditPlan: setEditPlan,
+    onEditStatus: setEditStatus,
+    onEditTrialEndsAt: setEditTrialEndsAt,
+    onEditPeriodEnd: setEditPeriodEnd,
+    onActivateDays: setActivateDays,
+    onExtendDays: setExtendDays,
+    onDeleteConfirmName: setDeleteConfirmName,
+    onRunAction: (fn: () => Promise<AdminOrganization>) => void runAction(fn),
+    onDeleteOrganization: () => void handleDeleteOrganization(),
+    onSmsReminder: runSmsReminder,
   }
 
   const kpiCards = useMemo(() => {
@@ -595,6 +766,20 @@ export function PlatformAdminPage({ onExit }: Props) {
           >
             <IconDash className="h-4 w-4" />
             Organisations
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              setSection('plans')
+              setSidebarOpen(false)
+            }}
+            className={cn(
+              'mb-1 flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-sm font-medium transition',
+              section === 'plans' ? theme.navActive : theme.navIdle,
+            )}
+          >
+            <IconShield className="h-4 w-4" />
+            Prix abonnements
           </button>
           <button
             type="button"
@@ -802,14 +987,18 @@ export function PlatformAdminPage({ onExit }: Props) {
                   ? 'Wave & Orange Money'
                   : section === 'branding'
                     ? 'Apparence du site'
-                    : 'Abonnements plateforme'}
+                    : section === 'plans'
+                      ? 'Prix des abonnements'
+                      : 'Abonnements plateforme'}
               </h1>
               <p className={cn('text-xs', theme.muted)}>
                 {section === 'payments'
                   ? 'Clés API paiement'
                   : section === 'branding'
                     ? 'Logo et nom sur la page d’accueil'
-                    : `${orgs.length} organisation(s)`}
+                    : section === 'plans'
+                      ? 'Tarifs Starter, Pro et Business'
+                      : `${orgs.length} organisation(s)`}
               </p>
             </div>
           </div>
@@ -833,11 +1022,26 @@ export function PlatformAdminPage({ onExit }: Props) {
               <PaymentProvidersAdminPanel theme={theme} inputClass={inputClass} />
             ) : section === 'branding' ? (
               <SiteBrandingAdminPanel theme={theme} inputClass={inputClass} />
+            ) : section === 'plans' ? (
+              <SubscriptionPlansAdminPanel theme={theme} inputClass={inputClass} />
             ) : (
               <>
             {loadError ? (
               <p className="mb-4 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-800 dark:border-rose-900 dark:bg-rose-950/40 dark:text-rose-300">
                 {loadError}
+              </p>
+            ) : null}
+
+            {actionMessage && !selected ? (
+              <p
+                className={cn(
+                  'mb-4 rounded-xl px-4 py-3 text-sm font-medium',
+                  actionMessage.includes('échou') || actionMessage.includes('impossible')
+                    ? 'border border-rose-200 bg-rose-50 text-rose-800 dark:border-rose-900 dark:bg-rose-950/40 dark:text-rose-300'
+                    : 'border border-emerald-200 bg-emerald-50 text-emerald-800 dark:border-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-300',
+                )}
+              >
+                {actionMessage}
               </p>
             ) : null}
 
@@ -958,39 +1162,7 @@ export function PlatformAdminPage({ onExit }: Props) {
             <Card className={cn('mt-6 xl:hidden', theme.card)}>
               <CardHeader title="Détail & actions" />
               <CardContent className="p-0">
-                <DetailPanel
-                  selected={selected}
-                  actionMessage={actionMessage}
-                  actionBusy={actionBusy}
-                  editPlan={editPlan}
-                  editStatus={editStatus}
-                  activateDays={activateDays}
-                  extendDays={extendDays}
-                  theme={theme}
-                  onEditPlan={setEditPlan}
-                  onEditStatus={setEditStatus}
-                  onActivateDays={setActivateDays}
-                  onExtendDays={setExtendDays}
-                  onRunAction={(fn) => void runAction(fn)}
-                  onSmsReminder={() => {
-                    if (!selected) return
-                    void (async () => {
-                      setActionBusy(true)
-                      try {
-                        const result = await runPlatformReminders(selected.id)
-                        setActionMessage(
-                          `Rappels SMS : ${result.sent} envoyé(s) / ${result.checked} contrôlé(s)`,
-                        )
-                      } catch (error) {
-                        setActionMessage(
-                          error instanceof Error ? error.message : 'Rappels échoués',
-                        )
-                      } finally {
-                        setActionBusy(false)
-                      }
-                    })()
-                  }}
-                />
+                <DetailPanel {...detailPanelProps} />
               </CardContent>
             </Card>
               </>
@@ -1008,39 +1180,7 @@ export function PlatformAdminPage({ onExit }: Props) {
               <h2 className="text-sm font-bold">Détail & actions</h2>
               <p className={cn('text-xs', theme.muted)}>Organisation sélectionnée</p>
             </div>
-            <DetailPanel
-              selected={selected}
-              actionMessage={actionMessage}
-              actionBusy={actionBusy}
-              editPlan={editPlan}
-              editStatus={editStatus}
-              activateDays={activateDays}
-              extendDays={extendDays}
-              theme={theme}
-              onEditPlan={setEditPlan}
-              onEditStatus={setEditStatus}
-              onActivateDays={setActivateDays}
-              onExtendDays={setExtendDays}
-              onRunAction={(fn) => void runAction(fn)}
-              onSmsReminder={() => {
-                if (!selected) return
-                void (async () => {
-                  setActionBusy(true)
-                  try {
-                    const result = await runPlatformReminders(selected.id)
-                    setActionMessage(
-                      `Rappels SMS : ${result.sent} envoyé(s) / ${result.checked} contrôlé(s)`,
-                    )
-                  } catch (error) {
-                    setActionMessage(
-                      error instanceof Error ? error.message : 'Rappels échoués',
-                    )
-                  } finally {
-                    setActionBusy(false)
-                  }
-                })()
-              }}
-            />
+            <DetailPanel {...detailPanelProps} />
           </aside>
           ) : null}
         </div>
