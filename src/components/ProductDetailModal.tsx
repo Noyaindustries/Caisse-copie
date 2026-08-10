@@ -164,6 +164,11 @@ function ProductDetailModalContent({
                 <span className="absolute left-3 top-3 rounded-full bg-zinc-900/90 px-3 py-1 text-[11px] font-semibold uppercase tracking-wider text-white">
                   Rupture
                 </span>
+              ) : isStorefront ? (
+                <span className="absolute left-3 top-3 inline-flex items-center gap-1.5 rounded-full bg-emerald-500/90 px-3 py-1 text-[11px] font-semibold text-white">
+                  <IconCheckCircle className="h-3 w-3" />
+                  Disponible
+                </span>
               ) : (
                 <span className="absolute left-3 top-3 inline-flex items-center gap-1.5 rounded-full bg-emerald-500/90 px-3 py-1 text-[11px] font-semibold text-white">
                   <IconCheckCircle className="h-3 w-3" />
@@ -228,54 +233,56 @@ function ProductDetailModalContent({
                 </ul>
               ) : null}
 
-              {/* Specs */}
-              <dl
-                className={cn(
-                  'grid grid-cols-2 gap-x-4 gap-y-2 rounded-xl border px-3 py-3 text-[12px]',
-                  isDark
-                    ? 'border-white/10 bg-slate-900/50'
-                    : 'border-zinc-200 bg-zinc-50',
-                )}
-              >
-                <div>
-                  <dt className={cn('text-[10px] uppercase tracking-wider', sub)}>
-                    Stock
-                  </dt>
-                  <dd className={cn('mt-0.5 font-mono-nums', strong)}>
-                    {product.stock} unité{product.stock > 1 ? 's' : ''}
-                  </dd>
-                </div>
-                {product.lowStockThreshold ? (
+              {/* Specs — stock / seuil réservés au back-office */}
+              {!isStorefront ? (
+                <dl
+                  className={cn(
+                    'grid grid-cols-2 gap-x-4 gap-y-2 rounded-xl border px-3 py-3 text-[12px]',
+                    isDark
+                      ? 'border-white/10 bg-slate-900/50'
+                      : 'border-zinc-200 bg-zinc-50',
+                  )}
+                >
                   <div>
-                    <dt
-                      className={cn(
-                        'text-[10px] uppercase tracking-wider',
-                        sub,
-                      )}
-                    >
-                      Seuil d’alerte
+                    <dt className={cn('text-[10px] uppercase tracking-wider', sub)}>
+                      Stock
                     </dt>
                     <dd className={cn('mt-0.5 font-mono-nums', strong)}>
-                      {product.lowStockThreshold}
+                      {product.stock} unité{product.stock > 1 ? 's' : ''}
                     </dd>
                   </div>
-                ) : null}
-                {product.archived ? (
-                  <div>
-                    <dt
-                      className={cn(
-                        'text-[10px] uppercase tracking-wider',
-                        sub,
-                      )}
-                    >
-                      État
-                    </dt>
-                    <dd className="mt-0.5">
-                      <Badge tone="neutral">Archivé</Badge>
-                    </dd>
-                  </div>
-                ) : null}
-              </dl>
+                  {product.lowStockThreshold ? (
+                    <div>
+                      <dt
+                        className={cn(
+                          'text-[10px] uppercase tracking-wider',
+                          sub,
+                        )}
+                      >
+                        Seuil d’alerte
+                      </dt>
+                      <dd className={cn('mt-0.5 font-mono-nums', strong)}>
+                        {product.lowStockThreshold}
+                      </dd>
+                    </div>
+                  ) : null}
+                  {product.archived ? (
+                    <div>
+                      <dt
+                        className={cn(
+                          'text-[10px] uppercase tracking-wider',
+                          sub,
+                        )}
+                      >
+                        État
+                      </dt>
+                      <dd className="mt-0.5">
+                        <Badge tone="neutral">Archivé</Badge>
+                      </dd>
+                    </div>
+                  ) : null}
+                </dl>
+              ) : null}
 
               {/* Qty + CTA */}
               {onAdd && !soldOut && !product.archived ? (

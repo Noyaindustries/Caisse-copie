@@ -117,7 +117,6 @@ export function EditProductModal({
         purchaseOpt = p
       }
     }
-    if (!barcode.trim()) return setErr('Indiquez un code-barres.')
     if (!Number.isFinite(st) || st < 0) return setErr('Stock invalide.')
     if (!Number.isFinite(th) || th < 0) return setErr('Seuil invalide.')
     const vat = Number.parseFloat(vatRatePct.replace(',', '.'))
@@ -232,10 +231,11 @@ export function EditProductModal({
             />
           </Field>
         </div>
-        <Field label="Code-barres" required>
+        <Field label="Code-barres" hint="Optionnel — laissez vide si aucun">
           <Input
             value={barcode}
             onChange={(e) => setBarcode(e.target.value)}
+            placeholder="Scanner ou saisir (facultatif)"
             className="font-mono-nums"
           />
         </Field>
