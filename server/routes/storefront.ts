@@ -30,6 +30,14 @@ import {
   normalizeStoreSlug,
   storefrontPublicKey,
 } from '../lib/storeSlug.js'
+import {
+  computeDeliveryFeeTTC,
+  MAX_STOREFRONT_DELIVERY_FEE_TTC,
+  MAX_STOREFRONT_FREE_DELIVERY_THRESHOLD_TTC,
+  normalizeNonNegativeInt,
+  resolveStorefrontDeliveryFeeTTC,
+  resolveStorefrontFreeDeliveryThresholdTTC,
+} from '../lib/storefrontDelivery.js'
 
 export const storefrontRouter = Router()
 
@@ -135,6 +143,20 @@ const storefrontBrandingSchema = z.object({
   openingHours: z.string().trim().max(1_000).optional(),
   footerTagline: z.string().trim().max(200).optional(),
   legalMentions: z.string().trim().max(1_000).optional(),
+  deliveryFeeTTC: z
+    .number()
+    .int()
+    .nonnegative()
+    .max(MAX_STOREFRONT_DELIVERY_FEE_TTC)
+    .nullable()
+    .optional(),
+  freeDeliveryThresholdTTC: z
+    .number()
+    .int()
+    .nonnegative()
+    .max(MAX_STOREFRONT_FREE_DELIVERY_THRESHOLD_TTC)
+    .nullable()
+    .optional(),
 })
 
 const BRANDING_STRING_KEYS = [
@@ -153,25 +175,40 @@ const BRANDING_STRING_KEYS = [
   'legalMentions',
 ] as const
 
-function readExistingBranding(menu: unknown): Record<string, string> | undefined {
+const BRANDING_NUMBER_KEYS = [
+  'deliveryFeeTTC',
+  'freeDeliveryThresholdTTC',
+] as const
+
+type StoredBranding = Record<string, string | number>
+
+function readExistingBranding(menu: unknown): StoredBranding | undefined {
   if (!menu || typeof menu !== 'object') return undefined
   const branding = (menu as { branding?: unknown }).branding
   if (!branding || typeof branding !== 'object') return undefined
   const raw = branding as Record<string, unknown>
-  const next: Record<string, string> = {}
+  const next: StoredBranding = {}
   for (const key of BRANDING_STRING_KEYS) {
     if (typeof raw[key] === 'string' && raw[key].trim()) {
       next[key] = raw[key].trim()
     }
   }
+  for (const key of BRANDING_NUMBER_KEYS) {
+    const max =
+      key === 'deliveryFeeTTC'
+        ? MAX_STOREFRONT_DELIVERY_FEE_TTC
+        : MAX_STOREFRONT_FREE_DELIVERY_THRESHOLD_TTC
+    const n = normalizeNonNegativeInt(raw[key], max)
+    if (n != null) next[key] = n
+  }
   return Object.keys(next).length > 0 ? next : undefined
 }
 
 function mergeBrandingPatch(
-  current: Record<string, string> | undefined,
+  current: StoredBranding | undefined,
   patch: z.infer<typeof storefrontBrandingSchema>,
-): Record<string, string> | undefined {
-  const next: Record<string, string> = { ...(current ?? {}) }
+): StoredBranding | undefined {
+  const next: StoredBranding = { ...(current ?? {}) }
   for (const key of BRANDING_STRING_KEYS) {
     if (!(key in patch)) continue
     const value = patch[key]
@@ -179,6 +216,15 @@ function mergeBrandingPatch(
       delete next[key]
     } else {
       next[key] = value.trim()
+    }
+  }
+  for (const key of BRANDING_NUMBER_KEYS) {
+    if (!(key in patch)) continue
+    const value = patch[key]
+    if (value == null) {
+      delete next[key]
+    } else {
+      next[key] = value
     }
   }
   return Object.keys(next).length > 0 ? next : undefined
@@ -467,7 +513,13 @@ storefrontRouter.post('/billing/storefront/:storeCode/orders', async (req, res) 
       return sum + lineTTC / (1 + line.vatRatePct / 100)
     }, 0)
     const tva = netProductsTTC - subtotalHT
-    const deliveryFeeTTC = body.fulfillmentMode === 'delivery' ? 1_000 : 0
+    const branding = readExistingBranding(org.storefrontMenu)
+    const deliveryFeeTTC = computeDeliveryFeeTTC({
+      fulfillmentMode: body.fulfillmentMode,
+      cartTTC: netProductsTTC,
+      feeTTC: resolveStorefrontDeliveryFeeTTC(branding),
+      freeThresholdTTC: resolveStorefrontFreeDeliveryThresholdTTC(branding),
+    })
     const verifiedOrder = {
       ...body,
       lines: canonicalLines,

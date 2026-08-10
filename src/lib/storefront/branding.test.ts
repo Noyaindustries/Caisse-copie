@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'vitest'
 import {
+  computeDeliveryFeeTTC,
+  DEFAULT_STOREFRONT_DELIVERY_FEE_TTC,
+  DEFAULT_STOREFRONT_FREE_DELIVERY_THRESHOLD_TTC,
   normalizeStorefrontBranding,
+  resolveStorefrontDeliveryFeeTTC,
+  resolveStorefrontFreeDeliveryThresholdTTC,
   storefrontAccentColor,
   storefrontDisplayName,
   storefrontMapsHref,
@@ -87,6 +92,79 @@ describe('normalizeStorefrontBranding', () => {
     expect(
       normalizeStorefrontBranding({ mapsUrl: 'javascript:alert(1)' }),
     ).toBeUndefined()
+  })
+
+  it('normalise les tarifs de livraison', () => {
+    expect(
+      normalizeStorefrontBranding({
+        deliveryFeeTTC: 2500,
+        freeDeliveryThresholdTTC: '20000',
+      }),
+    ).toEqual({
+      deliveryFeeTTC: 2500,
+      freeDeliveryThresholdTTC: 20_000,
+    })
+  })
+
+  it('rejette un frais de livraison hors plage', () => {
+    expect(
+      normalizeStorefrontBranding({ deliveryFeeTTC: -1 }),
+    ).toBeUndefined()
+  })
+})
+
+describe('computeDeliveryFeeTTC', () => {
+  it('retourne 0 en retrait', () => {
+    expect(
+      computeDeliveryFeeTTC({
+        fulfillmentMode: 'pickup',
+        cartTTC: 50_000,
+        feeTTC: 1000,
+        freeThresholdTTC: 15_000,
+      }),
+    ).toBe(0)
+  })
+
+  it('applique le frais hors seuil', () => {
+    expect(
+      computeDeliveryFeeTTC({
+        fulfillmentMode: 'delivery',
+        cartTTC: 5_000,
+        feeTTC: 1500,
+        freeThresholdTTC: 15_000,
+      }),
+    ).toBe(1500)
+  })
+
+  it('offre la livraison au seuil', () => {
+    expect(
+      computeDeliveryFeeTTC({
+        fulfillmentMode: 'delivery',
+        cartTTC: 15_000,
+        feeTTC: 1500,
+        freeThresholdTTC: 15_000,
+      }),
+    ).toBe(0)
+  })
+
+  it('n’offre jamais si seuil = 0', () => {
+    expect(
+      computeDeliveryFeeTTC({
+        fulfillmentMode: 'delivery',
+        cartTTC: 100_000,
+        feeTTC: 2000,
+        freeThresholdTTC: 0,
+      }),
+    ).toBe(2000)
+  })
+
+  it('utilise les défauts branding absents', () => {
+    expect(resolveStorefrontDeliveryFeeTTC(undefined)).toBe(
+      DEFAULT_STOREFRONT_DELIVERY_FEE_TTC,
+    )
+    expect(resolveStorefrontFreeDeliveryThresholdTTC(undefined)).toBe(
+      DEFAULT_STOREFRONT_FREE_DELIVERY_THRESHOLD_TTC,
+    )
   })
 })
 

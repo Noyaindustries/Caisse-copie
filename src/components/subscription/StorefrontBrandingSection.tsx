@@ -4,6 +4,12 @@ import {
   patchStorefrontBranding,
 } from '../../lib/storefront/api'
 import type { StorefrontBranding } from '../../lib/storefront/types'
+import {
+  DEFAULT_STOREFRONT_DELIVERY_FEE_TTC,
+  DEFAULT_STOREFRONT_FREE_DELIVERY_THRESHOLD_TTC,
+  MAX_STOREFRONT_DELIVERY_FEE_TTC,
+  MAX_STOREFRONT_FREE_DELIVERY_THRESHOLD_TTC,
+} from '../../lib/storefront/types'
 import { cacheOrgWorkspaceBranding } from '../../lib/orgWorkspaceBranding'
 import { storefrontDisplayName } from '../../lib/storefront/types'
 import { hasOrgAuth } from '../../lib/subscription/authHeaders'
@@ -64,6 +70,12 @@ export function StorefrontBrandingSection({
   const [openingHours, setOpeningHours] = useState('')
   const [footerTagline, setFooterTagline] = useState('')
   const [legalMentions, setLegalMentions] = useState('')
+  const [deliveryFeeTTC, setDeliveryFeeTTC] = useState(
+    String(DEFAULT_STOREFRONT_DELIVERY_FEE_TTC),
+  )
+  const [freeDeliveryThresholdTTC, setFreeDeliveryThresholdTTC] = useState(
+    String(DEFAULT_STOREFRONT_FREE_DELIVERY_THRESHOLD_TTC),
+  )
 
   useEffect(() => {
     let cancelled = false
@@ -89,6 +101,17 @@ export function StorefrontBrandingSection({
         setOpeningHours(data.branding.openingHours ?? '')
         setFooterTagline(data.branding.footerTagline ?? '')
         setLegalMentions(data.branding.legalMentions ?? '')
+        setDeliveryFeeTTC(
+          String(
+            data.branding.deliveryFeeTTC ?? DEFAULT_STOREFRONT_DELIVERY_FEE_TTC,
+          ),
+        )
+        setFreeDeliveryThresholdTTC(
+          String(
+            data.branding.freeDeliveryThresholdTTC ??
+              DEFAULT_STOREFRONT_FREE_DELIVERY_THRESHOLD_TTC,
+          ),
+        )
         setStoreNameHint(data.storeName)
         const displayName = storefrontDisplayName(
           data.branding,
@@ -164,6 +187,32 @@ export function StorefrontBrandingSection({
       toast.error('Couleur hex invalide (ex. #B8922E).')
       return
     }
+    const feeParsed = Math.round(
+      Number(deliveryFeeTTC.trim().replace(/\s/g, '')),
+    )
+    const thresholdParsed = Math.round(
+      Number(freeDeliveryThresholdTTC.trim().replace(/\s/g, '')),
+    )
+    if (
+      !Number.isFinite(feeParsed) ||
+      feeParsed < 0 ||
+      feeParsed > MAX_STOREFRONT_DELIVERY_FEE_TTC
+    ) {
+      toast.error(
+        `Frais de livraison invalide (0 – ${MAX_STOREFRONT_DELIVERY_FEE_TTC.toLocaleString('fr-FR')} FCFA).`,
+      )
+      return
+    }
+    if (
+      !Number.isFinite(thresholdParsed) ||
+      thresholdParsed < 0 ||
+      thresholdParsed > MAX_STOREFRONT_FREE_DELIVERY_THRESHOLD_TTC
+    ) {
+      toast.error(
+        `Seuil livraison offerte invalide (0 – ${MAX_STOREFRONT_FREE_DELIVERY_THRESHOLD_TTC.toLocaleString('fr-FR')} FCFA).`,
+      )
+      return
+    }
     setSaving(true)
     try {
       const branding: StorefrontBranding = {
@@ -180,6 +229,8 @@ export function StorefrontBrandingSection({
         openingHours: openingHours.trim() || undefined,
         footerTagline: footerTagline.trim() || undefined,
         legalMentions: legalMentions.trim() || undefined,
+        deliveryFeeTTC: feeParsed,
+        freeDeliveryThresholdTTC: thresholdParsed,
       }
       await patchStorefrontBranding(branding)
       const displayName = storefrontDisplayName(
@@ -457,6 +508,36 @@ export function StorefrontBrandingSection({
               />
             </Field>
           </div>
+
+          <div className="sm:col-span-2 border-t border-border pt-4">
+            <h3 className="text-sm font-semibold text-ink">Livraison</h3>
+            <p className="mt-1 text-xs text-ink-muted">
+              Tarifs appliqués sur la boutique en ligne. Seuil à 0 = jamais de
+              livraison offerte.
+            </p>
+          </div>
+
+          <Field label="Frais de livraison (FCFA TTC)">
+            <Input
+              inputMode="numeric"
+              value={deliveryFeeTTC}
+              onChange={(e) => setDeliveryFeeTTC(e.target.value)}
+              placeholder={String(DEFAULT_STOREFRONT_DELIVERY_FEE_TTC)}
+              disabled={!online || !usable}
+            />
+          </Field>
+          <Field
+            label="Livraison offerte dès (FCFA)"
+            hint="0 = désactiver l’offre"
+          >
+            <Input
+              inputMode="numeric"
+              value={freeDeliveryThresholdTTC}
+              onChange={(e) => setFreeDeliveryThresholdTTC(e.target.value)}
+              placeholder={String(DEFAULT_STOREFRONT_FREE_DELIVERY_THRESHOLD_TTC)}
+              disabled={!online || !usable}
+            />
+          </Field>
 
           <div className="sm:col-span-2">
             <Button

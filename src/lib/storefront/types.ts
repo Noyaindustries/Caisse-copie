@@ -19,6 +19,64 @@ export type StorefrontBranding = {
   footerTagline?: string
   /** Mentions légales / texte bas de page. */
   legalMentions?: string
+  /** Frais de livraison TTC (FCFA). */
+  deliveryFeeTTC?: number
+  /**
+   * Seuil panier TTC pour livraison offerte.
+   * 0 = jamais offerte.
+   */
+  freeDeliveryThresholdTTC?: number
+}
+
+/** Défauts historiques de la boutique (avant config par entreprise). */
+export const DEFAULT_STOREFRONT_DELIVERY_FEE_TTC = 1000
+export const DEFAULT_STOREFRONT_FREE_DELIVERY_THRESHOLD_TTC = 15_000
+export const MAX_STOREFRONT_DELIVERY_FEE_TTC = 1_000_000
+export const MAX_STOREFRONT_FREE_DELIVERY_THRESHOLD_TTC = 10_000_000
+
+function normalizeNonNegativeInt(
+  raw: unknown,
+  max: number,
+): number | undefined {
+  if (typeof raw === 'number' && Number.isFinite(raw)) {
+    const n = Math.round(raw)
+    if (n >= 0 && n <= max) return n
+    return undefined
+  }
+  if (typeof raw === 'string' && raw.trim()) {
+    const n = Math.round(Number(raw.trim().replace(/\s/g, '')))
+    if (Number.isFinite(n) && n >= 0 && n <= max) return n
+  }
+  return undefined
+}
+
+export function resolveStorefrontDeliveryFeeTTC(
+  branding: StorefrontBranding | undefined,
+): number {
+  return branding?.deliveryFeeTTC ?? DEFAULT_STOREFRONT_DELIVERY_FEE_TTC
+}
+
+export function resolveStorefrontFreeDeliveryThresholdTTC(
+  branding: StorefrontBranding | undefined,
+): number {
+  return (
+    branding?.freeDeliveryThresholdTTC ??
+    DEFAULT_STOREFRONT_FREE_DELIVERY_THRESHOLD_TTC
+  )
+}
+
+export function computeDeliveryFeeTTC(opts: {
+  fulfillmentMode: 'pickup' | 'delivery'
+  cartTTC: number
+  feeTTC: number
+  freeThresholdTTC: number
+}): number {
+  if (opts.fulfillmentMode !== 'delivery') return 0
+  const fee = Math.max(0, Math.round(opts.feeTTC))
+  const threshold = Math.max(0, Math.round(opts.freeThresholdTTC))
+  const cart = Math.max(0, opts.cartTTC)
+  if (threshold > 0 && cart >= threshold) return 0
+  return fee
 }
 
 export type PublishedStorefrontMenu = {
@@ -120,7 +178,14 @@ export function normalizeStorefrontBranding(
   }
 
   const trimField = (
-    key: keyof StorefrontBranding,
+    key:
+      | 'phone'
+      | 'whatsapp'
+      | 'email'
+      | 'address'
+      | 'openingHours'
+      | 'footerTagline'
+      | 'legalMentions',
     max: number,
   ): void => {
     const value = raw[key]
@@ -142,6 +207,20 @@ export function normalizeStorefrontBranding(
     if (mapsUrl && /^https?:\/\//i.test(mapsUrl)) {
       branding.mapsUrl = mapsUrl
     }
+  }
+
+  const deliveryFeeTTC = normalizeNonNegativeInt(
+    raw.deliveryFeeTTC,
+    MAX_STOREFRONT_DELIVERY_FEE_TTC,
+  )
+  if (deliveryFeeTTC != null) branding.deliveryFeeTTC = deliveryFeeTTC
+
+  const freeDeliveryThresholdTTC = normalizeNonNegativeInt(
+    raw.freeDeliveryThresholdTTC,
+    MAX_STOREFRONT_FREE_DELIVERY_THRESHOLD_TTC,
+  )
+  if (freeDeliveryThresholdTTC != null) {
+    branding.freeDeliveryThresholdTTC = freeDeliveryThresholdTTC
   }
 
   return Object.keys(branding).length > 0 ? branding : undefined

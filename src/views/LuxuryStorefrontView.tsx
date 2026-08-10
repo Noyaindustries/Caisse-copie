@@ -33,7 +33,10 @@ import type {
   StorefrontPaymentMethod,
 } from '../lib/storefront/types'
 import {
+  computeDeliveryFeeTTC,
   normalizeStorefrontBranding,
+  resolveStorefrontDeliveryFeeTTC,
+  resolveStorefrontFreeDeliveryThresholdTTC,
   storefrontAccentColor,
   storefrontDisplayName,
   storefrontMapsHref,
@@ -79,7 +82,6 @@ type FlyToCartAnim = {
   active: boolean
 }
 
-const FREE_DELIVERY_THRESHOLD = 15000
 const DESIRED_TIME_SLOTS: string[] = (() => {
   const slots = ['ASAP (des que possible)']
   const startMin = 7 * 60
@@ -317,9 +319,28 @@ export function LuxuryStorefrontView({
     () => Math.max(0, grossTotals.totalTTC - totals.totalTTC),
     [grossTotals.totalTTC, totals.totalTTC],
   )
+  const configuredDeliveryFeeTTC = useMemo(
+    () => resolveStorefrontDeliveryFeeTTC(branding),
+    [branding],
+  )
+  const freeDeliveryThresholdTTC = useMemo(
+    () => resolveStorefrontFreeDeliveryThresholdTTC(branding),
+    [branding],
+  )
   const deliveryFeeTTC = useMemo(
-    () => (fulfillmentMode === 'delivery' ? 1000 : 0),
-    [fulfillmentMode],
+    () =>
+      computeDeliveryFeeTTC({
+        fulfillmentMode,
+        cartTTC: totals.totalTTC,
+        feeTTC: configuredDeliveryFeeTTC,
+        freeThresholdTTC: freeDeliveryThresholdTTC,
+      }),
+    [
+      fulfillmentMode,
+      totals.totalTTC,
+      configuredDeliveryFeeTTC,
+      freeDeliveryThresholdTTC,
+    ],
   )
   const grandTotalTTC = useMemo(
     () => totals.totalTTC + deliveryFeeTTC,
@@ -461,17 +482,21 @@ export function LuxuryStorefrontView({
     [cart],
   )
   const freeDeliveryProgressPct = useMemo(() => {
-    if (FREE_DELIVERY_THRESHOLD <= 0) return 100
+    if (freeDeliveryThresholdTTC <= 0) return 100
     return Math.min(
       100,
-      Math.round((Math.max(0, totals.totalTTC) / FREE_DELIVERY_THRESHOLD) * 100),
+      Math.round(
+        (Math.max(0, totals.totalTTC) / freeDeliveryThresholdTTC) * 100,
+      ),
     )
-  }, [totals.totalTTC])
+  }, [totals.totalTTC, freeDeliveryThresholdTTC])
   const freeDeliveryRemaining = useMemo(
-    () => Math.max(0, FREE_DELIVERY_THRESHOLD - totals.totalTTC),
-    [totals.totalTTC],
+    () => Math.max(0, freeDeliveryThresholdTTC - totals.totalTTC),
+    [totals.totalTTC, freeDeliveryThresholdTTC],
   )
-  const hasFreeDelivery = freeDeliveryRemaining <= 0
+  const hasFreeDelivery =
+    freeDeliveryThresholdTTC > 0 && freeDeliveryRemaining <= 0
+  const showFreeDeliveryProgress = freeDeliveryThresholdTTC > 0
   const estimatedWindow =
     fulfillmentMode === 'delivery' ? 'Livraison 45-90 min' : 'Retrait 15-30 min'
   const productById = useMemo(
@@ -1017,30 +1042,33 @@ export function LuxuryStorefrontView({
               Fermer
             </button>
           </div>
-          <div className="mt-3 rounded-xl border border-stone-200 bg-stone-50 p-2.5">
-            <div className="flex items-center justify-between text-[11px]">
-              <span className="text-stone-600">
-                Livraison offerte dès {formatFCFA(FREE_DELIVERY_THRESHOLD)}
-              </span>
-              <span className="font-semibold text-stone-800">
-                {freeDeliveryProgressPct}%
-              </span>
+          {showFreeDeliveryProgress ? (
+            <div className="mt-3 rounded-xl border border-stone-200 bg-stone-50 p-2.5">
+              <div className="flex items-center justify-between text-[11px]">
+                <span className="text-stone-600">
+                  Livraison offerte dès{' '}
+                  {formatFCFA(freeDeliveryThresholdTTC)}
+                </span>
+                <span className="font-semibold text-stone-800">
+                  {freeDeliveryProgressPct}%
+                </span>
+              </div>
+              <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-stone-200">
+                <div
+                  className="h-full rounded-full transition-all duration-500"
+                  style={{
+                    width: `${freeDeliveryProgressPct}%`,
+                    backgroundColor: 'var(--storefront-accent)',
+                  }}
+                />
+              </div>
+              <p className="mt-1.5 text-[11px] text-stone-600">
+                {hasFreeDelivery
+                  ? 'Bravo, la livraison est offerte.'
+                  : `Encore ${formatFCFA(freeDeliveryRemaining)} pour débloquer la livraison offerte.`}
+              </p>
             </div>
-            <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-stone-200">
-              <div
-                className="h-full rounded-full transition-all duration-500"
-                style={{
-                  width: `${freeDeliveryProgressPct}%`,
-                  backgroundColor: 'var(--storefront-accent)',
-                }}
-              />
-            </div>
-            <p className="mt-1.5 text-[11px] text-stone-600">
-              {hasFreeDelivery
-                ? 'Bravo, la livraison est offerte.'
-                : `Encore ${formatFCFA(freeDeliveryRemaining)} pour débloquer la livraison offerte.`}
-            </p>
-          </div>
+          ) : null}
 
           <div className="mt-4 space-y-2">
             {cart.length === 0 ? (
@@ -1128,10 +1156,14 @@ export function LuxuryStorefrontView({
                   <span>- {formatFCFA(discountAmount)}</span>
                 </div>
               ) : null}
-              {deliveryFeeTTC > 0 ? (
+              {fulfillmentMode === 'delivery' ? (
                 <div className="mt-1 flex items-center justify-between text-stone-600">
                   <span>Livraison</span>
-                  <span>{formatFCFA(deliveryFeeTTC)}</span>
+                  <span>
+                    {deliveryFeeTTC > 0
+                      ? formatFCFA(deliveryFeeTTC)
+                      : 'Offerte'}
+                  </span>
                 </div>
               ) : null}
               <div className="mt-1 flex items-center justify-between text-stone-600">
@@ -1178,7 +1210,11 @@ export function LuxuryStorefrontView({
                   className="storefront-input w-full rounded-xl px-3 py-2 text-sm"
                 >
                   <option value="pickup">Retrait boutique</option>
-                  <option value="delivery">Livraison locale (+1000)</option>
+                  <option value="delivery">
+                    {configuredDeliveryFeeTTC > 0
+                      ? `Livraison locale (+${configuredDeliveryFeeTTC})`
+                      : 'Livraison locale (gratuite)'}
+                  </option>
                 </select>
                 <div className="flex gap-1.5">
                   <input

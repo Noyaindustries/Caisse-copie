@@ -74,6 +74,8 @@ export async function patchStorefrontBranding(
       openingHours: branding.openingHours ?? '',
       footerTagline: branding.footerTagline ?? '',
       legalMentions: branding.legalMentions ?? '',
+      deliveryFeeTTC: branding.deliveryFeeTTC,
+      freeDeliveryThresholdTTC: branding.freeDeliveryThresholdTTC,
     }),
   })
   return parseJson(res)
