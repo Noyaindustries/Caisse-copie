@@ -1,6 +1,7 @@
 import { apiUrl } from '../apiUrl'
 import { parseApiResponse } from '../parseApiResponse'
 import { buildOrgAuthHeaders } from './authHeaders'
+import { setModuleMinPlanOverrides } from './modulePlanOverrides'
 import type {
   MobileMoneyChannel,
   MobileMoneyChannelId,
@@ -26,11 +27,22 @@ export async function fetchPlans(): Promise<{
   trialDays: number
   stripeEnabled: boolean
   mobileMoneyEnabled: boolean
+  moduleMinPlans?: Partial<Record<string, PlanId>>
 }> {
   const res = await fetch(apiUrl('/billing/plans'), {
     signal: AbortSignal.timeout(8_000),
   })
-  return parseJson(res)
+  const data = await parseJson<{
+    plans: PlanDefinition[]
+    trialDays: number
+    stripeEnabled: boolean
+    mobileMoneyEnabled: boolean
+    moduleMinPlans?: Partial<Record<string, PlanId>>
+  }>(res)
+  if (data.moduleMinPlans) {
+    setModuleMinPlanOverrides(data.moduleMinPlans)
+  }
+  return data
 }
 
 export async function fetchMobileMoneyChannels(): Promise<{

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Moon, Sun } from 'lucide-react'
 import { BRAND_NAME } from '../brand'
 import { BrandLogo } from '../components/BrandLogo'
@@ -465,6 +465,9 @@ export function PlatformAdminPage({ onExit }: Props) {
     setDeleteConfirmName('')
   }, [selected])
 
+  const selectedIdRef = useRef<string | null>(null)
+  selectedIdRef.current = selected?.id ?? null
+
   const reload = useCallback(async () => {
     setLoadError(null)
     try {
@@ -479,9 +482,25 @@ export function PlatformAdminPage({ onExit }: Props) {
       ])
       setStats(statsData)
       setOrgs(orgData.organizations)
-      if (selected) {
-        const fresh = orgData.organizations.find((o) => o.id === selected.id)
-        if (fresh) setSelected(fresh)
+      const selectedId = selectedIdRef.current
+      if (selectedId) {
+        const fresh = orgData.organizations.find((o) => o.id === selectedId)
+        if (fresh) {
+          setSelected((prev) => {
+            if (!prev || prev.id !== fresh.id) return fresh
+            if (
+              prev.planId === fresh.planId &&
+              prev.status === fresh.status &&
+              prev.trialEndsAt === fresh.trialEndsAt &&
+              prev.currentPeriodEnd === fresh.currentPeriodEnd &&
+              prev.updatedAt === fresh.updatedAt &&
+              prev.usable === fresh.usable
+            ) {
+              return prev
+            }
+            return fresh
+          })
+        }
       }
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Chargement impossible'
@@ -491,7 +510,7 @@ export function PlatformAdminPage({ onExit }: Props) {
       }
       setLoadError(message)
     }
-  }, [filterStatus, filterPlan, search, selected])
+  }, [filterStatus, filterPlan, search])
 
   useEffect(() => {
     if (!authenticated) return
@@ -499,7 +518,7 @@ export function PlatformAdminPage({ onExit }: Props) {
       void reload()
     }, search ? 300 : 0)
     return () => globalThis.clearTimeout(timer)
-  }, [authenticated, reload, search])
+  }, [authenticated, reload])
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault()

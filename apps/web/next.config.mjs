@@ -20,17 +20,35 @@ const nextConfig = {
     appNewScrollHandler: false,
   },
   async rewrites() {
-    return [
-      { source: '/api/:path*', destination: `${apiOrigin}/api/:path*` },
-      { source: '/health', destination: `${apiOrigin}/health` },
-      { source: '/webhooks/:path*', destination: `${apiOrigin}/webhooks/:path*` },
-      { source: '/uploads/:path*', destination: `${apiOrigin}/uploads/:path*` },
-    ]
+    // Sur Vercel : pages/api/[[...path]] monte Express. Ne pas proxy localhost.
+    if (process.env.VERCEL) {
+      return [{ source: '/health', destination: '/api/health' }]
+    }
+    // En local : proxy avant les pages (beforeFiles) vers `npm run dev:api` (:4000).
+    return {
+      beforeFiles: [
+        { source: '/api/:path*', destination: `${apiOrigin}/api/:path*` },
+        { source: '/health', destination: `${apiOrigin}/health` },
+        {
+          source: '/webhooks/:path*',
+          destination: `${apiOrigin}/webhooks/:path*`,
+        },
+        {
+          source: '/uploads/:path*',
+          destination: `${apiOrigin}/uploads/:path*`,
+        },
+      ],
+    }
   },
-  // Ne pas aliaser react/react-dom vers node_modules : le App Router Next 16
-  // utilise son propre runtime React ; forcer l’alias provoque
-  // « Invalid hook call » / useContext(null) dans SegmentTrieNode (devtools).
-  // La junction apps/web/src → ../../src suffit pour une seule copie côté app.
+  // Inclut le backend Express + Prisma dans le bundle serverless /api.
+  outputFileTracingIncludes: {
+    '/api/**/*': [
+      '../../server/**/*',
+      '../../prisma/**/*',
+      '../../node_modules/.prisma/client/**/*',
+      '../../node_modules/@prisma/client/**/*',
+    ],
+  },
 }
 
 const withPWACfg = withPWA({

@@ -216,7 +216,7 @@ model PlatformSiteBranding {
   createdAt DateTime @default(now())
 }
 
-/** Prix des plans d’abonnement SaaS — editable via /admin. */
+/** Prix + modules des plans d’abonnement SaaS — editable via /admin. */
 model PlatformSubscriptionPlans {
   id                 String   @id @default(auto()) @map("_id") @db.ObjectId
   /** Singleton : toujours "default". */
@@ -224,6 +224,8 @@ model PlatformSubscriptionPlans {
   starterPriceFcfa   Int?
   proPriceFcfa       Int?
   businessPriceFcfa  Int?
+  /** Map moduleId → plan minimum (starter | pro | business). */
+  moduleMinPlans     Json?
   updatedAt          DateTime @updatedAt
   createdAt          DateTime @default(now())
 }

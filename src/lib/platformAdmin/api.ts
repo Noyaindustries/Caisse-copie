@@ -268,6 +268,16 @@ export async function uploadSiteBrandingLogo(
   return parseJson(res)
 }
 
+export type AdminModuleRow = {
+  id: string
+  label: string
+  description: string
+  section: string
+  kind: 'view' | 'feature'
+  defaultMinPlan: PlanId
+  minPlan: PlanId
+}
+
 export type SubscriptionPlansAdminStatus = {
   plans: Array<{
     id: PlanId
@@ -279,6 +289,10 @@ export type SubscriptionPlansAdminStatus = {
   defaults: Record<PlanId, number>
   source: 'db' | 'defaults'
   updatedAt: string | null
+  modules: AdminModuleRow[]
+  moduleMinPlans: Record<string, PlanId>
+  moduleDefaults: Record<string, PlanId>
+  modulesSource: 'db' | 'defaults'
 }
 
 export async function fetchSubscriptionPlansAdmin(): Promise<SubscriptionPlansAdminStatus> {
@@ -292,6 +306,7 @@ export async function saveSubscriptionPlansAdmin(body: {
   starter?: number
   pro?: number
   business?: number
+  moduleMinPlans?: Record<string, PlanId>
 }): Promise<SubscriptionPlansAdminStatus> {
   const res = await fetch(apiUrl('/platform-admin/subscription-plans'), {
     method: 'PUT',

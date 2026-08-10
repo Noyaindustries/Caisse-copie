@@ -55,21 +55,30 @@ app.use(
   }),
 )
 
+const isProd = process.env.NODE_ENV === 'production'
+
 const apiLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  limit: 600,
+  limit: isProd ? 600 : 5_000,
   standardHeaders: 'draft-8',
   legacyHeaders: false,
+  skip(req) {
+    // Console /admin déjà protégée par secret (sauf /status public et /auth limité à part).
+    const path = (req.originalUrl ?? req.url ?? '').split('?')[0] ?? ''
+    if (!path.startsWith('/api/platform-admin')) return false
+    if (path === '/api/platform-admin/auth') return false
+    return true
+  },
 })
 const syncLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  limit: 120,
+  limit: isProd ? 120 : 1_000,
   standardHeaders: 'draft-8',
   legacyHeaders: false,
 })
 const sensitiveLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  limit: 10,
+  limit: isProd ? 10 : 100,
   standardHeaders: 'draft-8',
   legacyHeaders: false,
 })

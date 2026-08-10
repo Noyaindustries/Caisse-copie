@@ -379,10 +379,16 @@ platformAdminRouter.put('/platform-admin/subscription-plans', async (req, res) =
       if (!Number.isFinite(n)) return undefined
       return n
     }
+    const rawModules = body.moduleMinPlans
+    const moduleMinPlans =
+      rawModules && typeof rawModules === 'object' && !Array.isArray(rawModules)
+        ? (rawModules as Record<string, 'starter' | 'pro' | 'business'>)
+        : undefined
     const status = await updateSubscriptionPlanPrices({
       starter: readPrice(body.starter ?? body.starterPriceFcfa),
       pro: readPrice(body.pro ?? body.proPriceFcfa),
       business: readPrice(body.business ?? body.businessPriceFcfa),
+      moduleMinPlans,
     })
     res.json(status)
   } catch (error) {

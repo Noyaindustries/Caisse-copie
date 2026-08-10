@@ -1,14 +1,15 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { MARKETING_IMAGES } from '../lib/marketingImages'
 import { MarketingImage } from './marketing/MarketingImage'
 import { MarketingBlobs } from './marketing/MarketingBlobs'
 import { MarketingSectionHeader } from './marketing/MarketingSectionHeader'
 import { Reveal } from './marketing/Reveal'
 import { NavIcon } from './NavIcons'
+import { fetchPlans } from '../lib/subscription/api'
 import {
-  ALL_MODULES,
-  MODULE_SECTIONS,
-  PLATFORM_FEATURES,
+  getAllModules,
+  getModuleSections,
+  getPlatformFeatures,
   moduleIncludedInPlan,
   modulesForPlan,
   type ModuleEntry,
@@ -135,7 +136,7 @@ function ComparisonMatrix() {
         <div className="border-b border-border/50 bg-linear-to-r from-surface-muted to-white px-6 py-5 sm:px-8">
           <h3 className="font-display text-xl font-bold text-ink">Matrice comparative complète</h3>
           <p className="mt-1 text-sm text-ink-muted">
-            {ALL_MODULES.length} modules · {PLATFORM_FEATURES.length} capacités plateforme
+            {getAllModules().length} modules · {getPlatformFeatures().length} capacités plateforme
           </p>
         </div>
         <div className="max-h-[32rem] overflow-auto">
@@ -160,7 +161,7 @@ function ComparisonMatrix() {
               </tr>
             </thead>
             <tbody>
-              {MODULE_SECTIONS.flatMap((section) => [
+              {getModuleSections().flatMap((section) => [
                 <tr key={`h-${section.title}`} className="bg-surface-muted/60">
                   <td colSpan={4} className="px-6 py-2 text-[11px] font-bold uppercase tracking-wider text-ink-subtle">
                     {section.title}
@@ -190,12 +191,18 @@ function ComparisonMatrix() {
                   Plateforme
                 </td>
               </tr>
-              {PLATFORM_FEATURES.map((f) => (
+              {getPlatformFeatures().map((f) => (
                 <tr key={f.id} className="border-b border-border/20 bg-accent/[0.02]">
                   <td className="px-6 py-2.5 font-medium text-ink">{f.label}</td>
                   {plans.map((p) => (
                     <td key={p} className="px-4 py-2.5 text-center">
-                      <IconCheck className="mx-auto h-3.5 w-3.5 text-emerald-600" strokeWidth={3} />
+                      {moduleIncludedInPlan(f.minPlan, p) ? (
+                        <span className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-emerald-50">
+                          <IconCheck className="h-3.5 w-3.5 text-emerald-600" strokeWidth={3} />
+                        </span>
+                      ) : (
+                        <IconMinus className="mx-auto h-4 w-4 text-ink-subtle/40" />
+                      )}
                     </td>
                   ))}
                 </tr>
@@ -212,11 +219,18 @@ export function MarketingModulesSection() {
   const [filter, setFilter] = useState<Filter>('all')
   const [search, setSearch] = useState('')
   const [viewMode, setViewMode] = useState<ViewMode>('grid')
+  const [modulesVersion, setModulesVersion] = useState(0)
+
+  useEffect(() => {
+    void fetchPlans()
+      .then(() => setModulesVersion((v) => v + 1))
+      .catch(() => {})
+  }, [])
 
   const q = search.trim().toLowerCase()
 
   const visibleSections = useMemo(() => {
-    return MODULE_SECTIONS.map((section) => ({
+    return getModuleSections().map((section) => ({
       ...section,
       modules: section.modules.filter((m) => {
         if (filter !== 'all' && !moduleIncludedInPlan(m.minPlan, filter)) return false
@@ -226,28 +240,28 @@ export function MarketingModulesSection() {
         )
       }),
     })).filter((s) => s.modules.length > 0)
-  }, [filter, q])
+  }, [filter, q, modulesVersion])
 
   const filteredPlatform = useMemo(() => {
-    return PLATFORM_FEATURES.filter((f) => {
+    return getPlatformFeatures().filter((f) => {
       if (filter !== 'all' && !moduleIncludedInPlan(f.minPlan, filter)) return false
       if (!q) return true
       return f.label.toLowerCase().includes(q) || f.description.toLowerCase().includes(q)
     })
-  }, [filter, q])
+  }, [filter, q, modulesVersion])
 
   const spotlight = useMemo(
-    () => ALL_MODULES.filter((m) => (SPOTLIGHT_IDS as readonly string[]).includes(m.id)),
-    [],
+    () => getAllModules().filter((m) => (SPOTLIGHT_IDS as readonly string[]).includes(m.id)),
+    [modulesVersion],
   )
 
   const planStats = useMemo(
     () =>
       (['starter', 'pro', 'business'] as PlanId[]).map((p) => ({
         plan: p,
-        count: modulesForPlan(p).length + PLATFORM_FEATURES.length,
+        count: modulesForPlan(p).length + getPlatformFeatures().length,
       })),
-    [],
+    [modulesVersion],
   )
 
   const totalVisible =

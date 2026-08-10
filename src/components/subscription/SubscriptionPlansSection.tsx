@@ -1,15 +1,10 @@
 import { useMemo, useState } from 'react'
 
 import {
-
-  ALL_MODULES,
-
+  getAllModules,
+  getPlatformFeatures,
   moduleIncludedInPlan,
-
   moduleCountForPlan,
-
-  PLATFORM_FEATURES,
-
 } from '../../lib/subscription/moduleCatalog'
 
 import { formatTrialPeriod, planLabel, PLAN_ORDER } from '../../lib/subscription/plans'
@@ -372,33 +367,22 @@ function PlanCard({
 
 
 
-const COMPARE_ROWS = [
-
-  ...ALL_MODULES.slice(0, 12).map((m) => ({
-
-    id: m.id,
-
-    label: m.label,
-
-    type: 'module' as const,
-
-    minPlan: m.minPlan,
-
-  })),
-
-  ...PLATFORM_FEATURES.slice(0, 4).map((f) => ({
-
-    id: f.id,
-
-    label: f.label,
-
-    type: 'platform' as const,
-
-    minPlan: f.minPlan,
-
-  })),
-
-]
+function getCompareRows() {
+  return [
+    ...getAllModules().slice(0, 12).map((m) => ({
+      id: m.id,
+      label: m.label,
+      type: 'module' as const,
+      minPlan: m.minPlan,
+    })),
+    ...getPlatformFeatures().slice(0, 4).map((f) => ({
+      id: f.id,
+      label: f.label,
+      type: 'platform' as const,
+      minPlan: f.minPlan,
+    })),
+  ]
+}
 
 
 
@@ -673,7 +657,7 @@ export function SubscriptionPlansSection({
 
               <tbody>
 
-                {COMPARE_ROWS.map((row) => (
+                {getCompareRows().map((row) => (
 
                   <tr key={row.id} className="border-b border-border/40 last:border-0">
 

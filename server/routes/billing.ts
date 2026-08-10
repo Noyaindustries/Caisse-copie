@@ -179,11 +179,14 @@ async function requireBillingOrg(req: Request, res: Response) {
 }
 
 billingRouter.get('/billing/plans', async (_req, res) => {
+  let moduleMinPlans: Record<string, string> | undefined
   try {
-    const { refreshSubscriptionPlanSettings } = await import(
-      '../lib/subscriptionPlanSettings.js'
-    )
+    const {
+      refreshSubscriptionPlanSettings,
+      resolveModuleMinPlans,
+    } = await import('../lib/subscriptionPlanSettings.js')
     await refreshSubscriptionPlanSettings()
+    moduleMinPlans = resolveModuleMinPlans()
   } catch {
     /* conserve le cache mémoire */
   }
@@ -193,6 +196,7 @@ billingRouter.get('/billing/plans', async (_req, res) => {
     stripeEnabled: stripeConfigured(),
     mobileMoneyEnabled: mobileMoneyEnabled(),
     waveEnabled: waveEnabled(),
+    moduleMinPlans: moduleMinPlans ?? {},
   })
 })
 

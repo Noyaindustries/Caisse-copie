@@ -10,7 +10,11 @@ import {
 } from 'react'
 import type { NavViewId } from '../navigation'
 import { ROUTES } from '../lib/siteRoutes'
-import { refreshSubscription, verifyMobileMoneyPayment } from '../lib/subscription/api'
+import {
+  fetchPlans,
+  refreshSubscription,
+  verifyMobileMoneyPayment,
+} from '../lib/subscription/api'
 import { pullCloudData } from '../lib/cloudPull'
 import { planAtLeast, viewAllowedByPlan } from '../lib/subscription/plans'
 import {
@@ -54,6 +58,8 @@ export function SubscriptionProvider({
   const [subscription, setSubscription] = useState<SubscriptionSnapshot | null>(
     null,
   )
+  /** Incrémente quand la matrice modules/plans est (re)chargée. */
+  const [modulePlansVersion, setModulePlansVersion] = useState(0)
 
   const applySnapshot = useCallback((snap: SubscriptionSnapshot) => {
     setSubscription(snap)
@@ -85,6 +91,13 @@ export function SubscriptionProvider({
     let cancelled = false
 
     const boot = async () => {
+      try {
+        await fetchPlans()
+        if (!cancelled) setModulePlansVersion((v) => v + 1)
+      } catch {
+        /* défauts code */
+      }
+
       const creds = getOrganizationCredentials()
       const cached = getCachedSubscription()
       if (!cancelled) {
@@ -198,6 +211,7 @@ export function SubscriptionProvider({
       subscription,
       usable,
       online,
+      modulePlansVersion,
       completeOnboarding,
       refresh,
       disconnect,

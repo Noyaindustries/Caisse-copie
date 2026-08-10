@@ -2,16 +2,10 @@
   "framework": "nextjs",
   "installCommand": "npm ci",
   "buildCommand": "npx prisma generate && npm run build -w @caisseci/web",
-  "functions": {
-    "apps/web/api/index.ts": {
-      "maxDuration": 60,
-      "includeFiles": "{server/**,prisma/**,node_modules/.prisma/client/**,node_modules/@prisma/client/**}"
-    }
-  },
   "rewrites": [
     {
-      "source": "/api/:path*",
-      "destination": "/api"
+      "source": "/health",
+      "destination": "/api/health"
     }
   ]
 }

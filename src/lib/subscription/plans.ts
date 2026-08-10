@@ -1,5 +1,8 @@
 import type { NavViewId } from '../../navigation'
 import type { PlanId } from './types'
+import { resolveModuleMinPlan, VIEW_MIN_PLAN } from './modulePlanOverrides'
+
+export { VIEW_MIN_PLAN }
 
 export const PLAN_ORDER: PlanId[] = ['starter', 'pro', 'business']
 
@@ -16,29 +19,12 @@ export function formatTrialPeriod(days: number = DEFAULT_TRIAL_DAYS): string {
   return `${days} jours`
 }
 
-/** Modules réservés aux paliers supérieurs. */
-export const VIEW_MIN_PLAN: Partial<Record<NavViewId, PlanId>> = {
-  kitchen: 'pro',
-  tables: 'pro',
-  promotions: 'pro',
-  loyalty: 'pro',
-  onlineOrders: 'pro',
-  ticketsFactures: 'starter',
-  comptabilite: 'pro',
-  analytique: 'pro',
-  network: 'business',
-  crm: 'business',
-  rh: 'business',
-  integrations: 'business',
-}
-
 export function planAtLeast(current: PlanId, required: PlanId): boolean {
   return PLAN_ORDER.indexOf(current) >= PLAN_ORDER.indexOf(required)
 }
 
 export function viewAllowedByPlan(view: NavViewId, planId: PlanId): boolean {
-  const required = VIEW_MIN_PLAN[view]
-  if (!required) return true
+  const required = resolveModuleMinPlan(view)
   return planAtLeast(planId, required)
 }
 
