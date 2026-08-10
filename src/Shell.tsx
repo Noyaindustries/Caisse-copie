@@ -62,6 +62,7 @@ import {
 } from './lib/terminalSync'
 import { useBarcodeScannerWedge } from './hooks/useBarcodeScannerWedge'
 import { storeStockRowId } from './lib/storeStockId'
+import { assertBarcodeAvailable } from './lib/productBarcode'
 import { deductKitchenIngredientStockForLines } from './lib/kitchenStock'
 import {
   APP_SETTINGS_CHANGED_EVENT,
@@ -906,13 +907,7 @@ export function Shell({ staff, online, onLogout }: Props) {
 
   const handleSaveNewProduct = useCallback(
     async (product: Product, initialStock: number) => {
-      const dup = await db.products
-        .where('barcode')
-        .equals(product.barcode)
-        .first()
-      if (dup) {
-        throw new Error('Ce code-barres existe déjà.')
-      }
+      await assertBarcodeAvailable(product.barcode)
       await db.products.add(product)
       await ensureAllStoreStockRows()
       await db.storeStocks.put({

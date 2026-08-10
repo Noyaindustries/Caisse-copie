@@ -18,6 +18,7 @@ import { productIsActive } from '../lib/productFilters'
 import type { AuditActor } from '../lib/auditLog'
 import { appendAuditEvent } from '../lib/auditLog'
 import { deleteProductPermanently } from '../lib/deleteProduct'
+import { assertBarcodeAvailable } from '../lib/productBarcode'
 import { storeStockRowId } from '../lib/storeStockId'
 import { Badge } from '../ui/Badge'
 import { Button, IconButton } from '../ui/Button'
@@ -227,13 +228,7 @@ export function CatalogueView({
   }, [rowsWithStock, q, cat, showArchived, stockFilter, sortKey])
 
   const handleSaveEdit = async (p: Product, stockAtStore: number) => {
-    const dup = await db.products
-      .where('barcode')
-      .equals(p.barcode)
-      .first()
-    if (dup && dup.id !== p.id) {
-      throw new Error('Ce code-barres est déjà utilisé.')
-    }
+    await assertBarcodeAvailable(p.barcode, p.id)
     const prevRow = rowsWithStock.find((r) => r.id === p.id)
     const previousQty = prevRow?.stock ?? 0
     const previousThreshold = prevRow?.lowStockThreshold ?? p.lowStockThreshold

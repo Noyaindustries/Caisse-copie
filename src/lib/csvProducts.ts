@@ -3,6 +3,7 @@ import { DEFAULT_STORE_ID } from '../db/seedStores'
 import type { Product, ProductCategory, ProductWithStock } from '../db/types'
 import { PRODUCT_CATEGORY_LIST } from '../db/types'
 import { downloadTextFile, toCsvSemicolon } from './analyticsExport'
+import { findProductByBarcode } from './productBarcode'
 import { storeStockRowId } from './storeStockId'
 
 export const CSV_TEMPLATE = `nom;prix_ttc;prix_revient_ttc;code_barres;categorie;stock;seuil;tva_pct;archive;image_url
@@ -297,7 +298,7 @@ export async function applyProductsCsvImport(
   await db.transaction('rw', db.products, db.storeStocks, async () => {
     for (let i = 0; i < parsed.length; i++) {
       const { product: p, mainStoreStock } = parsed[i]
-      const existing = await db.products.where('barcode').equals(p.barcode).first()
+      const existing = await findProductByBarcode(p.barcode)
       if (existing) {
         if (!options.updateExistingByBarcode) {
           errors.push({

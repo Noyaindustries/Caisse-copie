@@ -157,12 +157,13 @@ export function AddProductModal({ activeStoreLabel, onClose, onSave }: Props) {
             />
           </Field>
         </div>
-        <Field label="Code-barres" hint="optionnel">
+        <Field label="Code-barres" hint="Optionnel — laissez vide si aucun">
           <Input
             value={barcode}
             onChange={(e) => setBarcode(e.target.value)}
-            placeholder="—"
+            placeholder="Scanner ou saisir (facultatif)"
             className="font-mono-nums"
+            data-barcode-input
           />
         </Field>
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
