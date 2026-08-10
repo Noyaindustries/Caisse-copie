@@ -73,7 +73,6 @@ export function AddProductModal({ activeStoreLabel, onClose, onSave }: Props) {
       if (!Number.isFinite(purchase) || purchase < 0)
         return setErr('Prix de revient invalide.')
     }
-    if (!barcode.trim()) return setErr('Indiquez un code-barres.')
     if (!Number.isFinite(st) || st < 0) return setErr('Stock invalide.')
     if (!Number.isFinite(th) || th < 0) return setErr('Seuil invalide.')
     const vat = Number.parseFloat(vatRatePct.replace(',', '.'))
@@ -158,10 +157,11 @@ export function AddProductModal({ activeStoreLabel, onClose, onSave }: Props) {
             />
           </Field>
         </div>
-        <Field label="Code-barres" required>
+        <Field label="Code-barres" hint="optionnel">
           <Input
             value={barcode}
             onChange={(e) => setBarcode(e.target.value)}
+            placeholder="—"
             className="font-mono-nums"
           />
         </Field>

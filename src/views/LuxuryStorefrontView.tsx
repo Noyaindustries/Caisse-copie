@@ -36,6 +36,9 @@ import {
   normalizeStorefrontBranding,
   storefrontAccentColor,
   storefrontDisplayName,
+  storefrontMapsHref,
+  storefrontTelHref,
+  storefrontWhatsAppHref,
 } from '../lib/storefront/types'
 import { openWaveCheckout } from '../lib/wavePayment'
 
@@ -185,6 +188,27 @@ export function LuxuryStorefrontView({
   const accentColor = storefrontAccentColor(branding)
   const logoUrl = branding?.logoUrl?.trim() || null
   const welcomeMessage = branding?.welcomeMessage?.trim() || null
+  const contactPhone = branding?.phone?.trim() || null
+  const contactWhatsappLabel =
+    branding?.whatsapp?.trim() || contactPhone
+  const shopEmail = branding?.email?.trim() || null
+  const contactAddress = branding?.address?.trim() || null
+  const contactOpeningHours = branding?.openingHours?.trim() || null
+  const footerTagline = branding?.footerTagline?.trim() || null
+  const legalMentions = branding?.legalMentions?.trim() || null
+  const telHref = storefrontTelHref(contactPhone ?? undefined)
+  const whatsappHref = storefrontWhatsAppHref(
+    branding?.whatsapp,
+    contactPhone ?? undefined,
+  )
+  const mapsHref = storefrontMapsHref(branding?.mapsUrl, contactAddress ?? undefined)
+  const hasContactDetails = Boolean(
+    contactPhone ||
+      whatsappHref ||
+      shopEmail ||
+      contactAddress ||
+      contactOpeningHours,
+  )
   const cardDensity: 'compact' | 'confort' = 'compact'
   const [cart, setCart] = useState<CartLine[]>([])
   const [customerName, setCustomerName] = useState('')
@@ -479,6 +503,7 @@ export function LuxuryStorefrontView({
     (e: React.FormEvent) => {
       e.preventDefault()
       if (!contactName.trim() || !contactMessage.trim()) return
+      if (!shopEmail) return
       const subject = encodeURIComponent(
         `Contact boutique — ${contactName.trim()}`,
       )
@@ -487,11 +512,11 @@ export function LuxuryStorefrontView({
           contactEmail.trim() ? ` (${contactEmail.trim()})` : ''
         }`,
       )
-      window.location.href = `mailto:support@caisseci.local?subject=${subject}&body=${body}`
+      window.location.href = `mailto:${shopEmail}?subject=${subject}&body=${body}`
       setContactSent(true)
       window.setTimeout(() => setContactSent(false), 4000)
     },
-    [contactName, contactEmail, contactMessage],
+    [contactName, contactEmail, contactMessage, shopEmail],
   )
 
   useEffect(() => {
@@ -1465,172 +1490,176 @@ export function LuxuryStorefrontView({
                 </p>
 
                 <ul className="mt-6 grid gap-3 sm:grid-cols-2">
-                  <li>
-                    <a
-                      href="tel:+22507000000"
-                      className="flex items-start gap-3 rounded-xl border border-stone-200 bg-stone-50 p-3 transition hover:border-stone-300"
-                    >
-                      <span
-                        aria-hidden
-                        className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-stone-200 text-stone-800"
+                  {contactPhone && telHref ? (
+                    <li>
+                      <a
+                        href={telHref}
+                        className="flex items-start gap-3 rounded-xl border border-stone-200 bg-stone-50 p-3 transition hover:border-stone-300"
                       >
-                        <svg
-                          viewBox="0 0 24 24"
-                          fill="none"
-                          stroke="currentColor"
-                          strokeWidth="2"
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          className="h-4 w-4"
+                        <span
+                          aria-hidden
+                          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-stone-200 text-stone-800"
                         >
-                          <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92Z" />
-                        </svg>
-                      </span>
-                      <span className="min-w-0">
-                        <span className="block text-[10px] font-semibold uppercase tracking-wider text-stone-500">
-                          Téléphone
+                          <svg
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            strokeWidth="2"
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            className="h-4 w-4"
+                          >
+                            <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92Z" />
+                          </svg>
                         </span>
-                        <span className="block font-mono-nums text-sm font-semibold text-stone-900">
-                          +225 07 00 00 00 00
+                        <span className="min-w-0">
+                          <span className="block text-[10px] font-semibold uppercase tracking-wider text-stone-500">
+                            Téléphone
+                          </span>
+                          <span className="block font-mono-nums text-sm font-semibold text-stone-900">
+                            {contactPhone}
+                          </span>
+                          <span className="block text-[11px] text-stone-500">
+                            Appel direct
+                          </span>
                         </span>
-                        <span className="block text-[11px] text-stone-500">
-                          Appel direct
-                        </span>
-                      </span>
-                    </a>
-                  </li>
-                  <li>
-                    <a
-                      href="https://wa.me/22507000000"
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="flex items-start gap-3 rounded-xl border border-stone-200 bg-stone-50 p-3 transition hover:border-stone-300"
-                    >
-                      <span
-                        aria-hidden
-                        className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-emerald-100 text-emerald-800"
+                      </a>
+                    </li>
+                  ) : null}
+                  {whatsappHref && contactWhatsappLabel ? (
+                    <li>
+                      <a
+                        href={whatsappHref}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="flex items-start gap-3 rounded-xl border border-stone-200 bg-stone-50 p-3 transition hover:border-stone-300"
                       >
-                        <svg
-                          viewBox="0 0 24 24"
-                          fill="currentColor"
-                          className="h-4 w-4"
+                        <span
+                          aria-hidden
+                          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-emerald-100 text-emerald-800"
                         >
-                          <path d="M20.52 3.48A11.86 11.86 0 0 0 12.04 0C5.46 0 .12 5.34.12 11.92c0 2.1.55 4.15 1.6 5.96L0 24l6.3-1.66a11.9 11.9 0 0 0 5.74 1.46h.01c6.58 0 11.92-5.34 11.92-11.92 0-3.18-1.24-6.18-3.45-8.4ZM12.04 21.78h-.01a9.86 9.86 0 0 1-5.03-1.38l-.36-.21-3.74.98 1-3.65-.24-.37a9.85 9.85 0 0 1-1.51-5.23c0-5.45 4.43-9.88 9.89-9.88a9.83 9.83 0 0 1 7 2.9 9.82 9.82 0 0 1 2.9 7c0 5.45-4.44 9.88-9.9 9.88Zm5.42-7.4c-.3-.15-1.76-.87-2.03-.97-.27-.1-.47-.15-.67.15-.2.3-.77.97-.94 1.17-.17.2-.35.22-.65.07-.3-.15-1.26-.46-2.4-1.49-.9-.8-1.5-1.78-1.67-2.08-.17-.3-.02-.46.13-.61.13-.13.3-.35.45-.52.15-.17.2-.3.3-.5.1-.2.05-.37-.02-.52-.07-.15-.67-1.62-.92-2.22-.24-.58-.49-.5-.67-.5h-.57c-.2 0-.52.07-.79.37-.27.3-1.03 1-1.03 2.45 0 1.45 1.06 2.85 1.21 3.05.15.2 2.08 3.18 5.04 4.46.7.3 1.25.48 1.68.62.7.22 1.34.19 1.84.12.56-.08 1.76-.72 2.01-1.42.25-.7.25-1.3.17-1.42-.07-.12-.27-.2-.57-.35Z" />
-                        </svg>
-                      </span>
-                      <span className="min-w-0">
-                        <span className="block text-[10px] font-semibold uppercase tracking-wider text-stone-500">
-                          WhatsApp
+                          <svg
+                            viewBox="0 0 24 24"
+                            fill="currentColor"
+                            className="h-4 w-4"
+                          >
+                            <path d="M20.52 3.48A11.86 11.86 0 0 0 12.04 0C5.46 0 .12 5.34.12 11.92c0 2.1.55 4.15 1.6 5.96L0 24l6.3-1.66a11.9 11.9 0 0 0 5.74 1.46h.01c6.58 0 11.92-5.34 11.92-11.92 0-3.18-1.24-6.18-3.45-8.4ZM12.04 21.78h-.01a9.86 9.86 0 0 1-5.03-1.38l-.36-.21-3.74.98 1-3.65-.24-.37a9.85 9.85 0 0 1-1.51-5.23c0-5.45 4.43-9.88 9.89-9.88a9.83 9.83 0 0 1 7 2.9 9.82 9.82 0 0 1 2.9 7c0 5.45-4.44 9.88-9.9 9.88Zm5.42-7.4c-.3-.15-1.76-.87-2.03-.97-.27-.1-.47-.15-.67.15-.2.3-.77.97-.94 1.17-.17.2-.35.22-.65.07-.3-.15-1.26-.46-2.4-1.49-.9-.8-1.5-1.78-1.67-2.08-.17-.3-.02-.46.13-.61.13-.13.3-.35.45-.52.15-.17.2-.3.3-.5.1-.2.05-.37-.02-.52-.07-.15-.67-1.62-.92-2.22-.24-.58-.49-.5-.67-.5h-.57c-.2 0-.52.07-.79.37-.27.3-1.03 1-1.03 2.45 0 1.45 1.06 2.85 1.21 3.05.15.2 2.08 3.18 5.04 4.46.7.3 1.25.48 1.68.62.7.22 1.34.19 1.84.12.56-.08 1.76-.72 2.01-1.42.25-.7.25-1.3.17-1.42-.07-.12-.27-.2-.57-.35Z" />
+                          </svg>
                         </span>
-                        <span className="block font-mono-nums text-sm font-semibold text-stone-900">
-                          +225 07 00 00 00 00
+                        <span className="min-w-0">
+                          <span className="block text-[10px] font-semibold uppercase tracking-wider text-stone-500">
+                            WhatsApp
+                          </span>
+                          <span className="block font-mono-nums text-sm font-semibold text-stone-900">
+                            {contactWhatsappLabel}
+                          </span>
+                          <span className="block text-[11px] text-emerald-700">
+                            Message instantané
+                          </span>
                         </span>
-                        <span className="block text-[11px] text-emerald-700">
-                          Message instantané
-                        </span>
-                      </span>
-                    </a>
-                  </li>
-                  <li>
-                    <a
-                      href="mailto:support@caisseci.local"
-                      className="flex items-start gap-3 rounded-xl border border-stone-200 bg-stone-50 p-3 transition hover:border-stone-300"
-                    >
-                      <span
-                        aria-hidden
-                        className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-stone-200 text-stone-800"
+                      </a>
+                    </li>
+                  ) : null}
+                  {shopEmail ? (
+                    <li>
+                      <a
+                        href={`mailto:${shopEmail}`}
+                        className="flex items-start gap-3 rounded-xl border border-stone-200 bg-stone-50 p-3 transition hover:border-stone-300"
                       >
-                        <svg
-                          viewBox="0 0 24 24"
-                          fill="none"
-                          stroke="currentColor"
-                          strokeWidth="2"
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          className="h-4 w-4"
+                        <span
+                          aria-hidden
+                          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-stone-200 text-stone-800"
                         >
-                          <rect x="3" y="5" width="18" height="14" rx="2" />
-                          <path d="m3 7 9 6 9-6" />
-                        </svg>
-                      </span>
-                      <span className="min-w-0">
-                        <span className="block text-[10px] font-semibold uppercase tracking-wider text-stone-500">
-                          Email
+                          <svg
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            strokeWidth="2"
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            className="h-4 w-4"
+                          >
+                            <rect x="3" y="5" width="18" height="14" rx="2" />
+                            <path d="m3 7 9 6 9-6" />
+                          </svg>
                         </span>
-                        <span className="block truncate text-sm font-semibold text-stone-900">
-                          support@caisseci.local
+                        <span className="min-w-0">
+                          <span className="block text-[10px] font-semibold uppercase tracking-wider text-stone-500">
+                            Email
+                          </span>
+                          <span className="block truncate text-sm font-semibold text-stone-900">
+                            {shopEmail}
+                          </span>
+                          <span className="block text-[11px] text-stone-500">
+                            Réponse sous 24 h
+                          </span>
                         </span>
-                        <span className="block text-[11px] text-stone-500">
-                          Réponse sous 24 h
-                        </span>
-                      </span>
-                    </a>
-                  </li>
-                  <li>
-                    <div className="flex items-start gap-3 rounded-2xl border border-stone-200 bg-stone-50 p-3">
-                      <span
-                        aria-hidden
-                        className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-stone-200 text-stone-800"
-                      >
-                        <svg
-                          viewBox="0 0 24 24"
-                          fill="none"
-                          stroke="currentColor"
-                          strokeWidth="2"
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          className="h-4 w-4"
+                      </a>
+                    </li>
+                  ) : null}
+                  {contactAddress ? (
+                    <li>
+                      <div className="flex items-start gap-3 rounded-2xl border border-stone-200 bg-stone-50 p-3">
+                        <span
+                          aria-hidden
+                          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-stone-200 text-stone-800"
                         >
-                          <path d="M21 10c0 7-9 13-9 13S3 17 3 10a9 9 0 0 1 18 0z" />
-                          <circle cx="12" cy="10" r="3" />
-                        </svg>
-                      </span>
-                      <span className="min-w-0">
-                        <span className="block text-[10px] font-semibold uppercase tracking-wider text-stone-500">
-                          Adresse
+                          <svg
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            strokeWidth="2"
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            className="h-4 w-4"
+                          >
+                            <path d="M21 10c0 7-9 13-9 13S3 17 3 10a9 9 0 0 1 18 0z" />
+                            <circle cx="12" cy="10" r="3" />
+                          </svg>
                         </span>
-                        <span className="block text-sm font-semibold text-stone-900">
-                          Cocody, Abidjan
+                        <span className="min-w-0">
+                          <span className="block text-[10px] font-semibold uppercase tracking-wider text-stone-500">
+                            Adresse
+                          </span>
+                          <span className="block text-sm font-semibold text-stone-900">
+                            {contactAddress}
+                          </span>
+                          {mapsHref ? (
+                            <a
+                              href={mapsHref}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="text-[11px] text-stone-700 underline decoration-dotted underline-offset-2 hover:text-stone-900"
+                            >
+                              Voir l&apos;itinéraire
+                            </a>
+                          ) : null}
                         </span>
-                        <a
-                          href="https://maps.google.com/?q=Cocody+Abidjan"
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="text-[11px] text-stone-700 underline decoration-dotted underline-offset-2 hover:text-stone-900"
-                        >
-                          Voir l'itinéraire
-                        </a>
-                      </span>
-                    </div>
-                  </li>
+                      </div>
+                    </li>
+                  ) : null}
                 </ul>
 
-                <div className="mt-5 rounded-xl border border-stone-200 bg-stone-50 p-4">
-                  <p className="text-[10px] font-semibold uppercase tracking-wider text-stone-500">
-                    Horaires d'ouverture
+                {!hasContactDetails ? (
+                  <p className="mt-6 text-sm text-stone-500">
+                    Les coordonnées de contact seront affichées ici une fois
+                    renseignées par le commerçant.
                   </p>
-                  <ul className="mt-2 space-y-1 text-sm">
-                    <li className="flex items-center justify-between gap-3 text-stone-800">
-                      <span>Lundi — Vendredi</span>
-                      <span className="font-mono-nums text-stone-900">
-                        8h00 — 20h00
-                      </span>
-                    </li>
-                    <li className="flex items-center justify-between gap-3 text-stone-800">
-                      <span>Samedi</span>
-                      <span className="font-mono-nums text-stone-900">
-                        9h00 — 21h00
-                      </span>
-                    </li>
-                    <li className="flex items-center justify-between gap-3 text-stone-500">
-                      <span>Dimanche</span>
-                      <span className="font-mono-nums">Fermé</span>
-                    </li>
-                  </ul>
-                </div>
+                ) : null}
+
+                {contactOpeningHours ? (
+                  <div className="mt-5 rounded-xl border border-stone-200 bg-stone-50 p-4">
+                    <p className="text-[10px] font-semibold uppercase tracking-wider text-stone-500">
+                      Horaires d&apos;ouverture
+                    </p>
+                    <p className="mt-2 whitespace-pre-line text-sm text-stone-800">
+                      {contactOpeningHours}
+                    </p>
+                  </div>
+                ) : null}
               </div>
 
-              {/* Formulaire */}
+              {shopEmail ? (
               <form
                 onSubmit={submitContact}
                 className="rounded-2xl border border-stone-200 bg-stone-50 p-4 sm:p-5"
@@ -1642,7 +1671,7 @@ export function LuxuryStorefrontView({
                   Message rapide
                 </h3>
                 <p className="mt-1 text-xs text-stone-500">
-                  Votre client mail s'ouvrira pré-rempli.
+                  Votre client mail s&apos;ouvrira pré-rempli.
                 </p>
 
                 <div className="mt-4 space-y-3">
@@ -1710,20 +1739,25 @@ export function LuxuryStorefrontView({
                     role="status"
                     className="mt-3 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs text-emerald-800"
                   >
-                    Votre client mail s'est ouvert. Si rien ne s'affiche,
+                    Votre client mail s&apos;est ouvert. Si rien ne s&apos;affiche,
                     écrivez directement à{' '}
-                    <span className="font-semibold">
-                      support@caisseci.local
-                    </span>
-                    .
+                    <span className="font-semibold">{shopEmail}</span>.
                   </p>
                 ) : null}
 
                 <p className="mt-3 text-[11px] text-stone-500">
-                  En soumettant, vous acceptez d'être recontacté à propos de
+                  En soumettant, vous acceptez d&apos;être recontacté à propos de
                   votre demande.
                 </p>
               </form>
+              ) : (
+                <div className="rounded-2xl border border-dashed border-stone-300 bg-stone-50 p-4 sm:p-5">
+                  <p className="text-sm text-stone-600">
+                    Le formulaire de contact sera disponible lorsque le
+                    commerçant aura renseigné une adresse email.
+                  </p>
+                </div>
+              )}
             </div>
           </section>
         </main>
@@ -1744,10 +1778,9 @@ export function LuxuryStorefrontView({
                 <BrandLogo size="xl" alt={BRAND_NAME} ring="gold" />
               )}
               <p className="mt-2 text-sm font-semibold text-stone-900">{shopTitle}</p>
-              <p className="mt-1 text-sm text-stone-600">
-                Commande en ligne avec validation en magasin, livraison locale et
-                retrait rapide.
-              </p>
+              {footerTagline ? (
+                <p className="mt-1 text-sm text-stone-600">{footerTagline}</p>
+              ) : null}
             </div>
 
             <div>
@@ -1794,33 +1827,45 @@ export function LuxuryStorefrontView({
               <p className="text-xs font-semibold uppercase tracking-[0.16em] text-stone-600">
                 Contact & Horaires
               </p>
-              <a
-                href="tel:+22507000000"
-                className="mt-2 block text-sm text-stone-800 hover:text-stone-900"
-              >
-                +225 07 00 00 00 00
-              </a>
-              <a
-                href="mailto:support@caisseci.local"
-                className="block text-sm text-stone-800 hover:text-stone-900"
-              >
-                support@caisseci.local
-              </a>
-              <p className="mt-1 text-xs text-stone-500">
-                Lun-Ven 8h-20h · Sam 9h-21h
-              </p>
+              {contactPhone && telHref ? (
+                <a
+                  href={telHref}
+                  className="mt-2 block text-sm text-stone-800 hover:text-stone-900"
+                >
+                  {contactPhone}
+                </a>
+              ) : null}
+              {shopEmail ? (
+                <a
+                  href={`mailto:${shopEmail}`}
+                  className="block text-sm text-stone-800 hover:text-stone-900"
+                >
+                  {shopEmail}
+                </a>
+              ) : null}
+              {contactOpeningHours ? (
+                <p className="mt-1 whitespace-pre-line text-xs text-stone-500">
+                  {contactOpeningHours}
+                </p>
+              ) : null}
+              {!contactPhone && !shopEmail && !contactOpeningHours ? (
+                <p className="mt-2 text-sm text-stone-500">—</p>
+              ) : null}
             </div>
 
             <div>
               <p className="text-xs font-semibold uppercase tracking-[0.16em] text-stone-600">
-                Assistance client
+                Mentions
               </p>
-              <p className="mt-2 text-sm text-stone-600">
-                FAQ, suivi commande et support achat.
-              </p>
-              <p className="mt-2 text-xs text-stone-500">
-                Réponse rapide pendant les horaires d'ouverture.
-              </p>
+              {legalMentions ? (
+                <p className="mt-2 whitespace-pre-line text-sm text-stone-600">
+                  {legalMentions}
+                </p>
+              ) : (
+                <p className="mt-2 text-sm text-stone-500">
+                  Informations légales à venir.
+                </p>
+              )}
             </div>
           </div>
 

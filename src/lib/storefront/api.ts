@@ -66,6 +66,14 @@ export async function patchStorefrontBranding(
       primaryColor: branding.primaryColor ?? '',
       bannerUrl: branding.bannerUrl ?? '',
       welcomeMessage: branding.welcomeMessage ?? '',
+      phone: branding.phone ?? '',
+      whatsapp: branding.whatsapp ?? '',
+      email: branding.email ?? '',
+      address: branding.address ?? '',
+      mapsUrl: branding.mapsUrl ?? '',
+      openingHours: branding.openingHours ?? '',
+      footerTagline: branding.footerTagline ?? '',
+      legalMentions: branding.legalMentions ?? '',
     }),
   })
   return parseJson(res)

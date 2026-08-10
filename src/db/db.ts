@@ -979,7 +979,11 @@ export async function ensureAllLocationStockRows(): Promise<void> {
 
 export async function ensureSeed(): Promise<void> {
   await ensureStores()
-  await db.products.bulkPut(SEED_PRODUCTS)
+  // Ne pas réinjecter le catalogue démo à chaque démarrage : sinon les
+  // suppressions (et modifications) d’articles seed reviendraient au reload.
+  if ((await db.products.count()) === 0) {
+    await db.products.bulkPut(SEED_PRODUCTS)
+  }
 
   const existingMainStocks = new Set(
     (
@@ -995,7 +999,14 @@ export async function ensureSeed(): Promise<void> {
       stock,
     }))
   if (mainStocks.length > 0) {
-    await db.storeStocks.bulkPut(mainStocks)
+    // Uniquement pour des produits encore présents (évite des stocks orphelins).
+    const productIds = new Set((await db.products.toArray()).map((p) => p.id))
+    const stocksForExisting = mainStocks.filter((s) =>
+      productIds.has(s.productId),
+    )
+    if (stocksForExisting.length > 0) {
+      await db.storeStocks.bulkPut(stocksForExisting)
+    }
   }
 
   await ensureAllStoreStockRows()

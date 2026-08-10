@@ -119,7 +119,39 @@ const storefrontBrandingSchema = z.object({
     .optional(),
   bannerUrl: optionalHttpsOrDataUrl,
   welcomeMessage: z.string().trim().max(500).optional(),
+  phone: z.string().trim().max(40).optional(),
+  whatsapp: z.string().trim().max(40).optional(),
+  email: z.string().trim().max(160).optional(),
+  address: z.string().trim().max(300).optional(),
+  mapsUrl: z
+    .string()
+    .trim()
+    .max(500)
+    .refine(
+      (value) => value === '' || /^https?:\/\//i.test(value),
+      { message: 'URL Maps invalide' },
+    )
+    .optional(),
+  openingHours: z.string().trim().max(1_000).optional(),
+  footerTagline: z.string().trim().max(200).optional(),
+  legalMentions: z.string().trim().max(1_000).optional(),
 })
+
+const BRANDING_STRING_KEYS = [
+  'shopName',
+  'logoUrl',
+  'primaryColor',
+  'bannerUrl',
+  'welcomeMessage',
+  'phone',
+  'whatsapp',
+  'email',
+  'address',
+  'mapsUrl',
+  'openingHours',
+  'footerTagline',
+  'legalMentions',
+] as const
 
 function readExistingBranding(menu: unknown): Record<string, string> | undefined {
   if (!menu || typeof menu !== 'object') return undefined
@@ -127,13 +159,7 @@ function readExistingBranding(menu: unknown): Record<string, string> | undefined
   if (!branding || typeof branding !== 'object') return undefined
   const raw = branding as Record<string, unknown>
   const next: Record<string, string> = {}
-  for (const key of [
-    'shopName',
-    'logoUrl',
-    'primaryColor',
-    'bannerUrl',
-    'welcomeMessage',
-  ] as const) {
+  for (const key of BRANDING_STRING_KEYS) {
     if (typeof raw[key] === 'string' && raw[key].trim()) {
       next[key] = raw[key].trim()
     }
@@ -146,13 +172,7 @@ function mergeBrandingPatch(
   patch: z.infer<typeof storefrontBrandingSchema>,
 ): Record<string, string> | undefined {
   const next: Record<string, string> = { ...(current ?? {}) }
-  for (const key of [
-    'shopName',
-    'logoUrl',
-    'primaryColor',
-    'bannerUrl',
-    'welcomeMessage',
-  ] as const) {
+  for (const key of BRANDING_STRING_KEYS) {
     if (!(key in patch)) continue
     const value = patch[key]
     if (value == null || value.trim() === '') {

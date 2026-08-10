@@ -88,7 +88,11 @@ export function IconButton({
   ...rest
 }: Omit<Props, 'iconLeft' | 'iconRight' | 'loading' | 'fullWidth'>) {
   const dim =
-    size === 'sm' ? 'h-8 w-8' : size === 'lg' ? 'h-11 w-11' : 'h-9 w-9'
+    size === 'sm'
+      ? 'h-8 w-8 [&_svg]:h-4 [&_svg]:w-4'
+      : size === 'lg'
+        ? 'h-11 w-11 [&_svg]:h-5 [&_svg]:w-5'
+        : 'h-9 w-9 [&_svg]:h-[18px] [&_svg]:w-[18px]'
   return (
     <button
       type="button"
@@ -96,7 +100,6 @@ export function IconButton({
         'ui-btn ui-icon-btn shrink-0 px-0',
         VARIANT[variant],
         dim,
-        '[&_svg]:h-4 [&_svg]:w-4',
         className,
       )}
       {...rest}

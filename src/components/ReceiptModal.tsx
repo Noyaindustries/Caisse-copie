@@ -157,6 +157,8 @@ export function ReceiptModal({ source, autoPrint = false, onClose }: Props) {
     [sale.createdAt],
   )
   const amt = salePaymentAmounts(sale)
+  /** Tiroir auto uniquement s’il y a de la monnaie à rendre. */
+  const needsCashDrawer = (sale.changeDue ?? 0) > 0
   const vatSlices = vatSlicesFromLinesTTC(sale.lines, sale.discountPct)
   const modalTitle = isOnline
     ? 'Reçu commande en ligne'
@@ -298,11 +300,11 @@ export function ReceiptModal({ source, autoPrint = false, onClose }: Props) {
         }),
       ])
       const result = await printReceiptJob(source, {
-        openCashDrawer: amt.cash > 0,
+        openCashDrawer: needsCashDrawer,
         preferBrowser: !escposReady,
         browserFallback: printViaBrowser,
       })
-      if (amt.cash > 0) {
+      if (needsCashDrawer) {
         setDrawerOpenedOk(result.drawerOpened === true)
       }
       if (result.mode === 'escpos') {
@@ -312,7 +314,7 @@ export function ReceiptModal({ source, autoPrint = false, onClose }: Props) {
           'Impression',
           'Si le dialogue ne s’ouvre pas, cliquez Imprimer (bloqueurs Chrome).',
         )
-        if (amt.cash > 0 && result.drawerOpened === false) {
+        if (needsCashDrawer && result.drawerOpened === false) {
           toast.warning(
             'Tiroir-caisse',
             'Cliquez « Connecter USB » ci-dessous (COM3), puis « Ouvrir tiroir ». ' +
@@ -329,7 +331,7 @@ export function ReceiptModal({ source, autoPrint = false, onClose }: Props) {
     } finally {
       setPrinting(false)
     }
-  }, [amt.cash, printing, printViaBrowser, source, toast])
+  }, [needsCashDrawer, printing, printViaBrowser, source, toast])
 
   const printReceiptRef = useRef(printReceipt)
   printReceiptRef.current = printReceipt
@@ -378,7 +380,7 @@ export function ReceiptModal({ source, autoPrint = false, onClose }: Props) {
           <Button variant="ghost" onClick={onClose}>
             Fermer
           </Button>
-          {amt.cash > 0 && drawerOpenedOk !== true ? (
+          {needsCashDrawer && drawerOpenedOk !== true ? (
             <>
               <Button
                 variant="secondary"

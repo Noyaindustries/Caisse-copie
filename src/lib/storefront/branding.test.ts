@@ -3,6 +3,9 @@ import {
   normalizeStorefrontBranding,
   storefrontAccentColor,
   storefrontDisplayName,
+  storefrontMapsHref,
+  storefrontTelHref,
+  storefrontWhatsAppHref,
   type PublishedStorefrontMenu,
   type StorefrontBranding,
 } from './types'
@@ -54,6 +57,48 @@ describe('normalizeStorefrontBranding', () => {
         logoUrl: 'https://example.com/logo.png',
       })?.logoUrl,
     ).toBe('https://example.com/logo.png')
+  })
+
+  it('normalise contact et pied de page', () => {
+    expect(
+      normalizeStorefrontBranding({
+        phone: '  +225 07 00 00 00 00  ',
+        whatsapp: '0700112233',
+        email: '  contact@shop.ci ',
+        address: ' Plateau, Abidjan ',
+        mapsUrl: 'https://maps.google.com/?q=Plateau',
+        openingHours: 'Lun–Ven 8h–20h',
+        footerTagline: 'Commandez en ligne',
+        legalMentions: 'RCCM CI-ABJ-123',
+      }),
+    ).toEqual({
+      phone: '+225 07 00 00 00 00',
+      whatsapp: '0700112233',
+      email: 'contact@shop.ci',
+      address: 'Plateau, Abidjan',
+      mapsUrl: 'https://maps.google.com/?q=Plateau',
+      openingHours: 'Lun–Ven 8h–20h',
+      footerTagline: 'Commandez en ligne',
+      legalMentions: 'RCCM CI-ABJ-123',
+    })
+  })
+
+  it('rejette une mapsUrl non http(s)', () => {
+    expect(
+      normalizeStorefrontBranding({ mapsUrl: 'javascript:alert(1)' }),
+    ).toBeUndefined()
+  })
+})
+
+describe('storefront contact href helpers', () => {
+  it('construit tel et wa.me', () => {
+    expect(storefrontTelHref('+225 07 00 00 00 00')).toBe('tel:+2250700000000')
+    expect(storefrontWhatsAppHref(undefined, '+225 07 11 22 33 44')).toBe(
+      'https://wa.me/2250711223344',
+    )
+    expect(
+      storefrontMapsHref(undefined, 'Cocody, Abidjan'),
+    ).toBe('https://maps.google.com/?q=Cocody%2C%20Abidjan')
   })
 })
 

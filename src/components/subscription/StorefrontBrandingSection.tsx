@@ -55,6 +55,14 @@ export function StorefrontBrandingSection({
   const [logoUrl, setLogoUrl] = useState('')
   const [bannerUrl, setBannerUrl] = useState('')
   const [storeNameHint, setStoreNameHint] = useState('')
+  const [phone, setPhone] = useState('')
+  const [whatsapp, setWhatsapp] = useState('')
+  const [email, setEmail] = useState('')
+  const [address, setAddress] = useState('')
+  const [mapsUrl, setMapsUrl] = useState('')
+  const [openingHours, setOpeningHours] = useState('')
+  const [footerTagline, setFooterTagline] = useState('')
+  const [legalMentions, setLegalMentions] = useState('')
 
   useEffect(() => {
     let cancelled = false
@@ -72,6 +80,14 @@ export function StorefrontBrandingSection({
         setWelcomeMessage(data.branding.welcomeMessage ?? '')
         setLogoUrl(data.branding.logoUrl ?? '')
         setBannerUrl(data.branding.bannerUrl ?? '')
+        setPhone(data.branding.phone ?? '')
+        setWhatsapp(data.branding.whatsapp ?? '')
+        setEmail(data.branding.email ?? '')
+        setAddress(data.branding.address ?? '')
+        setMapsUrl(data.branding.mapsUrl ?? '')
+        setOpeningHours(data.branding.openingHours ?? '')
+        setFooterTagline(data.branding.footerTagline ?? '')
+        setLegalMentions(data.branding.legalMentions ?? '')
         setStoreNameHint(data.storeName)
         setCachedReceiptLogoUrl(data.branding.logoUrl)
       } catch (err) {
@@ -147,6 +163,14 @@ export function StorefrontBrandingSection({
         welcomeMessage: welcomeMessage.trim() || undefined,
         logoUrl: logoUrl.trim() || undefined,
         bannerUrl: bannerUrl.trim() || undefined,
+        phone: phone.trim() || undefined,
+        whatsapp: whatsapp.trim() || undefined,
+        email: email.trim() || undefined,
+        address: address.trim() || undefined,
+        mapsUrl: mapsUrl.trim() || undefined,
+        openingHours: openingHours.trim() || undefined,
+        footerTagline: footerTagline.trim() || undefined,
+        legalMentions: legalMentions.trim() || undefined,
       }
       await patchStorefrontBranding(branding)
       setCachedReceiptLogoUrl(branding.logoUrl)
@@ -317,6 +341,106 @@ export function StorefrontBrandingSection({
               />
             </Field>
           </div>
+
+          <div className="sm:col-span-2 border-t border-border pt-4">
+            <h3 className="text-sm font-semibold text-ink">
+              Contact & pied de page
+            </h3>
+            <p className="mt-1 text-xs text-ink-muted">
+              Affichés sur la vitrine publique. Laissez vide pour masquer un
+              bloc.
+            </p>
+          </div>
+
+          <Field label="Téléphone">
+            <Input
+              value={phone}
+              onChange={(e) => setPhone(e.target.value)}
+              placeholder="+225 07 00 00 00 00"
+              maxLength={40}
+              disabled={!online || !usable}
+            />
+          </Field>
+          <Field label="WhatsApp" hint="Optionnel — sinon dérivé du téléphone">
+            <Input
+              value={whatsapp}
+              onChange={(e) => setWhatsapp(e.target.value)}
+              placeholder="+225 07 00 00 00 00"
+              maxLength={40}
+              disabled={!online || !usable}
+            />
+          </Field>
+          <Field label="Email de contact">
+            <Input
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              placeholder="contact@votre-boutique.com"
+              maxLength={160}
+              disabled={!online || !usable}
+            />
+          </Field>
+          <Field label="Adresse">
+            <Input
+              value={address}
+              onChange={(e) => setAddress(e.target.value)}
+              placeholder="Cocody, Abidjan"
+              maxLength={300}
+              disabled={!online || !usable}
+            />
+          </Field>
+          <div className="sm:col-span-2">
+            <Field
+              label="Lien Google Maps"
+              hint="Optionnel — sinon construit depuis l’adresse"
+            >
+              <Input
+                value={mapsUrl}
+                onChange={(e) => setMapsUrl(e.target.value)}
+                placeholder="https://maps.google.com/?q=…"
+                maxLength={500}
+                disabled={!online || !usable}
+              />
+            </Field>
+          </div>
+          <div className="sm:col-span-2">
+            <Field label="Horaires d’ouverture">
+              <Textarea
+                value={openingHours}
+                onChange={(e) => setOpeningHours(e.target.value)}
+                placeholder={
+                  'Lun–Ven : 8h–20h\nSam : 9h–21h\nDimanche : fermé'
+                }
+                maxLength={1000}
+                rows={3}
+                disabled={!online || !usable}
+              />
+            </Field>
+          </div>
+          <div className="sm:col-span-2">
+            <Field label="Accroche pied de page">
+              <Input
+                value={footerTagline}
+                onChange={(e) => setFooterTagline(e.target.value)}
+                placeholder="Commande en ligne, retrait en magasin."
+                maxLength={200}
+                disabled={!online || !usable}
+              />
+            </Field>
+          </div>
+          <div className="sm:col-span-2">
+            <Field label="Mentions légales / infos footer">
+              <Textarea
+                value={legalMentions}
+                onChange={(e) => setLegalMentions(e.target.value)}
+                placeholder="RCCM, NIF, CGV…"
+                maxLength={1000}
+                rows={3}
+                disabled={!online || !usable}
+              />
+            </Field>
+          </div>
+
           <div className="sm:col-span-2">
             <Button
               type="button"

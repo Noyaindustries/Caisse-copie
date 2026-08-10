@@ -6,6 +6,19 @@ export type StorefrontBranding = {
   primaryColor?: string
   bannerUrl?: string
   welcomeMessage?: string
+  /** Téléphone affiché (lien tel:). */
+  phone?: string
+  /** WhatsApp (si vide côté UI, dérivé de phone). */
+  whatsapp?: string
+  email?: string
+  address?: string
+  mapsUrl?: string
+  /** Horaires multi-lignes. */
+  openingHours?: string
+  /** Accroche courte du pied de page. */
+  footerTagline?: string
+  /** Mentions légales / texte bas de page. */
+  legalMentions?: string
 }
 
 export type PublishedStorefrontMenu = {
@@ -106,7 +119,63 @@ export function normalizeStorefrontBranding(
     if (HEX_COLOR_RE.test(primaryColor)) branding.primaryColor = primaryColor
   }
 
+  const trimField = (
+    key: keyof StorefrontBranding,
+    max: number,
+  ): void => {
+    const value = raw[key]
+    if (typeof value !== 'string') return
+    const trimmed = value.trim().slice(0, max)
+    if (trimmed) branding[key] = trimmed
+  }
+
+  trimField('phone', 40)
+  trimField('whatsapp', 40)
+  trimField('email', 160)
+  trimField('address', 300)
+  trimField('openingHours', 1_000)
+  trimField('footerTagline', 200)
+  trimField('legalMentions', 1_000)
+
+  if (typeof raw.mapsUrl === 'string') {
+    const mapsUrl = raw.mapsUrl.trim().slice(0, 500)
+    if (mapsUrl && /^https?:\/\//i.test(mapsUrl)) {
+      branding.mapsUrl = mapsUrl
+    }
+  }
+
   return Object.keys(branding).length > 0 ? branding : undefined
+}
+
+/** Chiffres seuls pour tel: / wa.me. */
+export function storefrontPhoneDigits(raw: string | undefined): string {
+  if (!raw) return ''
+  return raw.replace(/\D/g, '')
+}
+
+export function storefrontTelHref(phone: string | undefined): string | undefined {
+  const digits = storefrontPhoneDigits(phone)
+  return digits ? `tel:+${digits}` : undefined
+}
+
+export function storefrontWhatsAppHref(
+  whatsapp: string | undefined,
+  phoneFallback?: string,
+): string | undefined {
+  const digits =
+    storefrontPhoneDigits(whatsapp) || storefrontPhoneDigits(phoneFallback)
+  return digits ? `https://wa.me/${digits}` : undefined
+}
+
+export function storefrontMapsHref(
+  mapsUrl: string | undefined,
+  address: string | undefined,
+): string | undefined {
+  const url = mapsUrl?.trim()
+  if (url && /^https?:\/\//i.test(url)) return url
+  const addr = address?.trim()
+  if (!addr) return undefined
+  return `https://maps.google.com/?q=${encodeURIComponent(addr)}`
 }
 
 export function storefrontDisplayName(

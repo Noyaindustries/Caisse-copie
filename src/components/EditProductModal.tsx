@@ -6,6 +6,7 @@ import { DEFAULT_VAT_RATE_PCT } from '../lib/money'
 import { resolveProductImageFields, type ProductImageFields } from '../lib/uploads/blob'
 import { Button } from '../ui/Button'
 import { cn } from '../ui/cn'
+import { IconTrash } from '../ui/icons'
 import { Field, Input, Select } from '../ui/Input'
 import { Modal } from '../ui/Modal'
 
@@ -19,6 +20,8 @@ type Props = {
   activeStoreLabel: string
   onClose: () => void
   onSave: (product: Product, stockAtActiveStore: number) => Promise<void>
+  /** Suppression définitive (double confirmation côté parent). */
+  onDelete?: () => void
 }
 
 export function EditProductModal({
@@ -28,6 +31,7 @@ export function EditProductModal({
   activeStoreLabel,
   onClose,
   onSave,
+  onDelete,
 }: Props) {
   const categoryRows =
     useLiveQuery(
@@ -160,6 +164,16 @@ export function EditProductModal({
       subtitle={`Stock affiché pour ${activeStoreLabel}`}
       footer={
         <>
+          {onDelete ? (
+            <Button
+              variant="danger"
+              iconLeft={<IconTrash />}
+              className="mr-auto"
+              onClick={onDelete}
+            >
+              Supprimer
+            </Button>
+          ) : null}
           <Button variant="ghost" onClick={onClose}>
             Annuler
           </Button>
