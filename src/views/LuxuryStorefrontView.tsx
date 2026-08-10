@@ -987,7 +987,7 @@ export function LuxuryStorefrontView({
         className={`storefront-hero${bannerUrl ? ' storefront-hero--banner' : ''}`}
       >
         {bannerUrl ? (
-          <>
+          <div className="storefront-hero-media">
             <img
               src={bannerUrl}
               alt=""
@@ -996,43 +996,34 @@ export function LuxuryStorefrontView({
                 e.currentTarget.style.display = 'none'
               }}
             />
-            <div className="storefront-hero-scrim" aria-hidden />
-          </>
+          </div>
         ) : null}
-        <div className="storefront-hero-content mx-auto flex min-h-[inherit] max-w-6xl flex-col justify-end px-4 pb-10 pt-20 sm:px-5 sm:pb-14">
-          {logoUrl ? (
-            <img
-              src={logoUrl}
-              alt=""
-              className="mb-4 h-16 w-16 rounded-full border-2 border-stone-200 object-cover shadow-lg bg-white sm:h-20 sm:w-20"
-              onError={(e) => {
-                e.currentTarget.style.display = 'none'
-              }}
-            />
-          ) : null}
-          <h1 className="max-w-2xl font-display text-4xl font-bold tracking-tight text-balance text-stone-900 sm:text-5xl lg:text-6xl">
+        <div
+          className={
+            bannerUrl
+              ? 'storefront-hero-content mx-auto w-full max-w-6xl px-4 py-5 sm:px-5 sm:py-7'
+              : 'storefront-hero-content mx-auto flex min-h-[inherit] max-w-6xl flex-col justify-end px-4 pb-10 pt-20 sm:px-5 sm:pb-14'
+          }
+        >
+          <h1
+            className={
+              bannerUrl
+                ? 'max-w-2xl font-display text-2xl font-bold tracking-tight text-balance text-stone-900 sm:text-4xl lg:text-5xl'
+                : 'max-w-2xl font-display text-4xl font-bold tracking-tight text-balance text-stone-900 sm:text-5xl lg:text-6xl'
+            }
+          >
             {shopTitle}
           </h1>
-          <p className="mt-3 max-w-xl text-base leading-relaxed text-stone-700 sm:text-lg">
+          <p
+            className={
+              bannerUrl
+                ? 'mt-2 max-w-xl text-sm leading-relaxed text-stone-600 sm:text-base'
+                : 'mt-3 max-w-xl text-base leading-relaxed text-stone-700 sm:text-lg'
+            }
+          >
             {welcomeMessage ??
               'Commandez en ligne, retirez en boutique ou faites-vous livrer près de chez vous.'}
           </p>
-          <div className="mt-6 flex flex-wrap gap-2">
-            <button
-              type="button"
-              onClick={scrollToProducts}
-              className="storefront-btn-accent rounded-xl px-5 py-2.5 text-sm"
-            >
-              Voir le menu
-            </button>
-            <button
-              type="button"
-              onClick={openCart}
-              className="rounded-xl border border-stone-300 bg-white/80 px-5 py-2.5 text-sm font-semibold text-stone-800 transition hover:bg-white"
-            >
-              Panier ({itemCount})
-            </button>
-          </div>
         </div>
       </section>
 
