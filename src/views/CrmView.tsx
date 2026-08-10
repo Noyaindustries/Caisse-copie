@@ -80,6 +80,8 @@ export function CrmView({ actor }: Props) {
       actorProfileId: actor.id,
       actorDisplayName: actor.displayName,
     })
+    const { scheduleWorkspaceOpsPush } = await import('../lib/workspaceOpsCloud')
+    scheduleWorkspaceOpsPush()
     setNote('')
     setNextActionDate('')
     toast.success('Interaction CRM enregistrée')

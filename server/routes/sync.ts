@@ -93,8 +93,15 @@ syncRouter.get('/caisseci/sync/pull', async (req, res) => {
     const excludeTerminal = req.header('x-terminal-id')?.trim() ?? null
     const sinceMs = since.getTime()
 
-    const [staffRows, orders, integration, deltas, catalogCategories, workspaceCatalog] =
-      await Promise.all([
+    const [
+      staffRows,
+      orders,
+      integration,
+      deltas,
+      catalogCategories,
+      workspaceCatalog,
+      workspaceOps,
+    ] = await Promise.all([
       prisma.staffMember.findMany({
         where: { organizationId: org.id, revokedAt: null },
         orderBy: { updatedAt: 'desc' },
@@ -115,6 +122,7 @@ syncRouter.get('/caisseci/sync/pull', async (req, res) => {
       import('../lib/workspaceCatalog.js').then((m) =>
         m.getOrgWorkspaceCatalog(org.id),
       ),
+      import('../lib/workspaceOps.js').then((m) => m.getOrgWorkspaceOps(org.id)),
     ])
 
     const blocked = assertSubscriptionActive(org)
@@ -144,6 +152,7 @@ syncRouter.get('/caisseci/sync/pull', async (req, res) => {
       integrations: integration?.config ?? {},
       catalogCategories,
       workspaceCatalog,
+      workspaceOps,
       sales: deltas.sales,
       stockUpdates: deltas.stockUpdates,
       organization: {

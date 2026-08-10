@@ -368,9 +368,12 @@ export function Shell({ staff, online, onLogout }: Props) {
         console.warn('[Sync]', r.error)
       }
     })
-    // Migre le catalogue local déjà présent (produits, magasins, etc.) vers le cloud.
+    // Migre le catalogue + données métier locales vers le cloud.
     void import('./lib/workspaceCatalogCloud')
       .then((m) => m.scheduleWorkspaceCatalogPush(1_500))
+      .catch(() => undefined)
+    void import('./lib/workspaceOpsCloud')
+      .then((m) => m.scheduleWorkspaceOpsPush(2_000))
       .catch(() => undefined)
   }, [online, refreshSyncMeta])
 
@@ -577,7 +580,9 @@ export function Shell({ staff, online, onLogout }: Props) {
       const { pushWorkspaceCatalogToCloud } = await import(
         './lib/workspaceCatalogCloud'
       )
+      const { pushWorkspaceOpsToCloud } = await import('./lib/workspaceOpsCloud')
       await pushWorkspaceCatalogToCloud()
+      await pushWorkspaceOpsToCloud()
       if (r.mode === 'cloud' || r.mode === 'local' || r.mode === 'noop') {
         refreshSyncMeta()
         await touchTerminalSyncTimestamp()
@@ -1201,6 +1206,29 @@ export function Shell({ staff, online, onLogout }: Props) {
           })
         },
       )
+
+      // Pousse les stocks post-vente vers le cloud (hors transaction Dexie).
+      const { enqueueStockSync } = await import('./lib/sync')
+      for (const line of cart) {
+        const rid = storeStockRowId(activeStoreId, line.productId)
+        const row = await db.storeStocks.get(rid)
+        const p = await db.products.get(line.productId)
+        if (!row || !p) continue
+        await enqueueStockSync({
+          productId: line.productId,
+          stock: row.stock,
+          lowStockThreshold: p.lowStockThreshold,
+          storeId: activeStoreId,
+        })
+      }
+      const { scheduleWorkspaceOpsPush } = await import('./lib/workspaceOpsCloud')
+      scheduleWorkspaceOpsPush()
+      if (appliedPromotionId) {
+        const { scheduleWorkspaceCatalogPush } = await import(
+          './lib/workspaceCatalogCloud'
+        )
+        scheduleWorkspaceCatalogPush()
+      }
 
       setReceiptOpen({
         type: 'sale',

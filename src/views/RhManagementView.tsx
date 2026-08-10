@@ -89,6 +89,8 @@ export function RhManagementView({ actor, canReview }: Props) {
       amountFCFA: Number.isFinite(amount) && amount > 0 ? amount : undefined,
     }
     await db.hrRequests.add(rec)
+    const { scheduleWorkspaceOpsPush } = await import('../lib/workspaceOpsCloud')
+    scheduleWorkspaceOpsPush()
     setReason('')
     setAmountFCFA('')
     toast.success('Demande RH créée')
@@ -120,6 +122,8 @@ export function RhManagementView({ actor, canReview }: Props) {
       setPendingRejectId(null)
       setPendingRejectUntil(0)
     }
+    const { scheduleWorkspaceOpsPush } = await import('../lib/workspaceOpsCloud')
+    scheduleWorkspaceOpsPush()
     toast.success(status === 'approved' ? 'Demande approuvée' : 'Demande rejetée')
   }
 

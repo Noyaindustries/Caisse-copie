@@ -527,6 +527,12 @@ export function TablesManagementView({
           }
         }
       })
+      const { scheduleWorkspaceOpsPush } = await import('../lib/workspaceOpsCloud')
+      scheduleWorkspaceOpsPush()
+      const { scheduleWorkspaceCatalogPush } = await import(
+        '../lib/workspaceCatalogCloud'
+      )
+      scheduleWorkspaceCatalogPush()
       toast.success('Réservation enregistrée', customerName)
       setResCustomerName('')
       setResPhone('')
@@ -554,6 +560,10 @@ export function TablesManagementView({
       patch.note = undefined
     }
     await db.diningTables.update(table.id, patch)
+    const { scheduleWorkspaceCatalogPush } = await import(
+      '../lib/workspaceCatalogCloud'
+    )
+    scheduleWorkspaceCatalogPush()
   }
 
   const updateReservationStatus = async (
@@ -586,6 +596,12 @@ export function TablesManagementView({
         })
       }
     })
+    const { scheduleWorkspaceOpsPush } = await import('../lib/workspaceOpsCloud')
+    scheduleWorkspaceOpsPush()
+    const { scheduleWorkspaceCatalogPush } = await import(
+      '../lib/workspaceCatalogCloud'
+    )
+    scheduleWorkspaceCatalogPush()
   }
 
   const moveTable = async (table: DiningTable, direction: -1 | 1): Promise<void> => {

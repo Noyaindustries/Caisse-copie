@@ -384,6 +384,8 @@ export function StocksView({ isAdmin, auditActor }: Props) {
         '../lib/workspaceCatalogCloud'
       )
       scheduleWorkspaceCatalogPush()
+      const { scheduleWorkspaceOpsPush } = await import('../lib/workspaceOpsCloud')
+      scheduleWorkspaceOpsPush()
       void appendAuditEvent({
         kind: 'stock_adjusted',
         actor: auditActor,
@@ -581,6 +583,8 @@ export function StocksView({ isAdmin, auditActor }: Props) {
       '../lib/workspaceCatalogCloud'
     )
     scheduleWorkspaceCatalogPush()
+    const { scheduleWorkspaceOpsPush } = await import('../lib/workspaceOpsCloud')
+    scheduleWorkspaceOpsPush()
     setIngredientName('')
     setIngredientStock('0')
     setIngredientThreshold('0')

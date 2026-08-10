@@ -277,6 +277,8 @@ export function TicketsFacturesView({
           updatedByDisplayName: actor.displayName,
         }
         await db.ticketInvoices.put(updatedRow)
+        const { scheduleWorkspaceOpsPush } = await import('../lib/workspaceOpsCloud')
+        scheduleWorkspaceOpsPush()
         if (updatedRow.linkedSaleId) {
           await db.sales.update(updatedRow.linkedSaleId, {
             lines: updatedRow.lines,
@@ -318,6 +320,8 @@ export function TicketsFacturesView({
         )
       } else {
         await db.ticketInvoices.add(payload)
+        const { scheduleWorkspaceOpsPush } = await import('../lib/workspaceOpsCloud')
+        scheduleWorkspaceOpsPush()
         toast.success(`${kindLabel(kind)} enregistre`, payload.reference)
       }
       setEditingId(null)
@@ -343,6 +347,8 @@ export function TicketsFacturesView({
     if (status === 'issued') patch.issuedAt = now
     if (status === 'paid') patch.paidAt = now
     await db.ticketInvoices.update(row.id, patch)
+    const { scheduleWorkspaceOpsPush } = await import('../lib/workspaceOpsCloud')
+    scheduleWorkspaceOpsPush()
   }
 
   const duplicateDocument = async (row: TicketInvoice) => {
@@ -361,6 +367,8 @@ export function TicketsFacturesView({
       linkedSaleId: undefined,
     }
     await db.ticketInvoices.add(payload)
+    const { scheduleWorkspaceOpsPush } = await import('../lib/workspaceOpsCloud')
+    scheduleWorkspaceOpsPush()
     toast.success('Document duplique', payload.reference)
   }
 

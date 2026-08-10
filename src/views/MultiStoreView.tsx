@@ -153,6 +153,27 @@ export function MultiStoreView({
         }
         await db.stockTransfers.add(tr)
       })
+      const fromRow = await db.storeStocks.get(storeStockRowId(fromId, prod.id))
+      const toRow = await db.storeStocks.get(storeStockRowId(toId, prod.id))
+      const { enqueueStockSync } = await import('../lib/sync')
+      if (fromRow) {
+        await enqueueStockSync({
+          productId: prod.id,
+          stock: fromRow.stock,
+          lowStockThreshold: prod.lowStockThreshold,
+          storeId: fromId,
+        })
+      }
+      if (toRow) {
+        await enqueueStockSync({
+          productId: prod.id,
+          stock: toRow.stock,
+          lowStockThreshold: prod.lowStockThreshold,
+          storeId: toId,
+        })
+      }
+      const { scheduleWorkspaceOpsPush } = await import('../lib/workspaceOpsCloud')
+      scheduleWorkspaceOpsPush()
       const fromName = storeById.get(fromId)?.name ?? fromId
       const toName = storeById.get(toId)?.name ?? toId
       void appendAuditEvent({

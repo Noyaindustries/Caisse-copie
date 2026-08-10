@@ -120,7 +120,28 @@ export async function applySaleRefund(params: {
         },
       })
 
-      return { amountTTC: computed.amountTTC }
+      return {
+        amountTTC: computed.amountTTC,
+        storeId,
+        adjustments: computed.adjustments,
+      }
     },
-  )
+  ).then(async (result) => {
+    const { enqueueStockSync } = await import('./sync')
+    for (const adj of result.adjustments) {
+      const rid = storeStockRowId(result.storeId, adj.productId)
+      const row = await db.storeStocks.get(rid)
+      const p = await db.products.get(adj.productId)
+      if (!row || !p) continue
+      await enqueueStockSync({
+        productId: adj.productId,
+        stock: row.stock,
+        lowStockThreshold: p.lowStockThreshold,
+        storeId: result.storeId,
+      })
+    }
+    const { scheduleWorkspaceOpsPush } = await import('./workspaceOpsCloud')
+    scheduleWorkspaceOpsPush()
+    return { amountTTC: result.amountTTC }
+  })
 }

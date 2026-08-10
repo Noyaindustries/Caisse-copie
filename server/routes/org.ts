@@ -123,9 +123,12 @@ orgRouter.post('/org/reset-data', async (req, res) => {
     const { stripWorkspaceCatalogFromConfig } = await import(
       '../lib/workspaceCatalog.js'
     )
-    // Reset métier : ne pas laisser le pull réhydrater l’ancien catalogue.
+    const { stripWorkspaceOpsFromConfig } = await import('../lib/workspaceOps.js')
+    // Reset métier : ne pas laisser le pull réhydrater l’ancien catalogue / ops.
     const nextConfig = {
-      ...stripWorkspaceCatalogFromConfig(prevConfig),
+      ...stripWorkspaceOpsFromConfig(
+        stripWorkspaceCatalogFromConfig(prevConfig),
+      ),
       forceClientWipeAt,
     } as Prisma.InputJsonValue
 
@@ -259,6 +262,38 @@ orgRouter.put('/org/workspace-catalog', async (req, res) => {
   }
 })
 
+orgRouter.get('/org/workspace-ops', async (req, res) => {
+  try {
+    const org = await requireOrg(req, res)
+    if (!org) return
+    const { getOrgWorkspaceOps } = await import('../lib/workspaceOps.js')
+    res.json(await getOrgWorkspaceOps(org.id))
+  } catch (err) {
+    console.error('[org/workspace-ops-get]', err)
+    res.status(500).json({ error: 'Impossible de charger les données métier.' })
+  }
+})
+
+orgRouter.put('/org/workspace-ops', async (req, res) => {
+  try {
+    const org = await requireOrg(req, res)
+    if (!org) return
+    const { workspaceOpsPayloadSchema, saveOrgWorkspaceOps } = await import(
+      '../lib/workspaceOps.js'
+    )
+    const body = workspaceOpsPayloadSchema.parse(req.body ?? {})
+    const ops = await saveOrgWorkspaceOps(org.id, body)
+    res.json({ ok: true, ...ops })
+  } catch (err) {
+    if (err instanceof z.ZodError) {
+      res.status(400).json({ error: 'Données métier workspace invalides.' })
+      return
+    }
+    console.error('[org/workspace-ops-put]', err)
+    res.status(500).json({ error: 'Enregistrement des données métier impossible.' })
+  }
+})
+
 orgRouter.get('/org/integrations', async (req, res) => {
   const org = await requireOrg(req, res)
   if (!org) return
@@ -319,6 +354,8 @@ orgRouter.put('/org/integrations', async (req, res) => {
       'workspaceKitchenIngredients',
       'workspaceProductRecipes',
       'workspaceCatalogUpdatedAt',
+      'workspaceOps',
+      'workspaceOpsUpdatedAt',
     ] as const
     for (const key of workspaceKeys) {
       if (!(key in incoming) && key in prev) {

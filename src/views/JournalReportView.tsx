@@ -292,6 +292,8 @@ export function JournalReportView({
         openingFloat: 0,
       }
       await db.dayClosures.put({ ...prev, dateYmd: todayYmd, openingFloat: n })
+      const { scheduleWorkspaceOpsPush } = await import('../lib/workspaceOpsCloud')
+      scheduleWorkspaceOpsPush()
       toast.success('Fond enregistré', `${formatFCFA(n)}`)
     } finally {
       setBusy(false)
@@ -322,6 +324,8 @@ export function JournalReportView({
         createdByDisplayName: currentProfile.displayName,
       }
       await db.cashOutflows.put(row)
+      const { scheduleWorkspaceOpsPush } = await import('../lib/workspaceOpsCloud')
+      scheduleWorkspaceOpsPush()
       setOutflowAmountEdit('')
       setOutflowLabelEdit('')
       toast.success('Sortie enregistrée', formatFCFA(amount))
@@ -416,6 +420,8 @@ export function JournalReportView({
         closedByProfileId: currentProfile.id,
         closedByDisplayName: currentProfile.displayName,
       })
+      const { scheduleWorkspaceOpsPush } = await import('../lib/workspaceOpsCloud')
+      scheduleWorkspaceOpsPush()
       await appendAuditEvent({
         kind: 'day_closure',
         actor: {
@@ -477,6 +483,8 @@ export function JournalReportView({
         dateYmd: prev.dateYmd,
         openingFloat: prev.openingFloat,
       })
+      const { scheduleWorkspaceOpsPush } = await import('../lib/workspaceOpsCloud')
+      scheduleWorkspaceOpsPush()
       await appendAuditEvent({
         kind: 'day_reopen',
         actor: {

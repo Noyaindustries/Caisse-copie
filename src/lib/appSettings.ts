@@ -113,7 +113,10 @@ export function getAppSettings(): AppSettings {
   return normalizeSettings(readLegacyTableSettings())
 }
 
-export function saveAppSettings(patch: Partial<AppSettings>): AppSettings {
+export function saveAppSettings(
+  patch: Partial<AppSettings>,
+  options?: { skipCloudPush?: boolean },
+): AppSettings {
   const next = normalizeSettings({ ...getAppSettings(), ...patch })
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(next))
@@ -126,6 +129,11 @@ export function saveAppSettings(patch: Partial<AppSettings>): AppSettings {
       next.tableAutoReleaseMinutes,
     )
     window.dispatchEvent(new CustomEvent(APP_SETTINGS_CHANGED_EVENT))
+    if (!options?.skipCloudPush) {
+      void import('./workspaceOpsCloud')
+        .then((m) => m.scheduleWorkspaceOpsPush())
+        .catch(() => undefined)
+    }
   } catch {
     /* ignore */
   }

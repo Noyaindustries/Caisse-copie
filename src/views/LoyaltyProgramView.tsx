@@ -79,6 +79,8 @@ export function LoyaltyProgramView({ canManageLoyalty }: Props) {
         points: delta,
         note: 'Ajustement manuel',
       })
+      const { scheduleWorkspaceOpsPush } = await import('../lib/workspaceOpsCloud')
+      scheduleWorkspaceOpsPush()
       setAdjustPoints('')
       toast.success('Solde fidélité mis à jour')
     } finally {

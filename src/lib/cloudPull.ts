@@ -7,6 +7,7 @@ import { importStorefrontOrdersFromPull } from './storefront/syncInbox'
 import type { UserRole } from '../auth/types'
 import { getOrCreateTerminalId } from './session'
 import type { WorkspaceCatalogCloud } from './workspaceCatalogCloud'
+import type { WorkspaceOpsCloud } from './workspaceOpsCloud'
 
 export type CloudPullResult = {
   ok: boolean
@@ -17,6 +18,7 @@ export type CloudPullResult = {
   mergeConflicts: number
   categoriesMerged: number
   productsMerged: number
+  opsMerged: number
   error?: string
 }
 
@@ -55,6 +57,7 @@ type PullResponse = {
     sortOrder: number
   }>
   workspaceCatalog?: WorkspaceCatalogCloud
+  workspaceOps?: WorkspaceOpsCloud
 }
 
 export async function pullCloudData(): Promise<CloudPullResult> {
@@ -86,6 +89,7 @@ export async function pullCloudData(): Promise<CloudPullResult> {
       await ensureSeed()
       try {
         localStorage.removeItem('caisseci-workspace-catalog-applied-at')
+        localStorage.removeItem('caisseci-workspace-ops-applied-at')
       } catch {
         /* ignore */
       }
@@ -101,6 +105,8 @@ export async function pullCloudData(): Promise<CloudPullResult> {
       './workspaceCatalogCloud'
     )
     const workspace = await mergeWorkspaceCatalogFromCloud(data.workspaceCatalog)
+    const { mergeWorkspaceOpsFromCloud } = await import('./workspaceOpsCloud')
+    const opsMerged = await mergeWorkspaceOpsFromCloud(data.workspaceOps)
     return {
       ok: true,
       staffCount,
@@ -110,6 +116,7 @@ export async function pullCloudData(): Promise<CloudPullResult> {
       mergeConflicts: merge.conflicts,
       categoriesMerged,
       productsMerged: workspace.products,
+      opsMerged,
     }
   } catch (err) {
     return emptyResult(err instanceof Error ? err.message : 'Pull cloud échoué')
@@ -126,6 +133,7 @@ function emptyResult(error: string): CloudPullResult {
     mergeConflicts: 0,
     categoriesMerged: 0,
     productsMerged: 0,
+    opsMerged: 0,
     error,
   }
 }

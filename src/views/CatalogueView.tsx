@@ -1,7 +1,13 @@
 import { useLiveQuery } from 'dexie-react-hooks'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useActiveStore } from '../context/ActiveStoreContext'
-import { addProductCategoryLabel, db } from '../db/db'
+import {
+  addProductCategoryLabel,
+  deleteProductCategoryLabel,
+  db,
+  moveProductCategory,
+  renameProductCategoryLabel,
+} from '../db/db'
 import type { CategoryTab } from '../components/Sidebar'
 import type { Product, ProductWithStock } from '../db/types'
 import { EditProductModal } from '../components/EditProductModal'
@@ -37,6 +43,8 @@ import { useToast } from '../ui/Toast'
 import {
   IconArchive,
   IconCatalogue,
+  IconChevronDown,
+  IconChevronUp,
   IconDownload,
   IconEdit,
   IconEye,
@@ -135,6 +143,7 @@ export function CatalogueView({
   const [showArchived, setShowArchived] = useState(false)
   const [newCategoryName, setNewCategoryName] = useState('')
   const [categoryAddBusy, setCategoryAddBusy] = useState(false)
+  const [categoryEditBusy, setCategoryEditBusy] = useState(false)
   const [pendingArchiveId, setPendingArchiveId] = useState<string | null>(null)
   const [pendingArchiveUntil, setPendingArchiveUntil] = useState(0)
   const fileRef = useRef<HTMLInputElement>(null)
@@ -179,7 +188,9 @@ export function CatalogueView({
           p.category === row.name && (showArchived ? true : productIsActive(p)),
       )
       return {
+        id: row.id,
         name: row.name,
+        sortOrder: row.sortOrder,
         total: items.length,
         active: items.filter((p) => !p.archived).length,
         rupture: items.filter((p) => !p.archived && p.stock <= 0).length,
@@ -209,6 +220,85 @@ export function CatalogueView({
       setCategoryAddBusy(false)
     }
   }, [newCategoryName, toast])
+
+  const handleRenameCategory = useCallback(
+    async (categoryId: string, currentName: string) => {
+      const next = window.prompt('Nouveau nom de catégorie', currentName)
+      if (next == null) return
+      setCategoryEditBusy(true)
+      try {
+        const name = await renameProductCategoryLabel(categoryId, next)
+        if (cat === currentName) setCat(name)
+        toast.success('Catégorie renommée', name)
+      } catch (e) {
+        toast.error(
+          'Renommage impossible',
+          e instanceof Error ? e.message : String(e),
+        )
+      } finally {
+        setCategoryEditBusy(false)
+      }
+    },
+    [cat, toast],
+  )
+
+  const handleDeleteCategory = useCallback(
+    async (categoryId: string, name: string, productCount: number) => {
+      let reassignTo: string | undefined
+      if (productCount > 0) {
+        const others = productCategoryRows
+          .filter((r) => r.id !== categoryId)
+          .map((r) => r.name)
+        if (others.length === 0) {
+          toast.error(
+            'Suppression impossible',
+            'Créez une autre catégorie pour y déplacer les articles.',
+          )
+          return
+        }
+        const picked = window.prompt(
+          `« ${name} » contient ${productCount} article(s).\nIndiquez la catégorie de remplacement :\n${others.join(', ')}`,
+          others[0],
+        )
+        if (picked == null) return
+        reassignTo = picked
+      } else {
+        const ok = window.confirm(`Supprimer la catégorie « ${name} » ?`)
+        if (!ok) return
+      }
+      setCategoryEditBusy(true)
+      try {
+        await deleteProductCategoryLabel(categoryId, reassignTo)
+        if (cat === name) setCat('Tous')
+        toast.success('Catégorie supprimée', name)
+      } catch (e) {
+        toast.error(
+          'Suppression impossible',
+          e instanceof Error ? e.message : String(e),
+        )
+      } finally {
+        setCategoryEditBusy(false)
+      }
+    },
+    [cat, productCategoryRows, toast],
+  )
+
+  const handleMoveCategory = useCallback(
+    async (categoryId: string, direction: -1 | 1) => {
+      setCategoryEditBusy(true)
+      try {
+        await moveProductCategory(categoryId, direction)
+      } catch (e) {
+        toast.error(
+          'Réordonnancement impossible',
+          e instanceof Error ? e.message : String(e),
+        )
+      } finally {
+        setCategoryEditBusy(false)
+      }
+    },
+    [toast],
+  )
 
   const filtered = useMemo(() => {
     const t = q.trim().toLowerCase()
@@ -901,15 +991,19 @@ export function CatalogueView({
             />
           ) : (
             <ul className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
-              {categoryStats.map((c) => (
-                <li key={c.name}>
-                  <button
-                    type="button"
-                    onClick={() => openCategory(c.name)}
-                    className="catalogue-cat-row flex w-full flex-col gap-2 p-4 text-left"
-                  >
+              {categoryStats.map((c, index) => (
+                <li key={c.id}>
+                  <div className="catalogue-cat-row flex w-full flex-col gap-2 p-4 text-left">
                     <div className="flex items-start justify-between gap-2">
-                      <p className="text-[14px] font-semibold text-zinc-900">{c.name}</p>
+                      <button
+                        type="button"
+                        onClick={() => openCategory(c.name)}
+                        className="min-w-0 flex-1 text-left"
+                      >
+                        <p className="text-[14px] font-semibold text-zinc-900">
+                          {c.name}
+                        </p>
+                      </button>
                       <Badge tone="neutral">{c.total} art.</Badge>
                     </div>
                     <div className="flex flex-wrap gap-1.5 text-[11px]">
@@ -921,10 +1015,67 @@ export function CatalogueView({
                         <Badge tone="warning">{c.alerte} alerte(s)</Badge>
                       ) : null}
                     </div>
-                    <span className="text-[11px] font-medium text-[var(--color-caisse-gold)]">
-                      Voir les articles →
-                    </span>
-                  </button>
+                    <div className="flex flex-wrap items-center gap-1.5">
+                      <button
+                        type="button"
+                        onClick={() => openCategory(c.name)}
+                        className="text-[11px] font-medium text-[var(--color-caisse-gold)]"
+                      >
+                        Voir les articles →
+                      </button>
+                      {canManageCatalog ? (
+                        <div className="ml-auto flex items-center gap-0.5">
+                          <IconButton
+                            type="button"
+                            size="sm"
+                            variant="ghost"
+                            aria-label="Monter"
+                            disabled={categoryEditBusy || index === 0}
+                            onClick={() => void handleMoveCategory(c.id, -1)}
+                          >
+                            <IconChevronUp />
+                          </IconButton>
+                          <IconButton
+                            type="button"
+                            size="sm"
+                            variant="ghost"
+                            aria-label="Descendre"
+                            disabled={
+                              categoryEditBusy ||
+                              index === categoryStats.length - 1
+                            }
+                            onClick={() => void handleMoveCategory(c.id, 1)}
+                          >
+                            <IconChevronDown />
+                          </IconButton>
+                          <IconButton
+                            type="button"
+                            size="sm"
+                            variant="ghost"
+                            aria-label="Renommer"
+                            disabled={categoryEditBusy}
+                            onClick={() =>
+                              void handleRenameCategory(c.id, c.name)
+                            }
+                          >
+                            <IconEdit />
+                          </IconButton>
+                          <IconButton
+                            type="button"
+                            size="sm"
+                            variant="ghost"
+                            aria-label="Supprimer"
+                            disabled={categoryEditBusy}
+                            onClick={() =>
+                              void handleDeleteCategory(c.id, c.name, c.total)
+                            }
+                          >
+                            <IconTrash />
+                          </IconButton>
+                        </div>
+                      ) : null}
+                    </div>
+                  </div>
                 </li>
               ))}
             </ul>

@@ -283,6 +283,8 @@ export function PointageView({
         }
         await db.timePunches.add(row)
         setNote('')
+        const { scheduleWorkspaceOpsPush } = await import('../lib/workspaceOpsCloud')
+        scheduleWorkspaceOpsPush()
         void appendAuditEvent({
           kind: 'time_punch',
           actor: {
@@ -368,6 +370,8 @@ export function PointageView({
         reason: `Saisie manuelle pointage · ${target.displayName}`,
         payload: { punchId: row.id, kind: manualKind, createdAt, note: reason },
       })
+      const { scheduleWorkspaceOpsPush } = await import('../lib/workspaceOpsCloud')
+      scheduleWorkspaceOpsPush()
       setManualNote('')
       toast.success('Pointage ajouté', `${target.displayName} · ${punchKindLabel(manualKind)}`)
     } catch (e) {

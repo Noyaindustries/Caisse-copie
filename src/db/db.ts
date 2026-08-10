@@ -641,6 +641,118 @@ export async function addProductCategoryLabel(raw: string): Promise<string> {
   return name
 }
 
+function scheduleCategoryCloudPush(): void {
+  void import('../lib/catalogCategoriesCloud')
+    .then((m) => m.pushCatalogCategoriesToCloud())
+    .catch(() => undefined)
+  void import('../lib/workspaceCatalogCloud')
+    .then((m) => m.scheduleWorkspaceCatalogPush())
+    .catch(() => undefined)
+}
+
+/** Renomme une catégorie et met à jour les produits rattachés. */
+export async function renameProductCategoryLabel(
+  categoryId: string,
+  rawNewName: string,
+): Promise<string> {
+  const nextName = rawNewName.replace(/\s+/g, ' ').trim()
+  if (!nextName) throw new Error('Nom de catégorie vide.')
+  if (nextName.toLowerCase() === 'tous') {
+    throw new Error('Le nom « Tous » est réservé pour les filtres.')
+  }
+  const row = await db.productCategories.get(categoryId)
+  if (!row) throw new Error('Catégorie introuvable.')
+  if (row.name === nextName) return nextName
+
+  const dup = await db.productCategories
+    .filter(
+      (r) =>
+        r.id !== categoryId && r.name.toLowerCase() === nextName.toLowerCase(),
+    )
+    .first()
+  if (dup) {
+    throw new Error(`La catégorie « ${dup.name} » existe déjà.`)
+  }
+
+  const oldName = row.name
+  await db.transaction('rw', db.productCategories, db.products, async () => {
+    await db.productCategories.update(categoryId, { name: nextName })
+    const products = await db.products
+      .filter((p) => p.category === oldName)
+      .toArray()
+    const now = Date.now()
+    for (const p of products) {
+      await db.products.put({ ...p, category: nextName, updatedAt: now })
+    }
+  })
+  scheduleCategoryCloudPush()
+  return nextName
+}
+
+/**
+ * Supprime une catégorie.
+ * Si des produits y sont rattachés, `reassignTo` est obligatoire (libellé existant).
+ */
+export async function deleteProductCategoryLabel(
+  categoryId: string,
+  reassignTo?: string,
+): Promise<void> {
+  const row = await db.productCategories.get(categoryId)
+  if (!row) throw new Error('Catégorie introuvable.')
+
+  const linked = await db.products.filter((p) => p.category === row.name).toArray()
+  if (linked.length > 0) {
+    const target = (reassignTo ?? '').replace(/\s+/g, ' ').trim()
+    if (!target) {
+      throw new Error(
+        `${linked.length} article(s) utilisent « ${row.name} ». Choisissez une catégorie de remplacement.`,
+      )
+    }
+    if (target.toLowerCase() === row.name.toLowerCase()) {
+      throw new Error('Choisissez une autre catégorie de remplacement.')
+    }
+    const targetRow = await db.productCategories
+      .filter((r) => r.name.toLowerCase() === target.toLowerCase())
+      .first()
+    if (!targetRow) {
+      throw new Error(`Catégorie de remplacement « ${target} » introuvable.`)
+    }
+    const now = Date.now()
+    await db.transaction('rw', db.productCategories, db.products, async () => {
+      for (const p of linked) {
+        await db.products.put({
+          ...p,
+          category: targetRow.name,
+          updatedAt: now,
+        })
+      }
+      await db.productCategories.delete(categoryId)
+    })
+  } else {
+    await db.productCategories.delete(categoryId)
+  }
+  scheduleCategoryCloudPush()
+}
+
+/** Déplace une catégorie d’un cran (haut / bas) dans l’ordre d’affichage. */
+export async function moveProductCategory(
+  categoryId: string,
+  direction: -1 | 1,
+): Promise<void> {
+  const rows = await db.productCategories.orderBy('sortOrder').toArray()
+  const idx = rows.findIndex((r) => r.id === categoryId)
+  if (idx < 0) throw new Error('Catégorie introuvable.')
+  const swapIdx = idx + direction
+  if (swapIdx < 0 || swapIdx >= rows.length) return
+  const a = rows[idx]
+  const b = rows[swapIdx]
+  await db.transaction('rw', db.productCategories, async () => {
+    await db.productCategories.update(a.id, { sortOrder: b.sortOrder })
+    await db.productCategories.update(b.id, { sortOrder: a.sortOrder })
+  })
+  scheduleCategoryCloudPush()
+}
+
 /** Enregistre en index les catégories présentes sur les produits (import CSV, etc.). */
 export async function syncProductCategoriesFromProducts(): Promise<void> {
   const [rows, products] = await Promise.all([
