@@ -174,8 +174,12 @@ export function StorefrontBrandingSection({
       toast.error('Choisissez une image (JPEG, PNG, WebP ou GIF).')
       return
     }
-    if (file.size > 500 * 1024) {
-      toast.error('Image trop volumineuse (max 500 Ko).')
+    if (file.size > (kind === 'banner' ? 1.5 * 1024 * 1024 : 500 * 1024)) {
+      toast.error(
+        kind === 'banner'
+          ? 'Bannière trop volumineuse (max 1,5 Mo).'
+          : 'Image trop volumineuse (max 500 Ko).',
+      )
       return
     }
     try {
@@ -404,13 +408,16 @@ export function StorefrontBrandingSection({
               ) : null}
             </div>
           </Field>
-          <Field label="Bannière">
+          <Field
+            label="Bannière d’accueil"
+            hint="Image pleine largeur du bandeau boutique (JPEG/PNG/WebP, max 1,5 Mo)."
+          >
             <div className="space-y-2">
               {bannerUrl ? (
                 <img
                   src={bannerUrl}
                   alt="Bannière boutique"
-                  className="h-24 w-full rounded-xl border border-border object-cover"
+                  className="h-28 w-full rounded-xl border border-border object-cover"
                 />
               ) : null}
               <div className="flex flex-wrap gap-2">

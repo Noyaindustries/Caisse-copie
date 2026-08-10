@@ -191,6 +191,7 @@ export function LuxuryStorefrontView({
   )
   const accentColor = storefrontAccentColor(branding)
   const logoUrl = branding?.logoUrl?.trim() || null
+  const bannerUrl = branding?.bannerUrl?.trim() || null
   const welcomeMessage = branding?.welcomeMessage?.trim() || null
   const contactPhone = branding?.phone?.trim() || null
   const contactWhatsappLabel =
@@ -982,7 +983,22 @@ export function LuxuryStorefrontView({
         </div>
       </header>
 
-      <section className="storefront-hero">
+      <section
+        className={`storefront-hero${bannerUrl ? ' storefront-hero--banner' : ''}`}
+      >
+        {bannerUrl ? (
+          <>
+            <img
+              src={bannerUrl}
+              alt=""
+              className="storefront-hero-banner"
+              onError={(e) => {
+                e.currentTarget.style.display = 'none'
+              }}
+            />
+            <div className="storefront-hero-scrim" aria-hidden />
+          </>
+        ) : null}
         <div className="storefront-hero-content mx-auto flex min-h-[inherit] max-w-6xl flex-col justify-end px-4 pb-10 pt-20 sm:px-5 sm:pb-14">
           {logoUrl ? (
             <img

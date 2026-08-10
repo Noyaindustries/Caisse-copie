@@ -561,6 +561,34 @@ body {
       );
   }
 
+  .storefront-hero--banner {
+    min-height: min(58svh, 520px);
+  }
+
+  .storefront-hero-banner {
+    position: absolute;
+    inset: 0;
+    z-index: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    object-position: center;
+  }
+
+  .storefront-hero-scrim {
+    position: absolute;
+    inset: 0;
+    z-index: 0;
+    pointer-events: none;
+    background:
+      linear-gradient(
+        180deg,
+        color-mix(in oklab, #fffaf3 18%, transparent) 0%,
+        color-mix(in oklab, #fffaf3 42%, transparent) 42%,
+        color-mix(in oklab, #fffaf3 88%, transparent) 100%
+      );
+  }
+
   .storefront-hero-content {
     position: relative;
     z-index: 1;
