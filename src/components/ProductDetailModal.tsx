@@ -206,7 +206,7 @@ function ProductDetailModalContent({
 
               <p
                 className={cn(
-                  'text-[13px] leading-relaxed sm:text-sm',
+                  'whitespace-pre-line text-[13px] leading-relaxed sm:text-sm',
                   isDark ? 'text-slate-300' : 'text-zinc-600',
                 )}
               >

@@ -193,7 +193,46 @@ const CATEGORY_FALLBACK: Record<string, string> = {
     'Article de notre boutique, disponible en magasin et en commande en ligne.',
 }
 
+const MAX_DESCRIPTION_CHARS = 1_000
+const MAX_HIGHLIGHTS = 5
+const MAX_HIGHLIGHT_CHARS = 80
+
+/** Normalise le texte saisi par le commerçant (trim, longueur max). */
+export function normalizeProductDescription(
+  raw: string | undefined | null,
+): string | undefined {
+  const text = (raw ?? '')
+    .replace(/\r\n/g, '\n')
+    .split('\n')
+    .map((line) => line.trim().replace(/[ \t]+/g, ' '))
+    .join('\n')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim()
+    .slice(0, MAX_DESCRIPTION_CHARS)
+  return text || undefined
+}
+
+/** Une ligne = un point fort ; ignore les vides. */
+export function normalizeProductHighlights(
+  raw: string[] | string | undefined | null,
+): string[] | undefined {
+  const lines = Array.isArray(raw)
+    ? raw
+    : String(raw ?? '')
+        .split(/\r?\n|,/)
+        .map((s) => s.trim())
+  const cleaned = lines
+    .map((s) => s.replace(/^[-•*]\s*/, '').trim())
+    .filter(Boolean)
+    .map((s) => s.slice(0, MAX_HIGHLIGHT_CHARS))
+    .slice(0, MAX_HIGHLIGHTS)
+  return cleaned.length > 0 ? cleaned : undefined
+}
+
 export function productDescription(product: Product): string {
+  const custom = normalizeProductDescription(product.description)
+  if (custom) return custom
+
   const haystack = [product.name, product.category ?? ''].join(' ')
   for (const rule of RULES) {
     if (rule.match.test(haystack)) return rule.description
@@ -205,9 +244,17 @@ export function productDescription(product: Product): string {
 }
 
 export function productHighlights(product: Product): string[] {
+  const custom = normalizeProductHighlights(product.highlights)
+  if (custom) return custom
+
   const haystack = [product.name, product.category ?? ''].join(' ')
   for (const rule of RULES) {
     if (rule.match.test(haystack) && rule.highlights) return rule.highlights
   }
   return []
+}
+
+/** Extrait court pour les cartes boutique (uniquement si description perso). */
+export function productCardBlurb(product: Product): string | undefined {
+  return normalizeProductDescription(product.description)
 }

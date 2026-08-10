@@ -123,6 +123,7 @@ export async function publishStorefrontMenu(
     storeName: string
     products: ProductWithStock[]
     promotions: Promotion[]
+    categories?: string[]
   },
 ): Promise<{ storefrontUrl: string; productCount: number; publishedAt: string }> {
   const res = await fetch(apiUrl('/billing/storefront/publish'), {
@@ -131,6 +132,7 @@ export async function publishStorefrontMenu(
     body: JSON.stringify({
       storeId: input.storeId,
       storeName: input.storeName,
+      categories: input.categories ?? [],
       products: input.products.map((p) => ({
         id: p.id,
         name: p.name,
@@ -142,6 +144,18 @@ export async function publishStorefrontMenu(
         stock: p.stock,
         barcode: p.barcode,
         lowStockThreshold: p.lowStockThreshold,
+        ...(p.description?.trim()
+          ? { description: p.description.trim().slice(0, 1_000) }
+          : {}),
+        ...(Array.isArray(p.highlights) && p.highlights.length > 0
+          ? {
+              highlights: p.highlights
+                .map((h) => h.trim())
+                .filter(Boolean)
+                .map((h) => h.slice(0, 80))
+                .slice(0, 5),
+            }
+          : {}),
       })),
       promotions: input.promotions.map((promotion) => ({
         id: promotion.id,

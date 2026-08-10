@@ -75,6 +75,11 @@ const publishedProductSchema = z.object({
   stock: z.number().nonnegative(),
   barcode: z.string().optional(),
   lowStockThreshold: z.number().nonnegative().optional(),
+  description: z.string().trim().max(1_000).optional(),
+  highlights: z
+    .array(z.string().trim().min(1).max(80))
+    .max(5)
+    .optional(),
 })
 
 const publishedPromotionSchema = z.object({
@@ -98,6 +103,7 @@ const publishMenuSchema = z.object({
   storeName: z.string().min(1).max(160),
   products: z.array(publishedProductSchema).max(5_000),
   promotions: z.array(publishedPromotionSchema).max(200).default([]),
+  categories: z.array(z.string().trim().min(1).max(80)).max(200).optional(),
 })
 
 // data:image base64 (logo/bannière ≤ 500 Ko) ≈ 700k chars ; https reste court.

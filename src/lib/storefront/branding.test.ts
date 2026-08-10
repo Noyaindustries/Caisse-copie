@@ -11,6 +11,7 @@ import {
   storefrontMapsHref,
   storefrontTelHref,
   storefrontWhatsAppHref,
+  orderStorefrontCategories,
   type PublishedStorefrontMenu,
   type StorefrontBranding,
 } from './types'
@@ -190,6 +191,22 @@ describe('computeDeliveryFeeTTC', () => {
     }
     expect(resolveStorefrontDeliveryFeeTTC(branding, 'b')).toBe(1500)
     expect(resolveStorefrontDeliveryFeeTTC(branding, null)).toBe(0)
+  })
+})
+
+describe('orderStorefrontCategories', () => {
+  it('respecte l’ordre préféré puis complète en alpha', () => {
+    expect(
+      orderStorefrontCategories(
+        [
+          { category: 'Desserts' },
+          { category: 'Boissons' },
+          { category: 'Plats' },
+          { category: '' },
+        ],
+        ['Plats', 'Boissons', 'Inconnu'],
+      ),
+    ).toEqual(['Plats', 'Boissons', 'Autres', 'Desserts'])
   })
 })
 

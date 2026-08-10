@@ -138,7 +138,33 @@ export type PublishedStorefrontMenu = {
   publishedAt: string
   products: ProductWithStock[]
   promotions: Promotion[]
+  /** Noms de catégories ordonnés (catalogue). */
+  categories?: string[]
   branding?: StorefrontBranding
+}
+
+/** Ordonne les catégories présentes dans les produits (préférence catalogue, puis alpha). */
+export function orderStorefrontCategories(
+  products: Array<{ category?: string | null }>,
+  preferredOrder?: string[] | null,
+): string[] {
+  const present = new Set<string>()
+  for (const product of products) {
+    const name = product.category?.trim() || 'Autres'
+    if (name) present.add(name)
+  }
+  const ordered: string[] = []
+  const seen = new Set<string>()
+  for (const raw of preferredOrder ?? []) {
+    const name = raw.trim()
+    if (!name || !present.has(name) || seen.has(name)) continue
+    ordered.push(name)
+    seen.add(name)
+  }
+  const rest = [...present]
+    .filter((name) => !seen.has(name))
+    .sort((a, b) => a.localeCompare(b, 'fr'))
+  return [...ordered, ...rest]
 }
 
 export type StorefrontInfo = {

@@ -3,10 +3,14 @@ import { useLiveQuery } from 'dexie-react-hooks'
 import type { Product, ProductCategory } from '../db/types'
 import { db } from '../db/db'
 import { getAppSettings } from '../lib/appSettings'
+import {
+  normalizeProductDescription,
+  normalizeProductHighlights,
+} from '../lib/productDescription'
 import { resolveProductImageFields } from '../lib/uploads/blob'
 import { Button } from '../ui/Button'
 import { cn } from '../ui/cn'
-import { Field, Input, Select } from '../ui/Input'
+import { Field, Input, Select, Textarea } from '../ui/Input'
 import { Modal } from '../ui/Modal'
 import { useToast } from '../ui/Toast'
 
@@ -42,6 +46,8 @@ export function AddProductModal({ activeStoreLabel, onClose, onSave }: Props) {
     String(getAppSettings().defaultVatRatePct),
   )
   const [imageDataUrl, setImageDataUrl] = useState<string | undefined>()
+  const [description, setDescription] = useState('')
+  const [highlightsText, setHighlightsText] = useState('')
   const [busy, setBusy] = useState(false)
   const [err, setErr] = useState<string | null>(null)
 
@@ -82,6 +88,8 @@ export function AddProductModal({ activeStoreLabel, onClose, onSave }: Props) {
     setBusy(true)
     try {
       const imageFields = await resolveProductImageFields(productId, imageDataUrl)
+      const desc = normalizeProductDescription(description)
+      const highlights = normalizeProductHighlights(highlightsText)
       const product: Product = {
         id: productId,
         name: name.trim(),
@@ -92,6 +100,8 @@ export function AddProductModal({ activeStoreLabel, onClose, onSave }: Props) {
         vatRatePct: Math.round(vat * 100) / 100,
         archived: false,
         ...(purchase !== undefined ? { purchasePriceTTC: purchase } : {}),
+        ...(desc ? { description: desc } : {}),
+        ...(highlights ? { highlights } : {}),
         ...imageFields,
       }
       await onSave(product, st)
@@ -209,6 +219,29 @@ export function AddProductModal({ activeStoreLabel, onClose, onSave }: Props) {
             </div>
           </Field>
         </div>
+        <Field
+          label="Description boutique"
+          hint="Visible sur la fiche produit en ligne (optionnel)"
+        >
+          <Textarea
+            value={description}
+            onChange={(e) => setDescription(e.target.value)}
+            rows={3}
+            maxLength={1000}
+            placeholder="Ex. Ingrédients, portion, allergènes, conseil de dégustation…"
+          />
+        </Field>
+        <Field
+          label="Points forts"
+          hint="Un par ligne — puces sur la boutique (max 5)"
+        >
+          <Textarea
+            value={highlightsText}
+            onChange={(e) => setHighlightsText(e.target.value)}
+            rows={3}
+            placeholder={'Fait maison\nServi frais\nSans colorant'}
+          />
+        </Field>
         <Field label="Photo" hint="Optionnel · max 500 Ko · stockée sur Vercel Blob si configuré">
           <input
             type="file"

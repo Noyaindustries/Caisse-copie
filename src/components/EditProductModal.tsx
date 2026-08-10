@@ -3,11 +3,15 @@ import { useLiveQuery } from 'dexie-react-hooks'
 import type { Product, ProductCategory } from '../db/types'
 import { db } from '../db/db'
 import { DEFAULT_VAT_RATE_PCT } from '../lib/money'
+import {
+  normalizeProductDescription,
+  normalizeProductHighlights,
+} from '../lib/productDescription'
 import { resolveProductImageFields, type ProductImageFields } from '../lib/uploads/blob'
 import { Button } from '../ui/Button'
 import { cn } from '../ui/cn'
 import { IconTrash } from '../ui/icons'
-import { Field, Input, Select } from '../ui/Input'
+import { Field, Input, Select, Textarea } from '../ui/Input'
 import { Modal } from '../ui/Modal'
 
 const VAT_PRESETS = [0, 9, 18] as const
@@ -69,6 +73,10 @@ export function EditProductModal({
   const [imagePreview, setImagePreview] = useState<string | undefined>(
     product.imageDataUrl ?? product.imageUrl,
   )
+  const [description, setDescription] = useState(product.description ?? '')
+  const [highlightsText, setHighlightsText] = useState(
+    (product.highlights ?? []).join('\n'),
+  )
   const [busy, setBusy] = useState(false)
   const [err, setErr] = useState<string | null>(null)
 
@@ -84,6 +92,8 @@ export function EditProductModal({
     setLowTh(String(product.lowStockThreshold))
     setVatRatePct(String(product.vatRatePct ?? DEFAULT_VAT_RATE_PCT))
     setImagePreview(product.imageDataUrl ?? product.imageUrl)
+    setDescription(product.description ?? '')
+    setHighlightsText((product.highlights ?? []).join('\n'))
   }, [product, stockAtActiveStore])
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -123,6 +133,12 @@ export function EditProductModal({
       vatRatePct: Math.round(vat * 100) / 100,
       archived: product.archived,
     }
+    const desc = normalizeProductDescription(description)
+    const highlights = normalizeProductHighlights(highlightsText)
+    if (desc) next.description = desc
+    else delete next.description
+    if (highlights) next.highlights = highlights
+    else delete next.highlights
     if (canEditPrices) {
       if (purchaseOpt !== undefined) {
         next.purchasePriceTTC = purchaseOpt
@@ -266,6 +282,29 @@ export function EditProductModal({
             </div>
           </Field>
         </div>
+        <Field
+          label="Description boutique"
+          hint="Visible sur la fiche produit en ligne (max 1000 car.)"
+        >
+          <Textarea
+            value={description}
+            onChange={(e) => setDescription(e.target.value)}
+            rows={4}
+            maxLength={1000}
+            placeholder="Ex. Poulet braisé mariné 24h, grillé au charbon, servi avec attiéké et sauce oignon…"
+          />
+        </Field>
+        <Field
+          label="Points forts"
+          hint="Un par ligne — affichés en puces sur la boutique (max 5)"
+        >
+          <Textarea
+            value={highlightsText}
+            onChange={(e) => setHighlightsText(e.target.value)}
+            rows={3}
+            placeholder={'Portion généreuse\nGrillé au charbon\nSauce maison'}
+          />
+        </Field>
         <Field label="Photo" hint="Max 500 Ko · Vercel Blob si configuré">
           <input
             type="file"

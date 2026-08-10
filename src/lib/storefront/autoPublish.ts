@@ -3,6 +3,7 @@ import type { ProductWithStock, Promotion } from '../../db/types'
 import { productIsActive } from '../productFilters'
 import { getOrganizationCredentials } from '../subscription/store'
 import { publishStorefrontMenu } from './api'
+import { orderStorefrontCategories } from './types'
 
 const LAST_FINGERPRINT_KEY = 'caisseci-storefront-publish-fingerprint'
 const LAST_PUBLISHED_AT_KEY = 'caisseci-storefront-published-at'
@@ -18,6 +19,7 @@ function fingerprintPayload(input: {
   storeName: string
   products: ProductWithStock[]
   promotions: Promotion[]
+  categories?: string[]
 }): string {
   const products = input.products
     .map((p) =>
@@ -32,6 +34,8 @@ function fingerprintPayload(input: {
         p.imageUrl ?? '',
         p.imageDataUrl ? '1' : '0',
         p.barcode ?? '',
+        p.description?.trim() ?? '',
+        Array.isArray(p.highlights) ? p.highlights.join('|') : '',
       ].join(':'),
     )
     .sort()
@@ -54,6 +58,7 @@ function fingerprintPayload(input: {
   return JSON.stringify({
     storeId: input.storeId,
     storeName: input.storeName,
+    categories: input.categories ?? [],
     products,
     promotions,
   })
@@ -89,6 +94,7 @@ export async function buildActiveStorefrontMenu(storeId: string): Promise<{
   storeName: string
   products: ProductWithStock[]
   promotions: Promotion[]
+  categories: string[]
 } | null> {
   const store = await db.stores.get(storeId)
   const products = await db.products.toArray()
@@ -106,6 +112,11 @@ export async function buildActiveStorefrontMenu(storeId: string): Promise<{
         promotion.storeId == null || promotion.storeId === storeId,
     )
     .toArray()
+  const categoryRows = await db.productCategories.orderBy('sortOrder').toArray()
+  const categories = orderStorefrontCategories(
+    displayProducts,
+    categoryRows.map((row) => row.name),
+  )
 
   const credentials = getOrganizationCredentials()
   return {
@@ -113,6 +124,7 @@ export async function buildActiveStorefrontMenu(storeId: string): Promise<{
     storeName: store?.name ?? credentials?.name ?? 'Boutique',
     products: displayProducts,
     promotions,
+    categories,
   }
 }
 

@@ -4,11 +4,15 @@ import type { Product, ProductCategory, ProductWithStock } from '../db/types'
 import { PRODUCT_CATEGORY_LIST } from '../db/types'
 import { downloadTextFile, toCsvSemicolon } from './analyticsExport'
 import { findProductByBarcode } from './productBarcode'
+import {
+  normalizeProductDescription,
+  normalizeProductHighlights,
+} from './productDescription'
 import { storeStockRowId } from './storeStockId'
 
-export const CSV_TEMPLATE = `nom;prix_ttc;prix_revient_ttc;code_barres;categorie;stock;seuil;tva_pct;archive;image_url
-Exemple boisson;1000;600;1234567890123;Boissons;0;5;18;;
-Autre exemple;500;;9876543210987;Epicerie fine;2;3;18;;`
+export const CSV_TEMPLATE = `nom;prix_ttc;prix_revient_ttc;code_barres;categorie;stock;seuil;tva_pct;archive;image_url;description;points_forts
+Exemple boisson;1000;600;1234567890123;Boissons;0;5;18;;;Boisson rafraîchissante maison;Fait maison|Servi glacé
+Autre exemple;500;;9876543210987;Epicerie fine;2;3;18;;;;;`
 
 function splitCsvLine(line: string, delimiter: string): string[] {
   const out: string[] = []
@@ -76,6 +80,12 @@ const HEADER_ALIASES: Record<string, keyof ParsedRowInput> = {
   prix_revient: 'purchasePriceTTC',
   purchase_price_ttc: 'purchasePriceTTC',
   cost_ttc: 'purchasePriceTTC',
+  description: 'description',
+  desc: 'description',
+  details: 'description',
+  points_forts: 'highlights',
+  highlights: 'highlights',
+  atouts: 'highlights',
 }
 
 type ParsedRowInput = {
@@ -89,6 +99,8 @@ type ParsedRowInput = {
   vatRatePct?: string
   archived?: string
   imageUrl?: string
+  description?: string
+  highlights?: string
 }
 
 export type CsvRowError = { line: number; message: string }
@@ -252,6 +264,10 @@ function validateAndBuild(
     ...(imageDataUrl ? { imageDataUrl } : {}),
     ...(imageUrl ? { imageUrl } : {}),
   }
+  const description = normalizeProductDescription(o.description)
+  const highlights = normalizeProductHighlights(o.highlights)
+  if (description) product.description = description
+  if (highlights) product.highlights = highlights
   return { product, mainStoreStock: stock }
 }
 
@@ -326,6 +342,14 @@ export async function applyProductsCsvImport(
         if (p.purchasePriceTTC !== undefined) {
           merged.purchasePriceTTC = p.purchasePriceTTC
         }
+        if (p.description !== undefined) {
+          if (p.description) merged.description = p.description
+          else delete merged.description
+        }
+        if (p.highlights !== undefined) {
+          if (p.highlights.length > 0) merged.highlights = p.highlights
+          else delete merged.highlights
+        }
         await db.products.put(merged)
         await db.storeStocks.put({
           id: storeStockRowId(DEFAULT_STORE_ID, merged.id),
@@ -378,6 +402,8 @@ export function exportProductsCsv(
     'tva_pct',
     'archive',
     'image_url',
+    'description',
+    'points_forts',
   ]
   const rows = products.map((p) => [
     p.name,
@@ -390,6 +416,8 @@ export function exportProductsCsv(
     String(p.vatRatePct ?? 18),
     p.archived ? '1' : '',
     p.imageUrl ?? '',
+    p.description ?? '',
+    (p.highlights ?? []).join('|'),
   ])
   downloadTextFile(filename, toCsvSemicolon([header, ...rows]))
 }

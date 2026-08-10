@@ -6,6 +6,7 @@ import { db } from '../db/db'
 import type {
   CartLine,
   OnlineOrder,
+  ProductCategoryRow,
   Promotion,
   ProductWithStock,
 } from '../db/types'
@@ -15,6 +16,7 @@ import {
   totalsFromLinesTTC,
 } from '../lib/money'
 import { productImageSrc } from '../lib/productImage'
+import { productCardBlurb } from '../lib/productDescription'
 import { ProductImage } from '../components/ProductImage'
 import { ProductDetailModal } from '../components/ProductDetailModal'
 import { storeStockRowId } from '../lib/storeStockId'
@@ -36,6 +38,7 @@ import {
   computeDeliveryFeeTTC,
   findStorefrontDeliveryZone,
   normalizeStorefrontBranding,
+  orderStorefrontCategories,
   resolveStorefrontDeliveryFeeTTC,
   resolveStorefrontDeliveryZones,
   resolveStorefrontFreeDeliveryThresholdTTC,
@@ -52,6 +55,7 @@ type PublicStorefrontConfig = {
   storeId: string
   products: ProductWithStock[]
   promotions?: Promotion[]
+  categories?: string[]
   waveEnabled?: boolean
   branding?: StorefrontBranding
   submitOrder: (
@@ -236,6 +240,7 @@ export function LuxuryStorefrontView({
   )
   const [cartBadgePulse, setCartBadgePulse] = useState(false)
   const [isCartOpen, setIsCartOpen] = useState(false)
+  const [selectedCategory, setSelectedCategory] = useState<string>('all')
   const [flyToCart, setFlyToCart] = useState<FlyToCartAnim | null>(null)
   const [detailProduct, setDetailProduct] = useState<ProductWithStock | null>(
     null,
@@ -259,10 +264,61 @@ export function LuxuryStorefrontView({
   const pulseTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const flyTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
+  const localCategoryRows =
+    useLiveQuery(
+      () =>
+        isPublicStorefront
+          ? Promise.resolve([] as ProductCategoryRow[])
+          : db.productCategories.orderBy('sortOrder').toArray(),
+      [isPublicStorefront],
+      [] as ProductCategoryRow[],
+    ) ?? []
+
   const featuredProducts = useMemo(
     () => [...displayProducts].sort((a, b) => a.name.localeCompare(b.name, 'fr')),
     [displayProducts],
   )
+  const storefrontCategories = useMemo(() => {
+    const preferred = isPublicStorefront
+      ? publicStorefront?.categories
+      : localCategoryRows.map((row) => row.name)
+    return orderStorefrontCategories(featuredProducts, preferred)
+  }, [
+    featuredProducts,
+    isPublicStorefront,
+    localCategoryRows,
+    publicStorefront?.categories,
+  ])
+  const featuredByCategory = useMemo(() => {
+    const grouped = new Map<string, ProductWithStock[]>()
+    for (const product of featuredProducts) {
+      const category = product.category?.trim() || 'Autres'
+      const list = grouped.get(category)
+      if (list) {
+        list.push(product)
+      } else {
+        grouped.set(category, [product])
+      }
+    }
+    const sections: Array<[string, ProductWithStock[]]> = []
+    for (const category of storefrontCategories) {
+      const products = grouped.get(category)
+      if (products?.length) sections.push([category, products])
+    }
+    return sections
+  }, [featuredProducts, storefrontCategories])
+  const visibleCategorySections = useMemo(() => {
+    if (selectedCategory === 'all') return featuredByCategory
+    return featuredByCategory.filter(([category]) => category === selectedCategory)
+  }, [featuredByCategory, selectedCategory])
+
+  useEffect(() => {
+    if (selectedCategory === 'all') return
+    if (!storefrontCategories.includes(selectedCategory)) {
+      setSelectedCategory('all')
+    }
+  }, [selectedCategory, storefrontCategories])
+
   const topOrderedProducts = useLiveQuery(async () => {
     if (isPublicStorefront) return []
     const [sales, onlineOrders] = await Promise.all([
@@ -299,20 +355,7 @@ export function LuxuryStorefrontView({
       .filter((entry): entry is { product: ProductWithStock; orderedQty: number } =>
         Boolean(entry),
       )
-  }, [displayProducts])
-  const featuredByCategory = useMemo(() => {
-    const grouped = new Map<string, ProductWithStock[]>()
-    for (const product of featuredProducts) {
-      const category = product.category?.trim() || 'Autres'
-      const list = grouped.get(category)
-      if (list) {
-        list.push(product)
-      } else {
-        grouped.set(category, [product])
-      }
-    }
-    return [...grouped.entries()].sort((a, b) => a[0].localeCompare(b[0], 'fr'))
-  }, [featuredProducts])
+  }, [displayProducts, isPublicStorefront])
 
   const grossTotals = useMemo(() => totalsFromLinesTTC(cart, 0), [cart])
   const totals = useMemo(
@@ -526,6 +569,13 @@ export function LuxuryStorefrontView({
 
   const scrollToProducts = useCallback(() => {
     productsSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+  }, [])
+
+  const selectCategory = useCallback((category: string) => {
+    setSelectedCategory(category)
+    requestAnimationFrame(() => {
+      productsSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    })
   }, [])
 
   const scrollToCheckoutForm = useCallback(() => {
@@ -1403,6 +1453,7 @@ export function LuxuryStorefrontView({
                 {topOrderedProducts.map(({ product, orderedQty }, index) => {
                   const qty = lineQty(product.id)
                   const soldOut = product.stock <= 0
+                  const blurb = productCardBlurb(product)
                   return (
                     <article
                       key={product.id}
@@ -1438,6 +1489,11 @@ export function LuxuryStorefrontView({
                           <p className="line-clamp-2 text-xs font-semibold text-stone-900">
                             {product.name}
                           </p>
+                          {blurb ? (
+                            <p className="mt-0.5 line-clamp-2 text-[10px] leading-snug text-stone-500">
+                              {blurb}
+                            </p>
+                          ) : null}
                           <p className="mt-0.5 font-mono-nums text-xs font-bold text-stone-800">
                             {formatFCFA(
                               discountPct > 0
@@ -1465,6 +1521,53 @@ export function LuxuryStorefrontView({
             </section>
           ) : null}
           <section ref={productsSectionRef} className="scroll-mt-24">
+            {seedReady && storefrontCategories.length > 0 ? (
+              <nav
+                className="storefront-category-nav"
+                aria-label="Catégories du menu"
+              >
+                <div className="storefront-category-nav-track">
+                  <button
+                    type="button"
+                    className={`storefront-category-chip${
+                      selectedCategory === 'all'
+                        ? ' storefront-category-chip--active'
+                        : ''
+                    }`}
+                    aria-pressed={selectedCategory === 'all'}
+                    onClick={() => selectCategory('all')}
+                  >
+                    Tous
+                    <span className="storefront-category-chip-count">
+                      {featuredProducts.length}
+                    </span>
+                  </button>
+                  {storefrontCategories.map((category) => {
+                    const count =
+                      featuredByCategory.find(([name]) => name === category)?.[1]
+                        .length ?? 0
+                    return (
+                      <button
+                        key={category}
+                        type="button"
+                        className={`storefront-category-chip${
+                          selectedCategory === category
+                            ? ' storefront-category-chip--active'
+                            : ''
+                        }`}
+                        aria-pressed={selectedCategory === category}
+                        onClick={() => selectCategory(category)}
+                      >
+                        {category}
+                        <span className="storefront-category-chip-count">
+                          {count}
+                        </span>
+                      </button>
+                    )
+                  })}
+                </div>
+              </nav>
+            ) : null}
             {!seedReady ? (
               <div className="mt-6 flex flex-col items-center gap-3 py-8">
                 <div className="relative flex h-20 w-20 items-center justify-center">
@@ -1483,11 +1586,14 @@ export function LuxuryStorefrontView({
               </div>
             ) : (
               <div className="space-y-8">
-                {featuredByCategory.map(([category, products]) => (
-                  <section key={category} className="space-y-3">
-                    <h2 className="text-sm font-bold uppercase tracking-[0.14em] text-stone-500">
-                      {category}
-                    </h2>
+                {visibleCategorySections.map(([category, products]) => (
+                  <section key={category} className="storefront-category-section space-y-3">
+                    <div className="storefront-category-heading">
+                      <h2>{category}</h2>
+                      <span>
+                        {products.length} article{products.length > 1 ? 's' : ''}
+                      </span>
+                    </div>
                     <div
                       className={`${
                         cardDensity === 'compact'
@@ -1498,6 +1604,7 @@ export function LuxuryStorefrontView({
                       {products.map((product) => {
                         const qty = lineQty(product.id)
                         const soldOut = product.stock <= 0
+                        const blurb = productCardBlurb(product)
                         return (
                           <article
                             key={product.id}
@@ -1534,6 +1641,11 @@ export function LuxuryStorefrontView({
                                 <h3 className="line-clamp-2 text-sm font-semibold text-stone-900">
                                   {product.name}
                                 </h3>
+                                {blurb && cardDensity !== 'compact' ? (
+                                  <p className="mt-1 line-clamp-2 text-[11px] leading-snug text-stone-500">
+                                    {blurb}
+                                  </p>
+                                ) : null}
                                 <p className="mt-1 font-mono-nums text-sm font-bold text-stone-900">
                                   {formatFCFA(
                                     discountPct > 0
@@ -1566,6 +1678,13 @@ export function LuxuryStorefrontView({
             )}
             {seedReady && featuredProducts.length === 0 ? (
               <p className="mt-8 text-sm text-stone-500">Aucun article disponible.</p>
+            ) : null}
+            {seedReady &&
+            featuredProducts.length > 0 &&
+            visibleCategorySections.length === 0 ? (
+              <p className="mt-8 text-sm text-stone-500">
+                Aucun article dans cette catégorie.
+              </p>
             ) : null}
           </section>
 

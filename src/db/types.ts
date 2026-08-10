@@ -303,6 +303,13 @@ export interface Product {
   /** Aperçu catalogue / grille caisse (data URL locale ou URL https — ex. Vercel Blob). */
   imageDataUrl?: string
   imageUrl?: string
+  /**
+   * Texte boutique (fiche produit). Si absent, une description automatique
+   * peut être proposée à partir du nom / catégorie.
+   */
+  description?: string
+  /** Points forts boutique (puces), max ~5 en UI. */
+  highlights?: string[]
   /** Masqué de la caisse ; réactivable depuis le catalogue. */
   archived: boolean
 }

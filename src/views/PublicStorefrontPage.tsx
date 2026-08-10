@@ -51,6 +51,7 @@ export function PublicStorefrontPage({ storeCode, online }: Props) {
   const [usable, setUsable] = useState(true)
   const [waveEnabled, setWaveEnabled] = useState(false)
   const [branding, setBranding] = useState<StorefrontBranding | undefined>()
+  const [categories, setCategories] = useState<string[]>([])
   const [paymentBanner, setPaymentBanner] = useState<{
     tone: 'success' | 'error'
     message: string
@@ -81,6 +82,7 @@ export function PublicStorefrontPage({ storeCode, online }: Props) {
         setProducts(menu.products)
         setPromotions(menu.promotions ?? [])
         setBranding(menu.branding)
+        setCategories(menu.categories ?? [])
         setUsable(true)
       } catch (err) {
         if (!cancelled) {
@@ -157,6 +159,7 @@ export function PublicStorefrontPage({ storeCode, online }: Props) {
       storeId,
       products,
       promotions,
+      categories,
       waveEnabled,
       branding,
       submitOrder: async (order: PublicStorefrontOrderInput) => {
@@ -164,7 +167,16 @@ export function PublicStorefrontPage({ storeCode, online }: Props) {
         return result
       },
     }),
-    [storeCode, storeId, storeName, products, promotions, waveEnabled, branding],
+    [
+      storeCode,
+      storeId,
+      storeName,
+      products,
+      promotions,
+      categories,
+      waveEnabled,
+      branding,
+    ],
   )
 
   if (loading) {
