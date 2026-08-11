@@ -3,10 +3,9 @@ import { profileSecretMatches } from '../auth/permissions'
 import {
   DEFAULT_OWNER_PIN,
   ensureOwnerAdminProfile,
-  hydrateStaffFromRemote,
   listActiveStaffProfiles,
-  pushPendingLocalStaffToCloud,
   rememberStaffSecret,
+  syncStaffWithCloud,
   roleLabel,
   subscribeStaffProfiles,
 } from '../auth/profiles'
@@ -49,6 +48,7 @@ export function LoginScreen({
   const [now, setNow] = useState(() => Date.now())
   const [bootstrappedOwner, setBootstrappedOwner] = useState(false)
   const [staffSyncing, setStaffSyncing] = useState(true)
+  const [staffSyncError, setStaffSyncError] = useState<string | null>(null)
   const [verifying, setVerifying] = useState(false)
   const stores = useLiveQuery(() => db.stores.orderBy('sortOrder').toArray(), [], []) ?? []
   const storeNameById = new Map(stores.map((store) => [store.id, store.name]))
@@ -66,9 +66,11 @@ export function LoginScreen({
   useEffect(() => {
     let cancelled = false
     setStaffSyncing(true)
+    setStaffSyncError(null)
     void (async () => {
-      await pushPendingLocalStaffToCloud()
-      await hydrateStaffFromRemote()
+      const result = await syncStaffWithCloud()
+      if (cancelled) return
+      if (result.error) setStaffSyncError(result.error)
     })().finally(() => {
       if (cancelled) return
       setProfiles(listActiveStaffProfiles())
@@ -236,6 +238,11 @@ export function LoginScreen({
                   ? 'Chargement des utilisateurs du magasin…'
                   : 'Sélectionnez votre profil pour continuer.'}
             </p>
+            {staffSyncError && !selected ? (
+              <p className="mt-2 rounded-lg bg-rose-50 px-3 py-2 text-[12px] text-rose-800">
+                Équipe non synchronisée : {staffSyncError}
+              </p>
+            ) : null}
             {bootstrappedOwner && !selected ? (
               <p className="mt-2 rounded-lg bg-amber-50 px-3 py-2 text-[12px] text-amber-900">
                 Premier accès : connectez-vous avec le PIN{' '}

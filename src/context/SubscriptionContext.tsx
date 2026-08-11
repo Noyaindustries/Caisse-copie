@@ -16,6 +16,7 @@ import {
   verifyMobileMoneyPayment,
 } from '../lib/subscription/api'
 import { pullCloudData } from '../lib/cloudPull'
+import { syncStaffWithCloud } from '../auth/profiles'
 import { planAtLeast, viewAllowedByPlan } from '../lib/subscription/plans'
 import {
   clearOrganizationCredentials,
@@ -111,7 +112,12 @@ export function SubscriptionProvider({
       try {
         const snap = await refreshSubscription(creds.licenseKey)
         if (!cancelled) applySnapshot(snap)
-        if (!cancelled) void pullCloudData().catch(() => undefined)
+        if (!cancelled) {
+          void pullCloudData()
+            .catch(() => undefined)
+            .then(() => syncStaffWithCloud())
+            .catch(() => undefined)
+        }
       } catch {
         const cachedSnap = getCachedSubscription()
         if (!cancelled && cachedSnap) setSubscription(cachedSnap)

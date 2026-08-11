@@ -2,6 +2,12 @@ import type { StaffProfile } from './types'
 import { isCloudApiConfigured } from '../lib/apiUrl'
 import { clientEnv } from '../lib/clientEnv'
 import { hasOrgAuth } from '../lib/subscription/authHeaders'
+import {
+  createRemoteStaff,
+  deleteRemoteStaff,
+  fetchRemoteStaff,
+  updateRemoteStaff,
+} from '../lib/staff/api'
 
 /** PIN provisoire pour un profil cloud dont le secret n’est pas encore connu localement. */
 const REMOTE_PIN_PLACEHOLDER = '0000'
@@ -118,6 +124,12 @@ function isBuiltinProfileId(id: string): boolean {
   return BUILTIN_STAFF_PROFILES.some((p) => p.id === id)
 }
 
+/** Les profils démo ne s’affichent pas dès qu’un magasin est connecté. */
+function demoStaffProfiles(): readonly StaffProfile[] {
+  if (currentOrganizationId()) return []
+  return BUILTIN_STAFF_PROFILES
+}
+
 function readCustomProfiles(): StaffProfile[] {
   if (typeof window === 'undefined') return []
   try {
@@ -169,7 +181,7 @@ export function listStaffProfiles(): StaffProfile[] {
   const overrides = readPasswordOverrides()
   const byId = new Map<string, StaffProfile>()
   for (const p of [
-    ...BUILTIN_STAFF_PROFILES,
+    ...demoStaffProfiles(),
     ...readCloudStaffProfiles(),
     ...readCustomProfiles(),
   ]) {
@@ -202,20 +214,36 @@ function writeCloudStaffProfiles(profiles: StaffProfile[]): void {
   window.dispatchEvent(new Event(CHANGE_EVENT))
 }
 
-/** Envoie les utilisateurs créés localement qui n’existent pas encore côté serveur. */
-export async function pushPendingLocalStaffToCloud(): Promise<number> {
-  if (typeof window === 'undefined' || !isCloudApiConfigured() || !hasOrgAuth()) {
-    return 0
+export type StaffCloudSyncResult = {
+  pulled: number
+  pushed: number
+  error?: string
+}
+
+/**
+ * Pousse les comptes locaux manquants puis recharge la liste serveur.
+ * À appeler à l’ouverture de la caisse, pas seulement dans Personnel.
+ */
+export async function syncStaffWithCloud(): Promise<StaffCloudSyncResult> {
+  if (typeof window === 'undefined') return { pulled: 0, pushed: 0 }
+  if (!isCloudApiConfigured()) {
+    return { pulled: 0, pushed: 0, error: 'API cloud non configurée.' }
   }
+  if (!hasOrgAuth()) {
+    return {
+      pulled: 0,
+      pushed: 0,
+      error: 'Session entreprise absente. Reconnectez le magasin.',
+    }
+  }
+
   try {
-    const { fetchRemoteStaff, createRemoteStaff } = await import('../lib/staff/api')
-    const remote = await fetchRemoteStaff()
+    let remote = await fetchRemoteStaff()
     const remoteIds = new Set(remote.map((row) => row.id))
-    const pending = readCustomProfiles().filter(
-      (profile) => profile.active !== false && !remoteIds.has(profile.id),
-    )
     let pushed = 0
-    for (const profile of pending) {
+    let lastPushError: string | undefined
+    for (const profile of readCustomProfiles()) {
+      if (profile.active === false || remoteIds.has(profile.id)) continue
       try {
         await createRemoteStaff({
           profileId: profile.id,
@@ -226,28 +254,44 @@ export async function pushPendingLocalStaffToCloud(): Promise<number> {
           password: profile.password,
         })
         pushed += 1
-      } catch {
-        /* quota, doublon ou API indisponible */
+        remoteIds.add(profile.id)
+      } catch (error) {
+        lastPushError =
+          error instanceof Error
+            ? error.message
+            : 'Impossible d’envoyer un utilisateur vers le cloud.'
+        console.error('[staff-sync] push failed', profile.id, error)
       }
     }
-    return pushed
-  } catch {
-    return 0
+    if (pushed > 0) {
+      remote = await fetchRemoteStaff()
+    }
+    const pulled = remote.length > 0 ? mergeStaffFromCloud(remote) : 0
+    return {
+      pulled,
+      pushed,
+      ...(lastPushError ? { error: lastPushError } : {}),
+    }
+  } catch (error) {
+    const message =
+      error instanceof Error
+        ? error.message
+        : 'Synchronisation du personnel impossible.'
+    console.error('[staff-sync]', error)
+    return { pulled: 0, pushed: 0, error: message }
   }
+}
+
+/** Envoie les utilisateurs créés localement qui n’existent pas encore côté serveur. */
+export async function pushPendingLocalStaffToCloud(): Promise<number> {
+  const result = await syncStaffWithCloud()
+  return result.pushed
 }
 
 /** Recharge la liste serveur (GET /org/staff) et la fusionne en local. */
 export async function hydrateStaffFromRemote(): Promise<number> {
-  if (typeof window === 'undefined' || !isCloudApiConfigured()) return 0
-  if (!hasOrgAuth()) return 0
-  try {
-    const { fetchRemoteStaff } = await import('../lib/staff/api')
-    const remote = await fetchRemoteStaff()
-    if (remote.length === 0) return 0
-    return mergeStaffFromCloud(remote)
-  } catch {
-    return 0
-  }
+  const result = await syncStaffWithCloud()
+  return result.pulled
 }
 
 export function mergeStaffFromCloud(
@@ -333,9 +377,6 @@ async function pushStaffToServer(
       'Session entreprise absente : reconnectez le magasin pour synchroniser le personnel.',
     )
   }
-  const { createRemoteStaff, updateRemoteStaff, deleteRemoteStaff } = await import(
-    '../lib/staff/api'
-  )
   if (action === 'create') {
     await createRemoteStaff(payload as Parameters<typeof createRemoteStaff>[0])
   } else if (action === 'update') {
@@ -443,6 +484,7 @@ export async function createStaffProfile(input: {
       password: created.password,
     })
   } catch (error) {
+    console.error('[staff-create] cloud push failed', error)
     const detail =
       error instanceof Error ? error.message : 'Synchronisation cloud impossible.'
     throw new StaffCloudSyncError(

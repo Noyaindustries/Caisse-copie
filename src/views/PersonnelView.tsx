@@ -7,10 +7,9 @@ import {
   deactivateStaffProfile,
   deleteStaffProfile,
   isCustomStaffProfile,
-  hydrateStaffFromRemote,
   listStaffProfiles,
-  pushPendingLocalStaffToCloud,
   StaffCloudSyncError,
+  syncStaffWithCloud,
   reactivateStaffProfile,
   roleLabel,
   subscribeStaffProfiles,
@@ -117,9 +116,16 @@ export function PersonnelView({ currentProfileId }: Props) {
   useEffect(() => {
     setProfiles(listStaffProfiles())
     void (async () => {
-      await pushPendingLocalStaffToCloud()
-      await hydrateStaffFromRemote()
+      const result = await syncStaffWithCloud()
       setProfiles(listStaffProfiles())
+      if (result.error) {
+        toast.error('Personnel non synchronisé', result.error)
+      } else if (result.pushed > 0) {
+        toast.success(
+          'Personnel synchronisé',
+          `${result.pushed} utilisateur(s) envoyé(s) vers les autres caisses.`,
+        )
+      }
     })()
     return subscribeStaffProfiles(() => {
       setProfiles(listStaffProfiles())
