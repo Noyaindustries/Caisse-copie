@@ -14,6 +14,7 @@ export type RemoteStaffProfile = {
 
 export async function fetchRemoteStaff(): Promise<RemoteStaffProfile[]> {
   const res = await fetch(apiUrl('/org/staff'), {
+    cache: 'no-store',
     headers: buildOrgAuthHeaders({ Accept: 'application/json' }),
   })
   const data = await parseApiResponse<{ staff: RemoteStaffProfile[] }>(res)

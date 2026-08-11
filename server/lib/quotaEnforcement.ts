@@ -6,7 +6,7 @@ import {
   parseStatus,
   type PlanId,
 } from './subscriptionPlans.js'
-import { prisma } from './prisma.js'
+import { countActiveStaffMembers } from './staffQuery.js'
 
 export function orgSubscriptionUsable(org: Organization): boolean {
   return isSubscriptionUsable(
@@ -26,9 +26,7 @@ export function planLimits(org: Organization): { maxStaff: number; maxStores: nu
 }
 
 export async function countActiveStaff(organizationId: string): Promise<number> {
-  return prisma.staffMember.count({
-    where: { organizationId, active: true, revokedAt: null },
-  })
+  return countActiveStaffMembers(organizationId)
 }
 
 export async function assertStaffQuota(

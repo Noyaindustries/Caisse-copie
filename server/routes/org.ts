@@ -13,16 +13,19 @@ orgRouter.get('/org/backup', async (req, res) => {
   if (!org) return
 
   const [staff, syncBatches, integration, payments] = await Promise.all([
-    prisma.staffMember.findMany({
-      where: { organizationId: org.id, revokedAt: null },
-      select: {
-        profileId: true,
-        displayName: true,
-        role: true,
-        active: true,
-        updatedAt: true,
-      },
-    }),
+    prisma.staffMember
+      .findMany({
+        where: { organizationId: org.id },
+        select: {
+          profileId: true,
+          displayName: true,
+          role: true,
+          active: true,
+          updatedAt: true,
+          revokedAt: true,
+        },
+      })
+      .then((rows) => rows.filter((row) => row.revokedAt == null)),
     prisma.syncBatch.findMany({
       where: { organizationId: org.id },
       orderBy: { receivedAt: 'desc' },

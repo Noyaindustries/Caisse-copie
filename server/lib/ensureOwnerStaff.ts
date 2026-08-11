@@ -35,11 +35,11 @@ export async function ensureOwnerStaffMember(
     return
   }
 
-  const anyActive = await prisma.staffMember.findFirst({
-    where: { organizationId: org.id, revokedAt: null },
-    select: { id: true },
+  const existing = await prisma.staffMember.findMany({
+    where: { organizationId: org.id },
+    select: { revokedAt: true },
   })
-  if (anyActive) return
+  if (existing.some((row) => !row.revokedAt)) return
 
   const displayName =
     org.name.trim().length >= 3 ? org.name.trim().slice(0, 80) : 'Administrateur'
@@ -57,6 +57,7 @@ export async function ensureOwnerStaffMember(
           ? hashStaffPassword(options.ownerPassword.trim())
           : null,
         active: true,
+        revokedAt: null,
       },
     })
   } catch (err) {

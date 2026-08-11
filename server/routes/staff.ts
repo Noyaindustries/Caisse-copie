@@ -14,6 +14,10 @@ import {
   verifyStaffPassword,
 } from '../lib/staffCredentials.js'
 import { logEvent } from '../lib/structuredLog.js'
+import {
+  findOrgStaffByProfile,
+  findOrgStaffMembers,
+} from '../lib/staffQuery.js'
 
 export const staffRouter = Router()
 
@@ -44,20 +48,15 @@ staffRouter.get('/org/staff', async (req, res) => {
     const org = await requireOrg(req, res)
     if (!org) return
 
-    let rows = await prisma.staffMember.findMany({
-      where: { organizationId: org.id, revokedAt: null },
-      orderBy: { displayName: 'asc' },
-    })
+    let rows = await findOrgStaffMembers(org.id)
 
     if (rows.length === 0) {
       const { ensureOwnerStaffMember } = await import('../lib/ensureOwnerStaff.js')
       await ensureOwnerStaffMember(org)
-      rows = await prisma.staffMember.findMany({
-        where: { organizationId: org.id, revokedAt: null },
-        orderBy: { displayName: 'asc' },
-      })
+      rows = await findOrgStaffMembers(org.id)
     }
 
+    res.setHeader('Cache-Control', 'no-store')
     res.json({
       staff: rows.map(serializeStaff),
       maxStaff: (await import('../lib/quotaEnforcement.js')).planLimits(org).maxStaff,
@@ -156,6 +155,7 @@ staffRouter.post('/org/staff', async (req, res) => {
           ? hashStaffPassword(body.password.trim())
           : null,
         active: true,
+        revokedAt: null,
       },
     })
 
@@ -204,9 +204,7 @@ staffRouter.patch('/org/staff/:profileId', async (req, res) => {
     if (!org) return
 
     const profileId = req.params.profileId
-    const existing = await prisma.staffMember.findFirst({
-      where: { organizationId: org.id, profileId, revokedAt: null },
-    })
+    const existing = await findOrgStaffByProfile(org.id, profileId)
     if (!existing) {
       res.status(404).json({ error: 'Utilisateur introuvable.' })
       return
@@ -272,9 +270,7 @@ staffRouter.delete('/org/staff/:profileId', async (req, res) => {
   if (!org) return
 
   const profileId = req.params.profileId
-  const existing = await prisma.staffMember.findFirst({
-    where: { organizationId: org.id, profileId, revokedAt: null },
-  })
+  const existing = await findOrgStaffByProfile(org.id, profileId)
   if (!existing) {
     res.status(404).json({ error: 'Utilisateur introuvable.' })
     return
@@ -306,15 +302,8 @@ staffRouter.post('/org/staff/verify', async (req, res) => {
       })
       .parse(req.body)
 
-    const member = await prisma.staffMember.findFirst({
-      where: {
-        organizationId: org.id,
-        profileId: body.profileId,
-        active: true,
-        revokedAt: null,
-      },
-    })
-    if (!member) {
+    const member = await findOrgStaffByProfile(org.id, body.profileId)
+    if (!member || member.active === false) {
       res.status(404).json({ error: 'Utilisateur introuvable.' })
       return
     }

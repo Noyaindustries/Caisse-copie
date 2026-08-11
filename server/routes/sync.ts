@@ -102,10 +102,12 @@ syncRouter.get('/caisseci/sync/pull', async (req, res) => {
       workspaceCatalog,
       workspaceOps,
     ] = await Promise.all([
-      prisma.staffMember.findMany({
-        where: { organizationId: org.id, revokedAt: null },
-        orderBy: { updatedAt: 'desc' },
-      }),
+      prisma.staffMember
+        .findMany({
+          where: { organizationId: org.id },
+          orderBy: { updatedAt: 'desc' },
+        })
+        .then((rows) => rows.filter((row) => row.revokedAt == null)),
       prisma.storefrontOrder.findMany({
         where: {
           organizationId: org.id,
