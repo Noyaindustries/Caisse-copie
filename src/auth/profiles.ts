@@ -66,6 +66,7 @@ const BUILTIN_STAFF_PROFILES: readonly StaffProfile[] = clientEnv.isDev()
 const CLOUD_STAFF_KEY = 'caisseci-cloud-staff-v1'
 const STORAGE_KEY = 'caisseci-custom-staff-profiles-v1'
 const PASSWORD_OVERRIDES_KEY = 'caisseci-staff-password-overrides-v1'
+const DELETED_STAFF_KEY = 'caisseci-staff-deleted-ids-v1'
 const ORG_CREDENTIALS_KEY = 'caisseci-org-credentials-v1'
 const LEGACY_PROFILE_OWNER_KEY = 'caisseci-legacy-profile-owner-v1'
 const CHANGE_EVENT = 'caisseci-staff-profiles-changed'
@@ -188,11 +189,14 @@ export function listStaffProfiles(): StaffProfile[] {
     const prev = byId.get(p.id)
     byId.set(p.id, prev ? { ...prev, ...p } : p)
   }
-  return [...byId.values()].map((p) => ({
-    ...p,
-    active: p.active !== false,
-    password: overrides[p.id] ?? p.password,
-  }))
+  const deleted = readDeletedStaffIds()
+  return [...byId.values()]
+    .filter((p) => !deleted.has(p.id))
+    .map((p) => ({
+      ...p,
+      active: p.active !== false,
+      password: overrides[p.id] ?? p.password,
+    }))
 }
 
 function readCloudStaffProfiles(): StaffProfile[] {
@@ -212,6 +216,58 @@ function writeCloudStaffProfiles(profiles: StaffProfile[]): void {
   if (typeof window === 'undefined') return
   localStorage.setItem(organizationStorageKey(CLOUD_STAFF_KEY), JSON.stringify(profiles))
   window.dispatchEvent(new Event(CHANGE_EVENT))
+}
+
+function readDeletedStaffIds(): Set<string> {
+  if (typeof window === 'undefined') return new Set()
+  try {
+    const raw = localStorage.getItem(organizationStorageKey(DELETED_STAFF_KEY))
+    if (!raw) return new Set()
+    const parsed = JSON.parse(raw) as unknown
+    if (!Array.isArray(parsed)) return new Set()
+    return new Set(parsed.filter((id): id is string => typeof id === 'string'))
+  } catch {
+    return new Set()
+  }
+}
+
+function writeDeletedStaffIds(ids: Set<string>): void {
+  if (typeof window === 'undefined') return
+  localStorage.setItem(
+    organizationStorageKey(DELETED_STAFF_KEY),
+    JSON.stringify([...ids]),
+  )
+}
+
+function rememberDeletedStaffId(profileId: string): void {
+  const ids = readDeletedStaffIds()
+  ids.add(profileId)
+  writeDeletedStaffIds(ids)
+}
+
+function forgetDeletedStaffId(profileId: string): void {
+  const ids = readDeletedStaffIds()
+  if (!ids.delete(profileId)) return
+  writeDeletedStaffIds(ids)
+}
+
+function pruneLocalStaffIds(profileIds: string[]): void {
+  if (profileIds.length === 0 || typeof window === 'undefined') return
+  const remove = new Set(profileIds)
+  localStorage.setItem(
+    organizationStorageKey(STORAGE_KEY),
+    JSON.stringify(readCustomProfiles().filter((p) => !remove.has(p.id))),
+  )
+  localStorage.setItem(
+    organizationStorageKey(CLOUD_STAFF_KEY),
+    JSON.stringify(readCloudStaffProfiles().filter((p) => !remove.has(p.id))),
+  )
+  window.dispatchEvent(new Event(CHANGE_EVENT))
+}
+
+function isRemoteStaffGoneError(error: unknown): boolean {
+  const message = error instanceof Error ? error.message : String(error)
+  return /introuvable|404|supprim|410|gone|révoqu|revoqu/i.test(message)
 }
 
 export type StaffCloudSyncResult = {
@@ -240,12 +296,21 @@ export async function syncStaffWithCloud(): Promise<StaffCloudSyncResult> {
   try {
     let remote = await fetchRemoteStaff()
     const remoteIds = new Set(remote.map((row) => row.id))
+    const knownCloudIds = new Set(readCloudStaffProfiles().map((p) => p.id))
+    const deletedIds = readDeletedStaffIds()
+    const vanished = [...knownCloudIds].filter((id) => !remoteIds.has(id))
+    if (vanished.length > 0) {
+      for (const id of vanished) rememberDeletedStaffId(id)
+      pruneLocalStaffIds(vanished)
+    }
     let pushed = 0
     let lastPushError: string | undefined
     for (const profile of readCustomProfiles()) {
       if (
         profile.active === false ||
         remoteIds.has(profile.id) ||
+        knownCloudIds.has(profile.id) ||
+        deletedIds.has(profile.id) ||
         profile.id === OWNER_PROFILE_ID
       ) {
         continue
@@ -261,11 +326,17 @@ export async function syncStaffWithCloud(): Promise<StaffCloudSyncResult> {
         })
         pushed += 1
         remoteIds.add(profile.id)
+        forgetDeletedStaffId(profile.id)
       } catch (error) {
         const message =
           error instanceof Error
             ? error.message
             : 'Impossible d’envoyer un utilisateur vers le cloud.'
+        if (isRemoteStaffGoneError(error)) {
+          rememberDeletedStaffId(profile.id)
+          pruneLocalStaffIds([profile.id])
+          continue
+        }
         if (/déjà|already|existe/i.test(message)) {
           remoteIds.add(profile.id)
           continue
@@ -277,7 +348,7 @@ export async function syncStaffWithCloud(): Promise<StaffCloudSyncResult> {
     if (pushed > 0) {
       remote = await fetchRemoteStaff()
     }
-    const pulled = remote.length > 0 ? mergeStaffFromCloud(remote) : 0
+    const pulled = mergeStaffFromCloud(remote)
     return {
       pulled,
       pushed,
@@ -315,10 +386,22 @@ export function mergeStaffFromCloud(
     active: boolean
   }>,
 ): number {
-  const localCustom = readCustomProfiles()
   const existingCloud = readCloudStaffProfiles()
+  const remoteIds = new Set(remote.map((row) => row.id))
+  const vanished = existingCloud
+    .map((profile) => profile.id)
+    .filter((id) => !remoteIds.has(id))
+  if (vanished.length > 0) {
+    for (const id of vanished) rememberDeletedStaffId(id)
+    pruneLocalStaffIds(vanished)
+  }
+  for (const row of remote) {
+    forgetDeletedStaffId(row.id)
+  }
   const localById = new Map(
-    [...existingCloud, ...localCustom].map((p) => [p.id, p] as const),
+    [...readCloudStaffProfiles(), ...readCustomProfiles()].map(
+      (profile) => [profile.id, profile] as const,
+    ),
   )
   const merged: StaffProfile[] = remote.map((row) => {
     const local = localById.get(row.id)
@@ -637,20 +720,38 @@ export function reactivateStaffProfile(profileId: string, maxStaff?: number): vo
 }
 
 /** Suppression définitive (profils personnalisés uniquement). */
-export function deleteStaffProfile(profileId: string): void {
+export async function deleteStaffProfile(profileId: string): Promise<void> {
   if (isBuiltinProfileId(profileId)) {
     throw new Error('Les profils de démonstration ne peuvent pas être supprimés.')
   }
-  const custom = readCustomProfiles().filter((p) => p.id !== profileId)
+  const previousCustom = readCustomProfiles()
+  const previousCloud = readCloudStaffProfiles()
+  const previousDeleted = readDeletedStaffIds()
+  const custom = previousCustom.filter((p) => p.id !== profileId)
   writeCustomProfiles(custom)
-  const cloud = readCloudStaffProfiles().filter((p) => p.id !== profileId)
+  const cloud = previousCloud.filter((p) => p.id !== profileId)
   writeCloudStaffProfiles(cloud)
   const overrides = readPasswordOverrides()
   if (overrides[profileId]) {
     delete overrides[profileId]
     writePasswordOverrides(overrides)
   }
-  swallowStaffCloudSync('delete', { profileId })
+  rememberDeletedStaffId(profileId)
+  try {
+    await pushStaffToServer('delete', { profileId })
+  } catch (error) {
+    if (isRemoteStaffGoneError(error)) return
+    writeCustomProfiles(previousCustom)
+    writeCloudStaffProfiles(previousCloud)
+    writeDeletedStaffIds(previousDeleted)
+    throw error instanceof StaffCloudSyncError
+      ? error
+      : new StaffCloudSyncError(
+          error instanceof Error
+            ? error.message
+            : 'Impossible de supprimer l’utilisateur sur le serveur.',
+        )
+  }
 }
 
 export function changeStaffPassword(input: {

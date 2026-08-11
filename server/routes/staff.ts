@@ -97,14 +97,22 @@ staffRouter.post('/org/staff', async (req, res) => {
       where: { organizationId: org.id, profileId },
     })
     if (existing) {
-      if (existing.revokedAt || existing.active === false) {
+      // Une autre caisse ne doit pas recréer un compte déjà supprimé.
+      if (existing.revokedAt) {
+        res.status(410).json({
+          error: 'Cet utilisateur a été supprimé.',
+          deleted: true,
+        })
+        return
+      }
+      if (existing.active === false) {
         const quotaError = await assertStaffQuota(org, 1)
         if (quotaError) {
           res.status(403).json({ error: quotaError })
           return
         }
       }
-      const revived = await prisma.staffMember.update({
+      const updated = await prisma.staffMember.update({
         where: { id: existing.id },
         data: {
           displayName: body.displayName.trim(),
@@ -115,10 +123,9 @@ staffRouter.post('/org/staff', async (req, res) => {
             ? hashStaffPassword(body.password.trim())
             : existing.passwordHash,
           active: true,
-          revokedAt: null,
         },
       })
-      res.json(serializeStaff(revived))
+      res.json(serializeStaff(updated))
       return
     }
 
@@ -172,6 +179,13 @@ staffRouter.post('/org/staff', async (req, res) => {
           where: { organizationId: org.id, profileId },
         })
         if (row) {
+          if (row.revokedAt) {
+            res.status(410).json({
+              error: 'Cet utilisateur a été supprimé.',
+              deleted: true,
+            })
+            return
+          }
           res.json(serializeStaff(row))
           return
         }

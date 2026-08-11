@@ -141,7 +141,7 @@ function emptyResult(error: string): CloudPullResult {
 async function applyStaffFromCloud(
   staff: PullResponse['staff'],
 ): Promise<number> {
-  if (staff.length === 0) return 0
+  if (!Array.isArray(staff)) return 0
   const { mergeStaffFromCloud } = await import('../auth/profiles')
   return mergeStaffFromCloud(staff)
 }

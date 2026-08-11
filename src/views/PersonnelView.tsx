@@ -296,7 +296,7 @@ export function PersonnelView({ currentProfileId }: Props) {
     )
     if (!ok) return
     try {
-      deleteStaffProfile(p.id)
+      await deleteStaffProfile(p.id)
       if (editingId === p.id) setEditingId(null)
       toast.success('Utilisateur supprimé', p.displayName)
     } catch (error) {
