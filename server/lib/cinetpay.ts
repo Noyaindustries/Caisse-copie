@@ -5,6 +5,7 @@ import {
   platformPaymentCreds,
   type PaymentProviderCreds,
 } from './orgPaymentCredentials.js'
+import { waveSubscriptionPaymentLinkConfigured } from './paymentProviderSettings.js'
 import { waveEnabled } from './wave.js'
 
 const CHECKOUT_URL = 'https://api-checkout.cinetpay.com/v2/payment'
@@ -46,7 +47,8 @@ export function mobileMoneyEnabled(
   return (
     cinetpayConfigured(creds) ||
     cinetpayDemoMode(creds) ||
-    waveEnabled(creds)
+    waveEnabled(creds) ||
+    waveSubscriptionPaymentLinkConfigured()
   )
 }
 

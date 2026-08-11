@@ -280,6 +280,22 @@ platformAdminRouter.put('/platform-admin/payment-providers', async (req, res) =>
     if (waveWebhookSecret !== undefined) input.waveWebhookSecret = waveWebhookSecret
     const waveSigningSecret = readSecret(body.waveSigningSecret)
     if (waveSigningSecret !== undefined) input.waveSigningSecret = waveSigningSecret
+    const wavePaymentLink = readSecret(body.wavePaymentLink)
+    if (wavePaymentLink !== undefined) input.wavePaymentLink = wavePaymentLink
+    const rawPlanLinks = body.wavePaymentLinks
+    if (rawPlanLinks && typeof rawPlanLinks === 'object') {
+      const rec = rawPlanLinks as Record<string, unknown>
+      const wavePaymentLinks: NonNullable<
+        PaymentProvidersUpdateInput['wavePaymentLinks']
+      > = {}
+      for (const planId of ['starter', 'pro', 'business'] as const) {
+        const value = readSecret(rec[planId])
+        if (value !== undefined) wavePaymentLinks[planId] = value
+      }
+      if (Object.keys(wavePaymentLinks).length > 0) {
+        input.wavePaymentLinks = wavePaymentLinks
+      }
+    }
     const cinetpayApiKey = readSecret(body.cinetpayApiKey)
     if (cinetpayApiKey !== undefined) input.cinetpayApiKey = cinetpayApiKey
     const cinetpaySiteId = readSecret(body.cinetpaySiteId)

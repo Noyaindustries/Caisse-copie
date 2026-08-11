@@ -4,6 +4,7 @@ import {
   savePaymentProviders,
   type PaymentProvidersStatus,
 } from '../../lib/platformAdmin/api'
+import type { PlanId } from '../../lib/subscription/types'
 import type { AdminThemeClasses } from '../../lib/platformAdmin/theme'
 import { Badge } from '../../ui/Badge'
 import { Button } from '../../ui/Button'
@@ -15,6 +16,22 @@ import { cn } from '../../ui/cn'
 type Props = {
   theme: AdminThemeClasses
   inputClass: string
+}
+
+const PLAN_LINK_IDS: PlanId[] = ['starter', 'pro', 'business']
+
+const PLAN_LINK_LABELS: Record<PlanId, string> = {
+  starter: 'Starter',
+  pro: 'Pro',
+  business: 'Business',
+}
+
+function emptyPlanLinks(): Record<PlanId, string> {
+  return { starter: '', pro: '', business: '' }
+}
+
+function emptyPlanClears(): Record<PlanId, boolean> {
+  return { starter: false, pro: false, business: false }
 }
 
 function sourceLabel(source: PaymentProvidersStatus['wave']['source']): string {
@@ -44,7 +61,9 @@ export function PaymentProvidersAdminPanel({ theme, inputClass }: Props) {
   const [waveWebhookSecret, setWaveWebhookSecret] = useState('')
   const [waveSigningSecret, setWaveSigningSecret] = useState('')
   const [waveDemoMode, setWaveDemoMode] = useState(false)
+  const [wavePaymentLinks, setWavePaymentLinks] = useState(emptyPlanLinks)
   const [clearWaveApiKey, setClearWaveApiKey] = useState(false)
+  const [clearWavePaymentLinks, setClearWavePaymentLinks] = useState(emptyPlanClears)
   const [clearWaveWebhook, setClearWaveWebhook] = useState(false)
   const [clearWaveSigning, setClearWaveSigning] = useState(false)
 
@@ -57,6 +76,11 @@ export function PaymentProvidersAdminPanel({ theme, inputClass }: Props) {
   const applyStatus = useCallback((next: PaymentProvidersStatus) => {
     setStatus(next)
     setWaveDemoMode(next.wave.demoMode)
+    setWavePaymentLinks({
+      starter: next.wave.paymentLinks?.starter ?? next.wave.paymentLink ?? '',
+      pro: next.wave.paymentLinks?.pro ?? '',
+      business: next.wave.paymentLinks?.business ?? '',
+    })
     setCinetpayDemoMode(next.orangeMoney.demoMode)
   }, [])
 
@@ -90,6 +114,16 @@ export function PaymentProvidersAdminPanel({ theme, inputClass }: Props) {
       else if (waveWebhookSecret.trim()) body.waveWebhookSecret = waveWebhookSecret.trim()
       if (clearWaveSigning) body.waveSigningSecret = null
       else if (waveSigningSecret.trim()) body.waveSigningSecret = waveSigningSecret.trim()
+      const nextPlanLinks: NonNullable<typeof body.wavePaymentLinks> = {}
+      for (const planId of PLAN_LINK_IDS) {
+        if (clearWavePaymentLinks[planId]) nextPlanLinks[planId] = null
+        else if (wavePaymentLinks[planId].trim()) {
+          nextPlanLinks[planId] = wavePaymentLinks[planId].trim()
+        }
+      }
+      if (Object.keys(nextPlanLinks).length > 0) {
+        body.wavePaymentLinks = nextPlanLinks
+      }
       if (clearCinetpayApiKey) body.cinetpayApiKey = null
       else if (cinetpayApiKey.trim()) body.cinetpayApiKey = cinetpayApiKey.trim()
       if (clearCinetpaySiteId) body.cinetpaySiteId = null
@@ -105,6 +139,7 @@ export function PaymentProvidersAdminPanel({ theme, inputClass }: Props) {
       setClearWaveApiKey(false)
       setClearWaveWebhook(false)
       setClearWaveSigning(false)
+      setClearWavePaymentLinks(emptyPlanClears())
       setClearCinetpayApiKey(false)
       setClearCinetpaySiteId(false)
       setSaveMessage('Configuration paiement enregistrée.')
@@ -160,12 +195,69 @@ export function PaymentProvidersAdminPanel({ theme, inputClass }: Props) {
                 {status?.wave.enabled ? 'Actif' : 'Inactif'}
               </Badge>
               <Badge tone="info">{sourceLabel(status?.wave.source ?? 'none')}</Badge>
+              {PLAN_LINK_IDS.filter((id) => status?.wave.paymentLinks?.[id]).map(
+                (id) => (
+                  <Badge key={id} tone="success">
+                    Lien {PLAN_LINK_LABELS[id]}
+                  </Badge>
+                ),
+              )}
               {status?.wave.apiKeyHint ? (
                 <span className={cn('font-mono text-[11px]', theme.muted)}>
                   Clé {status.wave.apiKeyHint}
                 </span>
               ) : null}
             </div>
+
+            <div className="space-y-3">
+              {PLAN_LINK_IDS.map((planId) => (
+                <div key={planId} className="space-y-1.5">
+                  <Field label={`Lien Wave — ${PLAN_LINK_LABELS[planId]}`}>
+                    <Input
+                      type="url"
+                      inputMode="url"
+                      autoComplete="off"
+                      className={inputClass}
+                      value={wavePaymentLinks[planId]}
+                      onChange={(e) => {
+                        const value = e.target.value
+                        setWavePaymentLinks((prev) => ({
+                          ...prev,
+                          [planId]: value,
+                        }))
+                        setClearWavePaymentLinks((prev) => ({
+                          ...prev,
+                          [planId]: false,
+                        }))
+                      }}
+                      placeholder="https://pay.wave.com/m/M_ci_…"
+                      disabled={clearWavePaymentLinks[planId] || busy}
+                    />
+                  </Field>
+                  <label className="flex items-center gap-2 text-[12px]">
+                    <input
+                      type="checkbox"
+                      checked={clearWavePaymentLinks[planId]}
+                      onChange={(e) =>
+                        setClearWavePaymentLinks((prev) => ({
+                          ...prev,
+                          [planId]: e.target.checked,
+                        }))
+                      }
+                      disabled={busy}
+                    />
+                    Effacer le lien {PLAN_LINK_LABELS[planId]} (repli .env si
+                    présent)
+                  </label>
+                </div>
+              ))}
+            </div>
+            <p className={cn('text-[12px] leading-relaxed', theme.muted)}>
+              Un lien Wave Business par formule. Au paiement, l’application Wave
+              s’ouvre (téléphone) ou un QR s’affiche (ordinateur). Sans clé API,
+              confirmez ensuite l’abonnement dans Organisations (code magasin
+              indiqué dans le message Wave).
+            </p>
 
             <Field label="Clé API Wave (WAVE_API_KEY)">
               <Input

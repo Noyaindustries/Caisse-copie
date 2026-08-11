@@ -196,6 +196,8 @@ model PlatformPaymentConfig {
   waveWebhookSecret  String?
   waveSigningSecret  String?
   waveDemoMode       Boolean  @default(false)
+  /** Lien Wave générique (repli). Les liens par formule sont dans wavePaymentLinks (Mongo). */
+  wavePaymentLink    String?
   cinetpayApiKey     String?
   cinetpaySiteId     String?
   cinetpayDemoMode   Boolean  @default(false)

@@ -3,6 +3,7 @@ import { profileSecretMatches } from '../auth/permissions'
 import {
   DEFAULT_OWNER_PIN,
   ensureOwnerAdminProfile,
+  hydrateStaffFromRemote,
   listActiveStaffProfiles,
   roleLabel,
   subscribeStaffProfiles,
@@ -48,6 +49,7 @@ export function LoginScreen({
   const storeNameById = new Map(stores.map((store) => [store.id, store.name]))
 
   useEffect(() => {
+    setProfiles(listActiveStaffProfiles())
     if (listActiveStaffProfiles().length > 0) return
     const created = ensureOwnerAdminProfile(organization?.name ?? 'Administrateur')
     if (created) {
@@ -55,6 +57,17 @@ export function LoginScreen({
       setProfiles(listActiveStaffProfiles())
     }
   }, [organization?.name])
+
+  useEffect(() => {
+    let cancelled = false
+    void hydrateStaffFromRemote().then((count) => {
+      if (cancelled || count === 0) return
+      setProfiles(listActiveStaffProfiles())
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [])
 
   useEffect(() => {
     return subscribeStaffProfiles(() => {

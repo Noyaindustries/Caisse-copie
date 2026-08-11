@@ -51,6 +51,8 @@ export async function fetchMobileMoneyChannels(): Promise<{
   demo: boolean
   waveEnabled: boolean
   waveDirect: boolean
+  wavePaymentLink?: boolean
+  wavePaymentLinks?: Partial<Record<PlanId, boolean>>
   cinetpayEnabled: boolean
 }> {
   const res = await fetch(apiUrl('/billing/mobile-money/channels'))
@@ -64,7 +66,8 @@ export async function startMobileMoneyCheckout(
   transactionId: string
   paymentUrl: string
   demo: boolean
-  provider?: 'wave' | 'cinetpay'
+  provider?: 'wave' | 'wave_link' | 'cinetpay'
+  storeCode?: string | null
 }> {
   const res = await fetch(apiUrl('/billing/mobile-money/checkout'), {
     method: 'POST',

@@ -29,7 +29,11 @@ import {
   merchantPaymentCreds,
   platformPaymentCreds,
 } from '../lib/orgPaymentCredentials.js'
-import { ensurePaymentConfigReady } from '../lib/paymentProviderSettings.js'
+import {
+  ensurePaymentConfigReady,
+  getWaveSubscriptionPaymentLink,
+  waveSubscriptionPaymentLinkConfigured,
+} from '../lib/paymentProviderSettings.js'
 import { calculateRenewalPeriodEnd } from '../lib/subscriptionActivation.js'
 import {
   findStorefrontOrderByExternalId,
@@ -44,6 +48,7 @@ import {
 } from '../lib/appUrls.js'
 import { resolveOrgFromRequest } from '../lib/orgAuth.js'
 import {
+  buildWaveOpenUrl,
   renderWaveCheckoutPage,
   waveOpenPath,
 } from '../lib/waveCheckoutPage.js'
@@ -105,7 +110,10 @@ async function markPaymentAccepted(paymentId: string, extra?: {
 }
 
 function isWaveDirectChannel(channelId: string): boolean {
-  return channelId === 'wave' && waveEnabled()
+  return (
+    channelId === 'wave' &&
+    (waveEnabled() || waveSubscriptionPaymentLinkConfigured())
+  )
 }
 
 type WaveCheckoutContext = {
@@ -137,7 +145,7 @@ async function resolveWaveCheckoutContext(
       merchantLabel: `Wave — ${plan.name}`,
       customerPhone: payment.customerPhone,
       launchUrl: notify.waveLaunchUrl ?? null,
-      demo: payment.paymentMethod === 'wave_demo' || waveDemoMode(),
+      demo: payment.paymentMethod === 'wave_demo',
       acceptAction: `/api/billing/wave/demo/${encodeURIComponent(transactionId)}/accept`,
       refuseAction: `/api/billing/wave/demo/${encodeURIComponent(transactionId)}/refuse`,
     }
@@ -163,7 +171,7 @@ async function resolveWaveCheckoutContext(
     merchantLabel: storeName,
     customerPhone,
     launchUrl,
-    demo: launchUrl === null || waveDemoMode(),
+    demo: launchUrl === null,
     acceptAction: `/api/billing/wave/demo/${encodeURIComponent(transactionId)}/accept?kind=storefront`,
     refuseAction: `/api/billing/wave/demo/${encodeURIComponent(transactionId)}/refuse?kind=storefront`,
   }
@@ -171,12 +179,14 @@ async function resolveWaveCheckoutContext(
 
 mobileMoneyRouter.get('/billing/mobile-money/channels', async (_req, res) => {
   await ensurePaymentConfigReady()
-  const cinetpayOn = cinetpayConfigured() || (cinetpayDemoMode() && !waveEnabled())
+  const waveLinkOn = waveSubscriptionPaymentLinkConfigured()
+  const waveCheckoutOn = waveEnabled() || waveLinkOn
+  const cinetpayOn = cinetpayConfigured() || (cinetpayDemoMode() && !waveCheckoutOn)
   res.json({
     channels: MOBILE_MONEY_CHANNELS_CI.map((channel) => ({
       ...channel,
       provider:
-        channel.id === 'wave' && waveEnabled()
+        channel.id === 'wave' && waveCheckoutOn
           ? 'wave'
           : cinetpayOn
             ? 'cinetpay'
@@ -185,9 +195,18 @@ mobileMoneyRouter.get('/billing/mobile-money/channels', async (_req, res) => {
     enabled: mobileMoneyEnabled(),
     demo:
       (cinetpayDemoMode() && !cinetpayConfigured() && !waveApiKeyConfigured()) ||
-      (waveDemoMode() && !waveApiKeyConfigured() && !cinetpayConfigured()),
-    waveEnabled: waveEnabled(),
-    waveDirect: waveEnabled(),
+      (waveDemoMode() &&
+        !waveApiKeyConfigured() &&
+        !waveLinkOn &&
+        !cinetpayConfigured()),
+    waveEnabled: waveCheckoutOn,
+    waveDirect: waveApiKeyConfigured(),
+    wavePaymentLink: waveLinkOn,
+    wavePaymentLinks: {
+      starter: waveSubscriptionPaymentLinkConfigured('starter'),
+      pro: waveSubscriptionPaymentLinkConfigured('pro'),
+      business: waveSubscriptionPaymentLinkConfigured('business'),
+    },
     cinetpayEnabled: cinetpayOn,
     country: 'CI',
   })
@@ -246,32 +265,97 @@ mobileMoneyRouter.post('/billing/mobile-money/checkout', async (req, res) => {
     })
 
     if (isWaveDirectChannel(channelId)) {
-      const waveInit = await initWaveCheckout({
-        transactionId,
-        amountFcfa: plan.priceFcfa,
-        successUrl: returnUrl,
-        errorUrl,
-        payerPhoneE164: phone,
-      })
+      if (waveApiKeyConfigured()) {
+        const waveInit = await initWaveCheckout({
+          transactionId,
+          amountFcfa: plan.priceFcfa,
+          successUrl: returnUrl,
+          errorUrl,
+          payerPhoneE164: phone,
+        })
 
-      await prisma.mobileMoneyPayment.update({
-        where: { id: payment.id },
-        data: {
-          paymentToken: waveInit.sessionId,
-          paymentMethod: waveInit.demo ? 'wave_demo' : 'wave',
-          notifyPayload: {
-            waveLaunchUrl: waveInit.launchUrl,
+        await prisma.mobileMoneyPayment.update({
+          where: { id: payment.id },
+          data: {
+            paymentToken: waveInit.sessionId,
+            paymentMethod: waveInit.demo ? 'wave_demo' : 'wave',
+            notifyPayload: {
+              waveLaunchUrl: waveInit.launchUrl,
+            },
           },
-        },
-      })
+        })
 
-      res.json({
-        transactionId,
-        paymentUrl: waveInit.paymentUrl,
-        demo: waveInit.demo,
-        channel: channelId,
-        provider: 'wave',
-        amountFcfa: plan.priceFcfa,
+        res.json({
+          transactionId,
+          paymentUrl: waveInit.paymentUrl,
+          demo: waveInit.demo,
+          channel: channelId,
+          provider: 'wave',
+          amountFcfa: plan.priceFcfa,
+        })
+        return
+      }
+
+      const paymentLink = getWaveSubscriptionPaymentLink(planId)
+      if (paymentLink) {
+        await prisma.mobileMoneyPayment.update({
+          where: { id: payment.id },
+          data: {
+            paymentMethod: 'wave_link',
+            notifyPayload: {
+              wavePaymentLink: true,
+              waveLaunchUrl: paymentLink,
+              storeCode: org.storeCode,
+              amountFcfa: plan.priceFcfa,
+            },
+          },
+        })
+
+        res.json({
+          transactionId,
+          paymentUrl: buildWaveOpenUrl(baseUrl, transactionId),
+          demo: false,
+          channel: channelId,
+          provider: 'wave_link',
+          amountFcfa: plan.priceFcfa,
+          storeCode: org.storeCode ?? null,
+        })
+        return
+      }
+
+      if (waveDemoMode()) {
+        const waveInit = await initWaveCheckout({
+          transactionId,
+          amountFcfa: plan.priceFcfa,
+          successUrl: returnUrl,
+          errorUrl,
+          payerPhoneE164: phone,
+        })
+
+        await prisma.mobileMoneyPayment.update({
+          where: { id: payment.id },
+          data: {
+            paymentToken: waveInit.sessionId,
+            paymentMethod: 'wave_demo',
+            notifyPayload: {
+              waveLaunchUrl: waveInit.launchUrl,
+            },
+          },
+        })
+
+        res.json({
+          transactionId,
+          paymentUrl: waveInit.paymentUrl,
+          demo: true,
+          channel: channelId,
+          provider: 'wave',
+          amountFcfa: plan.priceFcfa,
+        })
+        return
+      }
+
+      res.status(503).json({
+        error: `Lien Wave non configuré pour la formule ${plan.name}. Ajoutez-le dans /admin → Wave & Orange.`,
       })
       return
     }
@@ -581,11 +665,6 @@ mobileMoneyRouter.get('/billing/wave/open/:transactionId', async (req, res) => {
   const ctx = await resolveWaveCheckoutContext(transactionId)
   if (!ctx) {
     res.status(404).send('Transaction introuvable')
-    return
-  }
-
-  if (ctx.launchUrl && !ctx.demo) {
-    res.redirect(302, ctx.launchUrl)
     return
   }
 

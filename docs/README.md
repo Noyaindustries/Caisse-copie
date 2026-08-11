@@ -15,6 +15,7 @@ Guide pour **gérants**, **caissiers** et **administrateurs** :
 - Création de compte et connexion
 - Abonnement et essai gratuit
 - Encaissement et mode hors ligne
+- Catalogue (photos de catégories) et boutique publique
 - Bonnes pratiques et dépannage
 
 ### [Référence des modules](documentation-modules.md)

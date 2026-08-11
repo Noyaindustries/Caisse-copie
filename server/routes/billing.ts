@@ -19,7 +19,10 @@ import {
   updateOrganizationPaymentProviders,
   type OrgPaymentProvidersUpdateInput,
 } from '../lib/orgPaymentCredentials.js'
-import { ensurePaymentConfigReady } from '../lib/paymentProviderSettings.js'
+import {
+  ensurePaymentConfigReady,
+  waveSubscriptionPaymentLinkConfigured,
+} from '../lib/paymentProviderSettings.js'
 import { waveEnabled } from '../lib/wave.js'
 import { runSubscriptionReminders } from '../lib/subscriptionReminders.js'
 import { getStripe, publicAppUrl, stripeConfigured } from '../lib/stripe.js'
@@ -140,7 +143,8 @@ function orgPayload(org: {
     currentPeriodEnd: org.currentPeriodEnd?.toISOString() ?? null,
     stripeEnabled: stripeConfigured(),
     mobileMoneyEnabled: mobileMoneyEnabled(),
-    waveEnabled: waveEnabled(),
+    waveEnabled: waveEnabled() || waveSubscriptionPaymentLinkConfigured(),
+    wavePaymentLinkEnabled: waveSubscriptionPaymentLinkConfigured(),
     billingPhone: org.billingPhone ?? null,
     smsRemindersEnabled: org.smsRemindersEnabled ?? true,
   }
@@ -179,6 +183,7 @@ async function requireBillingOrg(req: Request, res: Response) {
 }
 
 billingRouter.get('/billing/plans', async (_req, res) => {
+  await ensurePaymentConfigReady()
   let moduleMinPlans: Record<string, string> | undefined
   try {
     const {
@@ -195,7 +200,8 @@ billingRouter.get('/billing/plans', async (_req, res) => {
     trialDays: TRIAL_DAYS,
     stripeEnabled: stripeConfigured(),
     mobileMoneyEnabled: mobileMoneyEnabled(),
-    waveEnabled: waveEnabled(),
+    waveEnabled: waveEnabled() || waveSubscriptionPaymentLinkConfigured(),
+    wavePaymentLinkEnabled: waveSubscriptionPaymentLinkConfigured(),
     moduleMinPlans: moduleMinPlans ?? {},
   })
 })

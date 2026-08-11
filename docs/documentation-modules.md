@@ -67,7 +67,12 @@ Vue synthétique de l’activité : indicateurs du jour, tendances, raccourcis v
 - Photos : upload (Vercel Blob si configuré, sinon local IndexedDB)
 
 ### Onglet Catégories
-- Liste et gestion des catégories produits
+- Liste des familles avec **aperçu rond** (photo ou initiale)
+- Admin / gérant :
+  - **Ajouter photo** / **Changer photo** / **Retirer** (image ≤ 500 Ko ; Blob si configuré, sinon data URL locale)
+  - Renommer, supprimer (réaffectation des articles), réordonner (monter / descendre)
+- Sync cloud : `GET/PUT /org/catalog-categories` (`imageUrl` inclus)
+- Les photos sont reprises à la **publication boutique** (cartes rondes du menu public)
 
 **Rôles** : lecture pour caissier ; édition prix/catalogue selon permissions admin/gérant.
 
@@ -242,7 +247,18 @@ Magasin, terminal, modules, cuisine, tables, périphériques, fond de caisse par
 
 ## Abonnement (`subscription`)
 
-Plan actif, code magasin, QR boutique, clé licence, paiement MM/carte, historique, SMS rappels.
+Plan actif, code magasin, QR boutique, clé licence, paiement Wave (lien admin ou API) / mobile money / carte, historique, SMS rappels.
+
+---
+
+## Boutique publique (`/boutique/:code`)
+
+Vitrine client (hors menu caisse). Composants : `PublicStorefrontPage`, `LuxuryStorefrontView`.
+
+- Navigation **cartes rondes** par catégorie (photo catalogue ou initiale)
+- Filtre « Tous » + compteur d’articles
+- Panier, commande, paiement selon config magasin
+- Les images de catégories viennent du menu publié (`categories[].imageUrl`)
 
 ---
 
@@ -256,7 +272,7 @@ Plan actif, code magasin, QR boutique, clé licence, paiement MM/carte, historiq
 | `/connexion` | Connexion gérant |
 | `/abonnement` | Gestion licence |
 | `/staff` | Connexion PIN staff |
-| `/boutique/:code` | Boutique client |
+| `/boutique/:code` | Boutique client — cartes catégories **rondes** (photo ou initiale), panier, commande |
 | `/admin` | Console opérateur plateforme |
 
 ---

@@ -30,7 +30,7 @@ export const ROLE_DEFAULT_PERMISSIONS: Record<UserRole, StaffPermissions> = {
     canDailyClosure: true,
     canProcessRefunds: true,
     canSwitchStore: true,
-    canManagePersonnel: false,
+    canManagePersonnel: true,
     canViewTeamPointage: true,
     canConfigureStoresAdmin: false,
     canManageIntegrations: false,

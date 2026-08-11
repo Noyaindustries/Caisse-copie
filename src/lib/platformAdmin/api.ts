@@ -187,6 +187,9 @@ export type PaymentProvidersStatus = {
     apiKeyHint: string | null
     webhookSecretSet: boolean
     signingSecretSet: boolean
+    paymentLink?: string | null
+    paymentLinkSet?: boolean
+    paymentLinks?: Partial<Record<PlanId, string | null>>
     source: 'db' | 'env' | 'none' | 'mixed'
   }
   orangeMoney: {
@@ -208,6 +211,8 @@ export type PaymentProvidersUpdateBody = {
   waveWebhookSecret?: string | null
   waveSigningSecret?: string | null
   waveDemoMode?: boolean
+  wavePaymentLink?: string | null
+  wavePaymentLinks?: Partial<Record<PlanId, string | null>>
   cinetpayApiKey?: string | null
   cinetpaySiteId?: string | null
   cinetpayDemoMode?: boolean

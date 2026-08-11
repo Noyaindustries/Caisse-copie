@@ -1,4 +1,5 @@
 import QRCode from 'qrcode'
+import { waveAndroidIntentUrl } from './wavePaymentLink.js'
 
 export type WaveCheckoutPageInput = {
   amountFcfa: number
@@ -33,32 +34,42 @@ export async function renderWaveCheckoutPage(
     color: { dark: '#1d4ed8', light: '#ffffff' },
   })
 
-  const launchUrlJs = JSON.stringify(launchUrl)
+  const intentUrlJs = JSON.stringify(
+    launchUrl ? waveAndroidIntentUrl(launchUrl) : '',
+  )
   const redirectBlock = launchUrl
     ? `<script>
 (function () {
-  var url = ${launchUrlJs};
-  var mobile = /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent);
-  if (mobile) {
-    window.location.replace(url);
-  } else {
-    window.location.replace(url);
+  var intentUrl = ${intentUrlJs};
+  if (/Android/i.test(navigator.userAgent) && intentUrl) {
+    window.location.replace(intentUrl);
   }
 })();
-</script>
-<noscript>
-  <meta http-equiv="refresh" content="0;url=${escapeHtml(launchUrl)}" />
-</noscript>`
+</script>`
     : ''
 
   const demoBadge = input.demo
     ? '<span class="badge">Mode démo — configurez WAVE_API_KEY pour l’app Wave réelle</span>'
     : ''
 
+  const openAppHref = launchUrl ? escapeHtml(launchUrl) : ''
   const instructions = launchUrl
-    ? `<p class="lead">Ouverture de Wave pour valider le paiement de <strong>${amount} F CFA</strong>.</p>
-       <p class="hint">Sur mobile, l’application Wave s’ouvre automatiquement. Sur ordinateur, scannez le QR code avec l’app Wave CI.</p>
-       <p class="hint"><a class="link" href="${escapeHtml(launchUrl)}">Ouvrir la page de paiement Wave</a></p>`
+    ? `<p class="lead">Ouvrez <strong>Wave</strong> pour payer <strong>${amount} F CFA</strong>.</p>
+       <p class="hint">Sur téléphone, l’application Wave s’ouvre. Sur ordinateur, scannez le QR avec l’app Wave CI.</p>
+       <p class="hint"><a class="open-app" id="open-wave" href="${openAppHref}">Ouvrir l’application Wave</a></p>
+       <script>
+(function () {
+  var link = document.getElementById('open-wave');
+  var intentUrl = ${intentUrlJs};
+  if (!link) return;
+  link.addEventListener('click', function (e) {
+    if (/Android/i.test(navigator.userAgent) && intentUrl) {
+      e.preventDefault();
+      window.location.href = intentUrl;
+    }
+  });
+})();
+</script>`
     : `<p class="lead">Simulez le paiement Wave pour <strong>${amount} F CFA</strong>.</p>
        <p class="hint">En production, cette étape ouvre l’application Wave CI ou la page Wave avec QR à scanner.</p>`
 
@@ -113,6 +124,18 @@ export async function renderWaveCheckoutPage(
     .hint { font-size: .85rem; }
     .link { color: #1d4ed8; font-weight: 600; text-decoration: none; }
     .link:hover { text-decoration: underline; }
+    .open-app {
+      display: block;
+      width: 100%;
+      padding: .9rem 1rem;
+      border-radius: 12px;
+      font-weight: 700;
+      background: #1d4ed8;
+      color: #fff;
+      text-decoration: none;
+      margin: .85rem 0 .25rem;
+    }
+    .open-app:hover { background: #1e40af; }
     .qr-wrap {
       margin: 1rem auto;
       padding: .75rem;

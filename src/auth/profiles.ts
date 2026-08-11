@@ -156,8 +156,16 @@ function writePasswordOverrides(overrides: Record<string, string>): void {
 
 export function listStaffProfiles(): StaffProfile[] {
   const overrides = readPasswordOverrides()
-  const cloud = readCloudStaffProfiles()
-  return [...BUILTIN_STAFF_PROFILES, ...cloud, ...readCustomProfiles()].map((p) => ({
+  const byId = new Map<string, StaffProfile>()
+  for (const p of [
+    ...BUILTIN_STAFF_PROFILES,
+    ...readCloudStaffProfiles(),
+    ...readCustomProfiles(),
+  ]) {
+    const prev = byId.get(p.id)
+    byId.set(p.id, prev ? { ...prev, ...p } : p)
+  }
+  return [...byId.values()].map((p) => ({
     ...p,
     active: p.active !== false,
     password: overrides[p.id] ?? p.password,
@@ -181,6 +189,19 @@ function writeCloudStaffProfiles(profiles: StaffProfile[]): void {
   if (typeof window === 'undefined') return
   localStorage.setItem(organizationStorageKey(CLOUD_STAFF_KEY), JSON.stringify(profiles))
   window.dispatchEvent(new Event(CHANGE_EVENT))
+}
+
+/** Recharge la liste serveur (GET /org/staff) et la fusionne en local. */
+export async function hydrateStaffFromRemote(): Promise<number> {
+  if (typeof window === 'undefined' || !isCloudApiConfigured()) return 0
+  try {
+    const { fetchRemoteStaff } = await import('../lib/staff/api')
+    const remote = await fetchRemoteStaff()
+    if (remote.length === 0) return 0
+    return mergeStaffFromCloud(remote)
+  } catch {
+    return 0
+  }
 }
 
 export function mergeStaffFromCloud(
@@ -370,10 +391,11 @@ export function updateStaffProfile(
     )
   }
   const custom = readCustomProfiles()
+  const cloud = readCloudStaffProfiles()
   const idx = custom.findIndex((p) => p.id === profileId)
-  if (idx < 0) throw new Error('Profil introuvable.')
-
-  const current = custom[idx]!
+  const cloudIdx = cloud.findIndex((p) => p.id === profileId)
+  const current = (idx >= 0 ? custom[idx] : null) ?? (cloudIdx >= 0 ? cloud[cloudIdx] : null)
+  if (!current) throw new Error('Profil introuvable.')
   const next: StaffProfile = { ...current }
 
   if (patch.displayName !== undefined) {
@@ -408,8 +430,25 @@ export function updateStaffProfile(
   }
   if (patch.active !== undefined) next.active = patch.active
 
-  custom[idx] = next
-  writeCustomProfiles(custom)
+  if (idx >= 0) {
+    custom[idx] = next
+    writeCustomProfiles(custom)
+  } else {
+    custom.push(next)
+    writeCustomProfiles(custom)
+  }
+  if (cloudIdx >= 0) {
+    cloud[cloudIdx] = {
+      ...cloud[cloudIdx]!,
+      displayName: next.displayName,
+      initials: next.initials,
+      role: next.role,
+      active: next.active,
+      ...(next.storeId ? { storeId: next.storeId } : {}),
+      pin: next.pin,
+    }
+    writeCloudStaffProfiles(cloud)
+  }
   void pushStaffToServer('update', {
     profileId,
     patch: {
@@ -449,6 +488,8 @@ export function deleteStaffProfile(profileId: string): void {
   }
   const custom = readCustomProfiles().filter((p) => p.id !== profileId)
   writeCustomProfiles(custom)
+  const cloud = readCloudStaffProfiles().filter((p) => p.id !== profileId)
+  writeCloudStaffProfiles(cloud)
   const overrides = readPasswordOverrides()
   if (overrides[profileId]) {
     delete overrides[profileId]

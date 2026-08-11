@@ -743,6 +743,8 @@ export function SubscriptionView() {
 
           amountFcfa={mobilePlan.priceFcfa}
 
+          storeCode={subscription.storeCode}
+
         />
 
       ) : null}

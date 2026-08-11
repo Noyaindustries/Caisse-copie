@@ -7,6 +7,7 @@ import {
   deactivateStaffProfile,
   deleteStaffProfile,
   isCustomStaffProfile,
+  hydrateStaffFromRemote,
   listStaffProfiles,
   reactivateStaffProfile,
   roleLabel,
@@ -61,7 +62,7 @@ const PERMISSIONS: PermRow[] = [
   { label: 'Stocks & inventaire rapide', caissier: false, gerant: true, admin: true },
   { label: 'Tableau de bord', caissier: false, gerant: true, admin: true },
   { label: 'Analytique', caissier: false, gerant: true, admin: true },
-  { label: 'Personnel (matrice)', caissier: false, gerant: false, admin: true },
+  { label: 'Personnel (matrice)', caissier: false, gerant: true, admin: true },
   { label: 'Intégrations', caissier: false, gerant: false, admin: true },
 ]
 
@@ -111,6 +112,10 @@ export function PersonnelView({ currentProfileId }: Props) {
   )
 
   useEffect(() => {
+    setProfiles(listStaffProfiles())
+    void hydrateStaffFromRemote().then((count) => {
+      if (count > 0) setProfiles(listStaffProfiles())
+    })
     return subscribeStaffProfiles(() => {
       setProfiles(listStaffProfiles())
     })
@@ -513,100 +518,17 @@ export function PersonnelView({ currentProfileId }: Props) {
       </Card>
 
       <SectionHeader
-        title="Matrice des permissions"
-        subtitle="Droits par rôle (les profils peuvent surcharger en démo)"
-      />
-      <TableScrollHint className="md:hidden" />
-      <ResponsiveData
-        table={
-          <Table minWidth={520}>
-            <THead>
-              <Tr hover={false}>
-                <Th sticky>Fonctionnalité</Th>
-                <Th align="center">Caissier</Th>
-                <Th align="center">Gérant</Th>
-                <Th align="center">Admin</Th>
-              </Tr>
-            </THead>
-            <TBody>
-              <Tr className="bg-zinc-50/50" hover={false}>
-                <Td sticky className="font-medium text-zinc-900">
-                  Plafond de remise par défaut
-                </Td>
-                <Td align="center" mono>
-                  5 %
-                </Td>
-                <Td align="center" mono>
-                  20 %
-                </Td>
-                <Td align="center" mono>
-                  100 %
-                </Td>
-              </Tr>
-              {PERMISSIONS.map((row) => (
-                <Tr key={row.label}>
-                  <Td sticky>{row.label}</Td>
-                  <PermCell ok={row.caissier} />
-                  <PermCell ok={row.gerant} />
-                  <PermCell ok={row.admin} />
-                </Tr>
-              ))}
-            </TBody>
-          </Table>
-        }
-        cards={
-          <ul className="grid gap-2">
-            <MobileDataCard
-              title="Plafond de remise par défaut"
-              body={
-                <div className="grid grid-cols-3 gap-2 text-center font-mono-nums">
-                  <div>
-                    <p className="text-[10px] uppercase text-ink-subtle">Caissier</p>
-                    <p className="font-semibold text-ink">5 %</p>
-                  </div>
-                  <div>
-                    <p className="text-[10px] uppercase text-ink-subtle">Gérant</p>
-                    <p className="font-semibold text-ink">20 %</p>
-                  </div>
-                  <div>
-                    <p className="text-[10px] uppercase text-ink-subtle">Admin</p>
-                    <p className="font-semibold text-ink">100 %</p>
-                  </div>
-                </div>
-              }
-            />
-            {PERMISSIONS.map((row) => (
-              <MobileDataCard
-                key={row.label}
-                title={row.label}
-                body={
-                  <div className="grid grid-cols-3 gap-2 text-center text-[12px]">
-                    <div>
-                      <p className="text-[10px] uppercase text-ink-subtle">Caissier</p>
-                      <p>{row.caissier ? 'Oui' : 'Non'}</p>
-                    </div>
-                    <div>
-                      <p className="text-[10px] uppercase text-ink-subtle">Gérant</p>
-                      <p>{row.gerant ? 'Oui' : 'Non'}</p>
-                    </div>
-                    <div>
-                      <p className="text-[10px] uppercase text-ink-subtle">Admin</p>
-                      <p>{row.admin ? 'Oui' : 'Non'}</p>
-                    </div>
-                  </div>
-                }
-              />
-            ))}
-          </ul>
-        }
-      />
-
-      <SectionHeader
         title="Profils enregistrés"
-        subtitle="Modifiez, désactivez ou supprimez les comptes créés sur cet appareil"
+        subtitle="Comptes de cet appareil et du cloud — modifiez, désactivez ou supprimez"
       />
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-        {profiles.map((p) => {
+      {profiles.length === 0 ? (
+        <p className="rounded-xl border border-dashed border-zinc-200 bg-zinc-50 px-4 py-6 text-center text-sm text-zinc-500">
+          Aucun profil visible. Créez un utilisateur ci-dessus ou synchronisez
+          (les comptes cloud apparaissent après connexion).
+        </p>
+      ) : (
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          {profiles.map((p) => {
           const active = p.id === currentProfileId
           const isActiveAccount = p.active !== false
           const custom = isCustomStaffProfile(p.id)
@@ -762,7 +684,97 @@ export function PersonnelView({ currentProfileId }: Props) {
             </Card>
           )
         })}
-      </div>
+        </div>
+      )}
+
+      <SectionHeader
+        title="Matrice des permissions"
+        subtitle="Droits par rôle (les profils peuvent surcharger en démo)"
+      />
+      <TableScrollHint className="md:hidden" />
+      <ResponsiveData
+        table={
+          <Table minWidth={520}>
+            <THead>
+              <Tr hover={false}>
+                <Th sticky>Fonctionnalité</Th>
+                <Th align="center">Caissier</Th>
+                <Th align="center">Gérant</Th>
+                <Th align="center">Admin</Th>
+              </Tr>
+            </THead>
+            <TBody>
+              <Tr className="bg-zinc-50/50" hover={false}>
+                <Td sticky className="font-medium text-zinc-900">
+                  Plafond de remise par défaut
+                </Td>
+                <Td align="center" mono>
+                  5 %
+                </Td>
+                <Td align="center" mono>
+                  20 %
+                </Td>
+                <Td align="center" mono>
+                  100 %
+                </Td>
+              </Tr>
+              {PERMISSIONS.map((row) => (
+                <Tr key={row.label}>
+                  <Td sticky>{row.label}</Td>
+                  <PermCell ok={row.caissier} />
+                  <PermCell ok={row.gerant} />
+                  <PermCell ok={row.admin} />
+                </Tr>
+              ))}
+            </TBody>
+          </Table>
+        }
+        cards={
+          <ul className="grid gap-2">
+            <MobileDataCard
+              title="Plafond de remise par défaut"
+              body={
+                <div className="grid grid-cols-3 gap-2 text-center font-mono-nums">
+                  <div>
+                    <p className="text-[10px] uppercase text-ink-subtle">Caissier</p>
+                    <p className="font-semibold text-ink">5 %</p>
+                  </div>
+                  <div>
+                    <p className="text-[10px] uppercase text-ink-subtle">Gérant</p>
+                    <p className="font-semibold text-ink">20 %</p>
+                  </div>
+                  <div>
+                    <p className="text-[10px] uppercase text-ink-subtle">Admin</p>
+                    <p className="font-semibold text-ink">100 %</p>
+                  </div>
+                </div>
+              }
+            />
+            {PERMISSIONS.map((row) => (
+              <MobileDataCard
+                key={row.label}
+                title={row.label}
+                body={
+                  <div className="grid grid-cols-3 gap-2 text-center text-[12px]">
+                    <div>
+                      <p className="text-[10px] uppercase text-ink-subtle">Caissier</p>
+                      <p>{row.caissier ? 'Oui' : 'Non'}</p>
+                    </div>
+                    <div>
+                      <p className="text-[10px] uppercase text-ink-subtle">Gérant</p>
+                      <p>{row.gerant ? 'Oui' : 'Non'}</p>
+                    </div>
+                    <div>
+                      <p className="text-[10px] uppercase text-ink-subtle">Admin</p>
+                      <p>{row.admin ? 'Oui' : 'Non'}</p>
+                    </div>
+                  </div>
+                }
+              />
+            ))}
+          </ul>
+        }
+      />
     </div>
   )
 }

@@ -243,11 +243,17 @@ Si le frontend est hébergé séparément, définir `VITE_API_BASE_URL` au build
 | Méthode | Route | Description |
 |---------|-------|-------------|
 | GET | `/billing/storefront/:storeCode` | Infos magasin public |
-| GET | `/billing/storefront/:storeCode/menu` | Catalogue publié |
+| GET | `/billing/storefront/:storeCode/menu` | Catalogue publié (produits + catégories avec `imageUrl`) |
 | POST | `/billing/storefront/:storeCode/orders` | Passer commande |
-| POST | `/billing/storefront/publish` | Publier menu (abonnement actif requis) |
+| POST | `/billing/storefront/publish` | Publier menu (abonnement actif requis ; catégories `{ name, imageUrl? }` ou string legacy) |
 | GET | `/billing/storefront/orders/inbox` | Boîte commandes gérant |
 | PATCH | `/billing/storefront/orders/:id` | Mettre à jour statut |
+
+Menu publié — champ `categories` :
+
+- Format actuel : `{ "name": "Boissons", "imageUrl": "https://…" }` (`imageUrl` optionnel)
+- Anciens menus : `string[]` encore lus (`normalizeStorefrontCategoryRefs` dans `src/lib/storefront/types.ts`)
+- UI boutique : cartes **rondes** (`.storefront-category-card`) — photo ou initiale si pas d’image
 
 ### Organisation, staff, fiscal
 
@@ -255,6 +261,8 @@ Si le frontend est hébergé séparément, définir `VITE_API_BASE_URL` au build
 |---------|-------|-------------|
 | GET | `/org/backup` | Export sauvegarde organisation |
 | GET/PUT | `/org/integrations` | Config intégrations cloud |
+| GET/PUT | `/org/catalog-categories` | Catégories catalogue (ordre, `imageUrl`) |
+| GET/PUT | `/org/workspace-catalog` | Snapshot catalogue (produits, stocks, magasins, etc.) |
 | GET/POST/PATCH/DELETE | `/org/staff` | Gestion personnel (abonnement actif pour écriture) |
 | POST | `/org/staff/verify` | Vérification PIN caissier |
 | GET/PATCH | `/org/fiscal/settings` | Paramètres fiscaux |
@@ -269,7 +277,7 @@ Si le frontend est hébergé séparément, définir `VITE_API_BASE_URL` au build
 | GET | `/platform-admin/stats` | Statistiques SaaS |
 | GET/PATCH | `/platform-admin/organizations` | Gestion organisations |
 | POST | `/platform-admin/reminders` | Déclencher rappels SMS |
-| GET/PUT | `/platform-admin/payment-providers` | Clés Wave/CinetPay **plateforme** |
+| GET/PUT | `/platform-admin/payment-providers` | Clés Wave/CinetPay **plateforme** + lien de paiement Wave abonnements |
 
 ### Sync, uploads & webhooks
 
@@ -278,7 +286,7 @@ Si le frontend est hébergé séparément, définir `VITE_API_BASE_URL` au build
 | POST | `/caisseci/sync` | Réception lot sync ventes/stocks (abonnement actif) |
 | GET | `/caisseci/sync/pull` | Téléchargement deltas cloud (abonnement actif) |
 | GET | `/uploads/status` | État stockage Blob |
-| POST | `/uploads/product-image` | Upload photo produit |
+| POST | `/uploads/product-image` | Upload photo produit ou catégorie (Vercel Blob) |
 | POST | `/webhooks/orders` | Commandes partenaires |
 | POST | `/webhooks/caisseci` | Webhook historique |
 | POST | `/webhooks/sms` | Accusés SMS |
@@ -325,13 +333,26 @@ Fichier principal : `src/db/db.ts`.
 
 Tables IndexedDB :
 
-- Produits, catégories, stocks
+- Produits, catégories (`productCategories`), stocks
 - Ventes, lignes de vente
 - Commandes en ligne
 - Tables, réservations
 - Personnel, pointages
 - File de synchronisation (`syncQueue`)
 - Journaux d’audit
+
+Table `productCategories` (`ProductCategoryRow`) :
+
+| Champ | Description |
+|-------|-------------|
+| `id` | Identifiant stable |
+| `name` | Libellé affiché |
+| `sortOrder` | Ordre catalogue / boutique |
+| `imageUrl` | Photo cloud (https Blob ou `/uploads/…`) |
+| `imageDataUrl` | Aperçu local (data URL) si Blob indisponible |
+
+Helpers : `setProductCategoryImage`, `renameProductCategoryLabel`, `deleteProductCategoryLabel`, `moveProductCategory` dans `src/db/db.ts`.  
+Sync : `src/lib/catalogCategoriesCloud.ts` → `GET/PUT /org/catalog-categories`.
 
 Le seed initial est chargé par `ensureSeed()` au démarrage.
 
@@ -415,6 +436,7 @@ Logique checkout : `src/lib/checkoutPayment.ts`, `src/components/CartPanel.tsx`.
 | `WAVE_WEBHOOK_SECRET` | Optionnel | Secret webhook Wave |
 | `WAVE_SIGNING_SECRET` | Optionnel | Signature requêtes Wave |
 | `WAVE_DEMO_MODE` | Non | Simulation sans clé Wave |
+| `WAVE_PAYMENT_LINK` | Optionnel | Lien Wave Business (abonnements) — repli `/admin` |
 | `BLOB_READ_WRITE_TOKEN` | Optionnel | Vercel Blob — photos catalogue |
 | `PLATFORM_ADMIN_SECRET` | Optionnel | Console `/admin` |
 | `SMS_PROVIDER_URL` | Optionnel | Endpoint envoi SMS |
@@ -493,14 +515,14 @@ Aucune variable `VITE_API_BASE_URL` requise.
 2. `APP_URL` en HTTPS (obligatoire Stripe / Wave / CinetPay)
 3. Webhooks : Stripe → `/api/billing/webhook` ; Wave → `/api/billing/wave/webhook` ; CinetPay → `/api/billing/cinetpay/notify`
 4. `prisma db push` ou migration sur la base cible
-5. Clés paiement plateforme dans `/admin` → Wave & Orange
+5. Clés paiement plateforme dans `/admin` → Wave & Orange (lien Wave et/ou clé API)
 6. Health check : `GET /health`
 
 ### Paiements : deux niveaux
 
 | Niveau | UI | Usage |
 |--------|-----|-------|
-| **Plateforme** | `/admin` | Commerçants paient l’abonnement CaisseCI |
+| **Plateforme** | `/admin` → Wave & Orange | Commerçants paient l’abonnement CaisseCI (lien Wave `pay.wave.com` et/ou API) |
 | **Boutique** | Intégrations → Wave & Orange | Clients paient le commerçant en ligne |
 
 ---
@@ -533,8 +555,10 @@ Aucune variable `VITE_API_BASE_URL` requise.
 | KDS | `KitchenView.tsx` |
 | Abonnement UI | `SubscriptionView.tsx`, `SubscriptionContext.tsx` |
 | Onboarding | `OrganizationSetup.tsx` |
-| Boutique luxe | `LuxuryStorefrontView.tsx`, `PublicStorefrontPage.tsx` |
+| Boutique luxe | `LuxuryStorefrontView.tsx`, `PublicStorefrontPage.tsx`, `src/lib/storefront/` |
+| Cartes catégories boutique | CSS `.storefront-category-card*` dans `src/index.css` |
 | Marketing | `MarketingSiteView.tsx`, `src/components/marketing/` |
-| Modules catalogue | `CatalogueView.tsx`, `csvProducts.ts` |
+| Modules catalogue | `CatalogueView.tsx`, `csvProducts.ts`, `catalogCategoriesCloud.ts` |
+| Catégories cloud | `server/lib/catalogCategories.ts`, `server/routes/org.ts` |
 | Stocks | `StocksView.tsx` |
 | Tickets / rapport | `TicketsFacturesView.tsx`, `JournalReportView.tsx` |

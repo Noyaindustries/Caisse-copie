@@ -28,6 +28,8 @@ import { cn } from '../ui/cn'
 import {
   IconClose,
   IconDash,
+  IconEye,
+  IconEyeOff,
   IconLogout,
   IconMenu,
   IconMobile,
@@ -424,6 +426,7 @@ export function PlatformAdminPage({ onExit }: Props) {
   const [mfaRequired, setMfaRequired] = useState(false)
   const [authenticated, setAuthenticated] = useState(() => Boolean(getPlatformAdminSecret()))
   const [password, setPassword] = useState('')
+  const [showPassword, setShowPassword] = useState(false)
   const [totpCode, setTotpCode] = useState('')
   const [loginError, setLoginError] = useState<string | null>(null)
   const [loginBusy, setLoginBusy] = useState(false)
@@ -680,14 +683,36 @@ export function PlatformAdminPage({ onExit }: Props) {
             <form onSubmit={(e) => void handleLogin(e)} className="space-y-4">
               <label className="block text-left text-sm font-medium">
                 Mot de passe administrateur
-                <input
-                  type="password"
-                  autoComplete="current-password"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  className={cn(inputClass, 'mt-1.5 min-h-11')}
-                  placeholder="Secret défini dans .env"
-                />
+                <div className="relative mt-1.5">
+                  <input
+                    type={showPassword ? 'text' : 'password'}
+                    autoComplete="current-password"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    className={cn(inputClass, 'min-h-11 pr-11')}
+                    placeholder="Secret défini dans .env"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword((visible) => !visible)}
+                    className={cn(
+                      'absolute right-2 top-1/2 -translate-y-1/2 rounded-md p-1.5 transition',
+                      dark
+                        ? 'text-zinc-400 hover:bg-zinc-800 hover:text-zinc-200'
+                        : 'text-zinc-500 hover:bg-zinc-100 hover:text-zinc-800',
+                    )}
+                    aria-label={
+                      showPassword ? 'Masquer le mot de passe' : 'Afficher le mot de passe'
+                    }
+                    aria-pressed={showPassword}
+                  >
+                    {showPassword ? (
+                      <IconEyeOff className="h-4 w-4" />
+                    ) : (
+                      <IconEye className="h-4 w-4" />
+                    )}
+                  </button>
+                </div>
               </label>
               {mfaRequired ? (
                 <label className="block text-left text-sm font-medium">
@@ -1012,7 +1037,7 @@ export function PlatformAdminPage({ onExit }: Props) {
               </h1>
               <p className={cn('text-xs', theme.muted)}>
                 {section === 'payments'
-                  ? 'Clés API paiement'
+                  ? 'Lien Wave abonnements et clés API'
                   : section === 'branding'
                     ? 'Logo et nom sur la page d’accueil'
                     : section === 'plans'

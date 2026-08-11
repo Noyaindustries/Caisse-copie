@@ -18,6 +18,7 @@ type Props = {
   planId: PlanId
   planName: string
   amountFcfa: number
+  storeCode?: string | null
 }
 
 function formatFcfa(amount: number): string {
@@ -35,11 +36,16 @@ export function MobileMoneyCheckoutModal({
   planId,
   planName,
   amountFcfa,
+  storeCode,
 }: Props) {
   const toast = useToast()
   const [channels, setChannels] = useState<MobileMoneyChannel[]>([])
   const [demo, setDemo] = useState(false)
   const [waveDirect, setWaveDirect] = useState(false)
+  const [wavePaymentLink, setWavePaymentLink] = useState(false)
+  const [wavePaymentLinks, setWavePaymentLinks] = useState<
+    Partial<Record<PlanId, boolean>>
+  >({})
   const [channelId, setChannelId] = useState<MobileMoneyChannelId>('wave')
   const [phone, setPhone] = useState('')
   const [busy, setBusy] = useState(false)
@@ -51,6 +57,8 @@ export function MobileMoneyCheckoutModal({
         setChannels(data.channels)
         setDemo(data.demo)
         setWaveDirect(data.waveDirect)
+        setWavePaymentLink(data.wavePaymentLink === true)
+        setWavePaymentLinks(data.wavePaymentLinks ?? {})
         const preferred =
           data.channels.find((c) => c.id === 'wave' && c.provider === 'wave') ??
           data.channels.find((c) => c.provider) ??
@@ -63,7 +71,14 @@ export function MobileMoneyCheckoutModal({
   }, [open, toast])
 
   const selected = channels.find((c) => c.id === channelId)
-  const usesWaveApi = selected?.provider === 'wave' || (channelId === 'wave' && waveDirect)
+  const planHasWaveLink =
+    wavePaymentLinks[planId] === true ||
+    (wavePaymentLinks[planId] !== false && wavePaymentLink)
+  const usesWaveLink =
+    channelId === 'wave' && planHasWaveLink && !waveDirect
+  const usesWaveApi =
+    !usesWaveLink &&
+    (selected?.provider === 'wave' || (channelId === 'wave' && waveDirect))
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -82,11 +97,11 @@ export function MobileMoneyCheckoutModal({
             : 'Simulation du paiement mobile money.',
         )
       }
-      if (usesWaveApi) {
+      if (result.provider === 'wave_link' || usesWaveLink || usesWaveApi) {
         openWaveCheckout(result.paymentUrl)
-      } else {
-        window.location.href = result.paymentUrl
+        return
       }
+      window.location.href = result.paymentUrl
     } catch (err) {
       toast.error(
         'Paiement',
@@ -109,6 +124,25 @@ export function MobileMoneyCheckoutModal({
             Mode démo actif : aucun débit réel. Vous pourrez confirmer ou refuser le
             paiement sur la page suivante.
           </p>
+        ) : usesWaveLink ? (
+          <div className="flex items-start gap-3 rounded-xl border border-sky-200 bg-sky-50 px-3 py-3">
+            <img
+              src="/branding/wave-logo.png"
+              alt="Wave"
+              className="h-12 w-12 shrink-0 rounded-lg object-cover shadow-sm"
+            />
+            <p className="text-sm text-sky-950">
+              L’application <strong>Wave</strong> va s’ouvrir pour payer{' '}
+              <strong>{formatFcfa(amountFcfa)}</strong>
+              {storeCode ? (
+                <>
+                  {' '}
+                  (indiquez <strong>{storeCode}</strong> dans le message)
+                </>
+              ) : null}
+              . Sur ordinateur, scannez le QR avec l’app.
+            </p>
+          </div>
         ) : usesWaveApi ? (
           <div className="flex items-center gap-3 rounded-xl border border-sky-200 bg-sky-50 px-3 py-3">
             <img
@@ -163,7 +197,7 @@ export function MobileMoneyCheckoutModal({
           <Button type="submit" className="sm:flex-1" disabled={busy}>
             {busy
               ? 'Redirection…'
-              : usesWaveApi
+              : usesWaveApi || usesWaveLink
                 ? 'Payer avec Wave'
                 : 'Continuer vers le paiement'}
           </Button>

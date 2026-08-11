@@ -20,12 +20,12 @@
 CaisseCI regroupe sur une seule plateforme :
 
 - **Encaissement** (POS) avec scan, catégories, remises, fidélité et multi-paiements
-- **Catalogue & stocks** avec alertes, inventaire et exports CSV
+- **Catalogue & stocks** avec catégories illustrées (photo ronde), alertes, inventaire et exports CSV
 - **Facturation** (tickets & factures) et **rapport journalier** avec clôture de journée
 - **Restaurant** : cuisine (KDS), tables, commandes en ligne
-- **Commerce** : boutique publique, promotions, CRM, multi-magasins
+- **Commerce** : boutique publique (cartes catégories rondes), promotions, CRM, multi-magasins
 - **Équipe** : personnel (création / désactivation / quota plan), pointage, RH, analytique
-- **Abonnement** : essai 1 mois, mobile money (CinetPay / Wave), carte (Stripe)
+- **Abonnement** : essai 1 mois, Wave (lien de paiement ou API), mobile money (CinetPay), carte (Stripe)
 
 L’application est une **PWA** installable sur tablette ou PC et fonctionne **sans connexion** (paiements espèces, cache licence 7 jours).
 

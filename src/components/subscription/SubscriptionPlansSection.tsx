@@ -522,7 +522,7 @@ export function SubscriptionPlansSection({
 
               <p className="mt-1 text-sm text-ink-muted">
 
-                Orange Money · Wave · MTN MoMo · Moov — Wave en API directe, autres via CinetPay.
+                Orange Money · Wave · MTN MoMo · Moov — Wave via lien de paiement ou API, autres via CinetPay.
 
               </p>
 

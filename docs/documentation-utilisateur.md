@@ -93,7 +93,7 @@ Les comptes désactivés n’apparaissent plus à la connexion.
 
 - **Durée** : 1 mois sur tous les plans.
 - **Sans engagement** : aucune carte bancaire requise à l’inscription.
-- **Fin d’essai** : payer via mobile money (Orange Money, Wave, MTN MoMo, Moov) ou carte (Stripe) pour continuer.
+- **Fin d’essai** : payer via **Wave** (lien de paiement ou app), mobile money (Orange Money, MTN MoMo, Moov) ou carte (Stripe) pour continuer.
 
 ### 3.3 Page Abonnement (`/abonnement`)
 
@@ -101,7 +101,7 @@ Depuis cette page, le gérant peut :
 
 - Voir le plan actif et les jours restants
 - Consulter le **code magasin** et le **QR code boutique**
-- Changer de plan ou renouveler
+- Changer de plan ou renouveler (**Payer avec Wave** ouvre le lien configuré par l’admin plateforme)
 - Activer les **rappels SMS** (J-3 et J-1 avant échéance)
 - Consulter l’**historique des paiements**
 - Copier la **clé de licence** admin
@@ -198,9 +198,14 @@ Le module **Catalogue** centralise vos articles :
 
 **Onglet Catégories**
 
-- Création et organisation des familles de produits
+- Création des familles de produits
+- **Photo ronde** par catégorie : *Ajouter photo* / *Changer photo* / *Retirer* (fichier image, **500 Ko max**)
+- Renommer, supprimer (les articles sont réaffectés) et réordonner (monter / descendre)
+- Les photos et l’ordre sont synchronisés dans le cloud avec le catalogue
 
 Les stocks affichés correspondent au **magasin actif** (multi-magasins Business).
+
+> Pour que les photos de catégories apparaissent sur la **boutique publique**, republiez le menu (ou laissez la publication automatique se lancer après la sync).
 
 ### 6.2 Stocks
 
@@ -295,6 +300,7 @@ Chaque magasin dispose d’une vitrine publique :
 - URL : `/boutique/MAG-XXXX` (code magasin)
 - QR code téléchargeable depuis la page Abonnement
 - Catalogue, panier et commande par le client
+- **Catégories en cartes rondes** : photo de la catégorie (si définie dans le Catalogue) ou initiale du nom
 - Validation en caisse dans le module Commandes en ligne
 
 ---
@@ -379,9 +385,10 @@ Un bandeau « Hors ligne » s’affiche en haut de l’écran quand le réseau e
 | Ticket non imprimé | Vérifier « Imprimantes tickets » |
 | KDS silencieux / SLA inactif | Vérifier « Écrans cuisine (KDS) » |
 | Commande invisible en cuisine | Vérifier validation commande + module cuisine actif |
+| Photo de catégorie absente en boutique | Ajouter la photo dans Catalogue → Catégories, puis republier le menu |
 | Module verrouillé | Vérifier le plan d’abonnement ou renouveler |
 | Connexion gérant impossible | Vérifier Gmail + mot de passe ; comptes anciens sans mot de passe doivent être recréés |
-| Essai expiré | Payer via Abonnement (mobile money ou carte) |
+| Essai expiré | Payer via Abonnement (Wave, mobile money ou carte) |
 
 ---
 

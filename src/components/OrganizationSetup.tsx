@@ -57,7 +57,7 @@ function PasswordInput({
 }) {
   const [visible, setVisible] = useState(false)
   return (
-    <div className="flex items-center gap-2">
+    <div className="relative">
       <Input
         id={id}
         type={visible ? 'text' : 'password'}
@@ -67,18 +67,21 @@ function PasswordInput({
         required={required}
         autoComplete={autoComplete}
         minLength={minLength}
-        className="flex-1"
+        className="pr-11"
       />
-      <Button
+      <button
         type="button"
-        size="sm"
-        variant="ghost"
+        className="absolute right-1.5 top-1/2 -translate-y-1/2 rounded-md p-1.5 text-ink-subtle transition hover:bg-zinc-100 hover:text-ink"
         aria-label={visible ? 'Masquer le mot de passe' : 'Afficher le mot de passe'}
         aria-pressed={visible}
         onClick={() => setVisible((v) => !v)}
       >
-        {visible ? <IconEyeOff /> : <IconEye />}
-      </Button>
+        {visible ? (
+          <IconEyeOff className="h-4 w-4" />
+        ) : (
+          <IconEye className="h-4 w-4" />
+        )}
+      </button>
     </div>
   )
 }
@@ -534,7 +537,7 @@ export function OrganizationSetup({
 
       {/* Formulaire — seule colonne scrollable */}
       <div className="flex min-h-0 flex-1 flex-col overflow-y-auto overscroll-y-contain">
-        <div className="mx-auto my-auto w-full max-w-2xl px-4 py-8 sm:px-8 lg:px-12">
+        <div className="mx-auto flex min-h-full w-full max-w-2xl flex-col justify-center px-4 py-8 sm:px-8 lg:px-12">
         <button
           type="button"
           onClick={() => onNavigate(ROUTES.home)}
@@ -671,13 +674,13 @@ export function OrganizationSetup({
                   </div>
                 </>
               ) : mode === 'login' ? (
-                <div className="space-y-5">
-                  <div className="rounded-2xl border border-dashed border-violet-300/80 bg-linear-to-br from-violet-50/80 to-indigo-50/40 p-6 text-center">
-                    <span className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-violet-100 text-violet-700">
-                      <IconKey className="h-6 w-6" />
+                <div className="space-y-4">
+                  <div className="rounded-2xl border border-dashed border-violet-300/80 bg-linear-to-br from-violet-50/80 to-indigo-50/40 px-5 py-4 text-center">
+                    <span className="mx-auto flex h-10 w-10 items-center justify-center rounded-xl bg-violet-100 text-violet-700">
+                      <IconKey className="h-5 w-5" />
                     </span>
-                    <h2 className="mt-4 text-lg font-bold text-ink">Connexion gérant</h2>
-                    <p className="mt-2 text-sm text-ink-muted">
+                    <h2 className="mt-3 text-lg font-bold text-ink">Connexion gérant</h2>
+                    <p className="mt-1.5 text-sm text-ink-muted">
                       Retrouvez votre magasin avec votre Gmail et le mot de passe créé à l’inscription.
                     </p>
                   </div>

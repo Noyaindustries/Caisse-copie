@@ -144,6 +144,28 @@ app.get('/health', healthHandler)
 /** Alias sous /api quand seul /api/* est routé vers Express (Vercel serverless). */
 app.get('/api/health', healthHandler)
 
+/** Chrome DevTools sonde cette URL tout seul — 204 pour éviter un 404 en console. */
+app.get('/.well-known/appspecific/com.chrome.devtools.json', (_req, res) => {
+  res.status(204).end()
+})
+
+/**
+ * Un SW PWA (next-pwa) ou Chrome redemande /sw.js sur l’origine API (:4000)
+ * après /api/billing/wave/open — ce n’est pas l’app Next. On se désinscrit.
+ */
+app.get('/sw.js', (_req, res) => {
+  res
+    .type('application/javascript')
+    .set('Cache-Control', 'no-store')
+    .send(`self.addEventListener('install',function(){self.skipWaiting()});
+self.addEventListener('activate',function(event){
+  event.waitUntil(self.registration.unregister().then(function(){return self.clients.matchAll()}).then(function(clients){
+    clients.forEach(function(client){client.navigate(client.url)})
+  }))
+});
+`)
+})
+
 app.use('/api', syncRouter)
 app.use('/api', staffRouter)
 app.use('/api', orgRouter)

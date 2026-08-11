@@ -297,13 +297,14 @@ const NAV_SECTIONS_CUISINIER: readonly NavSection[] = [
   },
 ]
 
-/** Gérant : comme l’admin sauf personnel, création de magasins (onglet) et intégrations. */
+/** Gérant : comme l’admin sauf création de magasins (onglet) et intégrations. */
 const NAV_SECTIONS_GERANT: readonly NavSection[] = [
   NAV_SECTIONS[0],
   NAV_SECTIONS[1],
   {
     title: 'Équipe',
     items: [
+      { id: 'personnel', label: 'Personnel' },
       { id: 'pointage', label: 'Pointage' },
       { id: 'analytique', label: 'Analytique' },
     ],
