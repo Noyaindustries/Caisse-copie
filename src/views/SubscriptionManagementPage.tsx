@@ -9,9 +9,11 @@ import {
   resolveOrgWorkspaceBranding,
   type OrgWorkspaceBranding,
 } from '../lib/orgWorkspaceBranding'
+import { boutiqueKeyOf, storefrontPath, useSitePath } from '../lib/siteRoutes'
 import { planLabel, statusLabel } from '../lib/subscription/plans'
 import { Badge } from '../ui/Badge'
 import { Button } from '../ui/Button'
+import { useToast } from '../ui/Toast'
 import {
   IconArrowRight,
   IconCaisse,
@@ -29,17 +31,17 @@ const SubscriptionView = lazy(() =>
 type Props = {
   online: boolean
   onOpenCaisse: () => void
-  onGoHome: () => void
   onDisconnect: () => void
 }
 
 export function SubscriptionManagementPage({
   online,
   onOpenCaisse,
-  onGoHome,
   onDisconnect,
 }: Props) {
   const { organization, subscription, usable, refresh } = useSubscription()
+  const [, navigate] = useSitePath()
+  const toast = useToast()
   const [orgBranding, setOrgBranding] = useState<OrgWorkspaceBranding>(() =>
     getCachedOrgWorkspaceBranding(),
   )
@@ -64,6 +66,15 @@ export function SubscriptionManagementPage({
     if (!ok) return
     clearStaffSession()
     onDisconnect()
+  }
+
+  const openBoutique = () => {
+    const key = subscription ? boutiqueKeyOf(subscription) : null
+    if (!key) {
+      toast.error('Lien boutique indisponible pour ce magasin.')
+      return
+    }
+    navigate(storefrontPath(key))
   }
 
   const orgName = organization?.name ?? subscription?.name ?? 'Votre magasin'
@@ -118,7 +129,7 @@ export function SubscriptionManagementPage({
               type="button"
               variant="secondary"
               size="sm"
-              onClick={onGoHome}
+              onClick={openBoutique}
               iconLeft={<IconStore className="h-3.5 w-3.5" />}
             >
               Aperçu boutique
@@ -185,7 +196,7 @@ export function SubscriptionManagementPage({
               </button>
               <button
                 type="button"
-                onClick={onGoHome}
+                onClick={openBoutique}
                 className="group flex flex-col items-start gap-2 rounded-2xl border border-border bg-white/90 p-4 text-left shadow-sm transition hover:border-[rgba(184,146,46,0.35)] hover:bg-[#fffcf6]"
               >
                 <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-zinc-100 text-zinc-700">

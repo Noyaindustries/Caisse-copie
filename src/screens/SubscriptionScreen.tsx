@@ -44,7 +44,6 @@ export function SubscriptionScreen() {
             setShowStaffLogin(true)
             navigate(ROUTES.staff)
           }}
-          onGoHome={() => navigate(ROUTES.home)}
           onDisconnect={() => {
             clearStaff()
             disconnect()

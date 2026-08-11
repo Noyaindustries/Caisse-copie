@@ -67,6 +67,20 @@ export function storefrontPath(slugOrCode: string): string {
   return `${ROUTES.storefrontBase}/${encodeURIComponent(raw.toLowerCase())}`
 }
 
+/** Clé URL boutique (slug entreprise, sinon code MAG-XXXX). */
+export function boutiqueKeyOf(sub: {
+  storefrontKey?: string | null
+  storeSlug?: string | null
+  storeCode?: string | null
+}): string | null {
+  const key =
+    sub.storefrontKey?.trim() ||
+    sub.storeSlug?.trim() ||
+    sub.storeCode?.trim() ||
+    ''
+  return key || null
+}
+
 export function storefrontUrl(slugOrCode: string, origin?: string): string {
   const base =
     origin ??

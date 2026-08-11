@@ -1,4 +1,5 @@
 import { StorefrontQrCode } from '../StorefrontQrCode'
+import { boutiqueKeyOf, storefrontPath, useSitePath } from '../../lib/siteRoutes'
 import type { SubscriptionSnapshot } from '../../lib/subscription/types'
 import { planLabel, statusLabel } from '../../lib/subscription/plans'
 import { Badge } from '../../ui/Badge'
@@ -109,9 +110,15 @@ export function SubscriptionHero({
   onCopy,
   onPublish,
 }: Props) {
+  const [, navigate] = useSitePath()
   const accent = PLAN_ACCENT[subscription.planId]
   const isTrial = subscription.status === 'trialing'
   const ringTotal = isTrial ? trialDays : 30
+
+  const openBoutique = () => {
+    const key = boutiqueKeyOf(subscription)
+    if (key) navigate(storefrontPath(key))
+  }
 
   return (
     <section className="relative overflow-hidden rounded-3xl bg-[linear-gradient(145deg,#14110c_0%,#1c1812_45%,#2a2116_100%)] text-white shadow-[0_28px_70px_-28px_rgba(40,30,10,0.55)]">
@@ -281,7 +288,12 @@ export function SubscriptionHero({
                     Boutique en ligne
                   </p>
                 </div>
-                <p className="mt-2 truncate font-mono text-sm text-white">{boutiqueLink}</p>
+                <a
+                  href={boutiqueLink}
+                  className="mt-2 block truncate font-mono text-sm text-white underline decoration-white/30 underline-offset-2 hover:decoration-white"
+                >
+                  {boutiqueLink}
+                </a>
                 <p className="mt-2 text-xs leading-relaxed text-[#f5e6c0]/80">
                   Catalogue et promotions synchronisés automatiquement avec la
                   boutique en ligne
@@ -291,6 +303,15 @@ export function SubscriptionHero({
                   .
                 </p>
                 <div className="mt-4 flex flex-wrap gap-2">
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    size="sm"
+                    className="border-[rgba(232,199,106,0.35)] bg-white/10 text-white hover:bg-white/20"
+                    onClick={openBoutique}
+                  >
+                    Ouvrir la boutique
+                  </Button>
                   <Button
                     type="button"
                     variant="ghost"

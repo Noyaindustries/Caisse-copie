@@ -19,7 +19,7 @@ import {
   publishActiveStorefrontMenu,
 } from '../lib/storefront/autoPublish'
 
-import { storefrontUrl } from '../lib/siteRoutes'
+import { boutiqueKeyOf, storefrontUrl } from '../lib/siteRoutes'
 
 import {
 
@@ -134,11 +134,7 @@ export function SubscriptionView() {
 
 
 
-  const boutiqueKey =
-    subscription?.storefrontKey ||
-    subscription?.storeSlug ||
-    subscription?.storeCode ||
-    null
+  const boutiqueKey = subscription ? boutiqueKeyOf(subscription) : null
 
   const boutiqueLink = boutiqueKey ? storefrontUrl(boutiqueKey) : null
 
