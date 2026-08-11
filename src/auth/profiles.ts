@@ -243,7 +243,13 @@ export async function syncStaffWithCloud(): Promise<StaffCloudSyncResult> {
     let pushed = 0
     let lastPushError: string | undefined
     for (const profile of readCustomProfiles()) {
-      if (profile.active === false || remoteIds.has(profile.id)) continue
+      if (
+        profile.active === false ||
+        remoteIds.has(profile.id) ||
+        profile.id === OWNER_PROFILE_ID
+      ) {
+        continue
+      }
       try {
         await createRemoteStaff({
           profileId: profile.id,
@@ -256,10 +262,15 @@ export async function syncStaffWithCloud(): Promise<StaffCloudSyncResult> {
         pushed += 1
         remoteIds.add(profile.id)
       } catch (error) {
-        lastPushError =
+        const message =
           error instanceof Error
             ? error.message
             : 'Impossible d’envoyer un utilisateur vers le cloud.'
+        if (/déjà|already|existe/i.test(message)) {
+          remoteIds.add(profile.id)
+          continue
+        }
+        lastPushError = message
         console.error('[staff-sync] push failed', profile.id, error)
       }
     }

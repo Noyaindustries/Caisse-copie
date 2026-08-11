@@ -92,13 +92,42 @@ staffRouter.post('/org/staff', async (req, res) => {
       return
     }
 
+    const profileId = body.profileId ?? `profile-${crypto.randomUUID()}`
+    const existing = await prisma.staffMember.findFirst({
+      where: { organizationId: org.id, profileId },
+    })
+    if (existing) {
+      if (existing.revokedAt || existing.active === false) {
+        const quotaError = await assertStaffQuota(org, 1)
+        if (quotaError) {
+          res.status(403).json({ error: quotaError })
+          return
+        }
+      }
+      const revived = await prisma.staffMember.update({
+        where: { id: existing.id },
+        data: {
+          displayName: body.displayName.trim(),
+          role: body.role,
+          storeId: body.storeId?.trim() || null,
+          pinHash: hashStaffPin(body.pin.trim()),
+          passwordHash: body.password?.trim()
+            ? hashStaffPassword(body.password.trim())
+            : existing.passwordHash,
+          active: true,
+          revokedAt: null,
+        },
+      })
+      res.json(serializeStaff(revived))
+      return
+    }
+
     const quotaError = await assertStaffQuota(org, 1)
     if (quotaError) {
       res.status(403).json({ error: quotaError })
       return
     }
 
-    const profileId = body.profileId ?? `profile-${crypto.randomUUID()}`
     const initials = body.displayName
       .trim()
       .split(/\s+/)
@@ -132,6 +161,22 @@ staffRouter.post('/org/staff', async (req, res) => {
   } catch (err) {
     if (err instanceof ZodError) {
       res.status(400).json({ error: 'Données invalides.', issues: err.issues })
+      return
+    }
+    if ((err as { code?: string }).code === 'P2002') {
+      const org = await requireOrg(req, res)
+      const profileId =
+        typeof req.body?.profileId === 'string' ? req.body.profileId : null
+      if (org && profileId) {
+        const row = await prisma.staffMember.findFirst({
+          where: { organizationId: org.id, profileId },
+        })
+        if (row) {
+          res.json(serializeStaff(row))
+          return
+        }
+      }
+      res.status(409).json({ error: 'Utilisateur déjà enregistré.' })
       return
     }
     console.error('[staff/create]', err)
