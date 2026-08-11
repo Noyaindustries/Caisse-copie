@@ -40,28 +40,63 @@ export async function fetchStorefrontMenu(
   }
 }
 
-export async function fetchStorefrontBranding(): Promise<{
+type StorefrontBrandingPayload = {
   branding: StorefrontBranding
   storeName: string
   menuPublished: boolean
   publishedAt: string | null
   storefrontUrl: string
   storeCode: string
-} | null> {
-  try {
-    const res = await fetch(apiUrl('/billing/storefront/branding'), {
-      headers: buildOrgAuthHeaders(),
-    })
-    if (!res.ok) return null
-    return parseJson(res)
-  } catch {
-    return null
+}
+
+const BRANDING_TTL_MS = 60_000
+let brandingInFlight: Promise<StorefrontBrandingPayload | null> | null = null
+let brandingCache: { at: number; data: StorefrontBrandingPayload | null } | null =
+  null
+
+export async function fetchStorefrontBranding(): Promise<StorefrontBrandingPayload | null> {
+  const now = Date.now()
+  if (brandingCache && now - brandingCache.at < BRANDING_TTL_MS) {
+    return brandingCache.data
   }
+  if (brandingInFlight) return brandingInFlight
+
+  brandingInFlight = (async () => {
+    try {
+      const res = await fetch(apiUrl('/billing/storefront/branding'), {
+        headers: buildOrgAuthHeaders(),
+      })
+      if (res.status === 429) {
+        brandingCache = {
+          at: Date.now(),
+          data: brandingCache?.data ?? null,
+        }
+        return brandingCache.data
+      }
+      if (!res.ok) return null
+      const data = await parseJson<StorefrontBrandingPayload>(res)
+      brandingCache = { at: Date.now(), data }
+      return data
+    } catch {
+      return brandingCache?.data ?? null
+    } finally {
+      brandingInFlight = null
+    }
+  })()
+
+  return brandingInFlight
+}
+
+/** Invalide le cache après un PATCH branding. */
+export function invalidateStorefrontBrandingCache(): void {
+  brandingCache = null
+  brandingInFlight = null
 }
 
 export async function patchStorefrontBranding(
   branding: StorefrontBranding,
 ): Promise<{ branding: StorefrontBranding; storefrontUrl: string }> {
+  invalidateStorefrontBrandingCache()
   const res = await fetch(apiUrl('/billing/storefront/branding'), {
     method: 'PATCH',
     headers: buildOrgAuthHeaders({ 'Content-Type': 'application/json' }),
@@ -189,17 +224,43 @@ export async function publishStorefrontMenu(
   return parseJson(res)
 }
 
+type StorefrontInboxPayload = {
+  orders: Array<Record<string, unknown> & { id: string; createdAt: number; status: string }>
+}
+
+let inboxInFlight: Promise<StorefrontInboxPayload> | null = null
+let inboxRetryAfterMs = 0
+
 export async function fetchStorefrontInbox(
   _licenseKey: string,
   status = 'pending',
-): Promise<{
-  orders: Array<Record<string, unknown> & { id: string; createdAt: number; status: string }>
-}> {
-  const q = new URLSearchParams({ status })
-  const res = await fetch(apiUrl(`/billing/storefront/orders/inbox?${q}`), {
-    headers: buildOrgAuthHeaders(),
-  })
-  return parseJson(res)
+): Promise<StorefrontInboxPayload> {
+  if (Date.now() < inboxRetryAfterMs) {
+    return { orders: [] }
+  }
+  if (inboxInFlight) return inboxInFlight
+
+  const request = (async (): Promise<StorefrontInboxPayload> => {
+    const q = new URLSearchParams({ status })
+    const res = await fetch(apiUrl(`/billing/storefront/orders/inbox?${q}`), {
+      headers: buildOrgAuthHeaders(),
+    })
+    if (res.status === 429) {
+      const retry = Number(res.headers.get('retry-after'))
+      inboxRetryAfterMs =
+        Date.now() + (Number.isFinite(retry) && retry > 0 ? retry * 1000 : 60_000)
+      return { orders: [] }
+    }
+    inboxRetryAfterMs = 0
+    return parseJson<StorefrontInboxPayload>(res)
+  })()
+
+  inboxInFlight = request
+  try {
+    return await request
+  } finally {
+    if (inboxInFlight === request) inboxInFlight = null
+  }
 }
 
 export async function patchStorefrontOrderStatus(

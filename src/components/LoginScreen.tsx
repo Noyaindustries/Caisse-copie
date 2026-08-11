@@ -5,9 +5,12 @@ import {
   ensureOwnerAdminProfile,
   hydrateStaffFromRemote,
   listActiveStaffProfiles,
+  pushPendingLocalStaffToCloud,
+  rememberStaffSecret,
   roleLabel,
   subscribeStaffProfiles,
 } from '../auth/profiles'
+import { verifyRemoteStaffPin } from '../lib/staff/api'
 import type { StaffAuthMethod, StaffProfile } from '../auth/types'
 import { useSubscription } from '../context/SubscriptionContext'
 import { db } from '../db/db'
@@ -45,6 +48,8 @@ export function LoginScreen({
   const [lockedUntil, setLockedUntil] = useState(0)
   const [now, setNow] = useState(() => Date.now())
   const [bootstrappedOwner, setBootstrappedOwner] = useState(false)
+  const [staffSyncing, setStaffSyncing] = useState(true)
+  const [verifying, setVerifying] = useState(false)
   const stores = useLiveQuery(() => db.stores.orderBy('sortOrder').toArray(), [], []) ?? []
   const storeNameById = new Map(stores.map((store) => [store.id, store.name]))
 
@@ -60,14 +65,19 @@ export function LoginScreen({
 
   useEffect(() => {
     let cancelled = false
-    void hydrateStaffFromRemote().then((count) => {
-      if (cancelled || count === 0) return
+    setStaffSyncing(true)
+    void (async () => {
+      await pushPendingLocalStaffToCloud()
+      await hydrateStaffFromRemote()
+    })().finally(() => {
+      if (cancelled) return
       setProfiles(listActiveStaffProfiles())
+      setStaffSyncing(false)
     })
     return () => {
       cancelled = true
     }
-  }, [])
+  }, [organization?.organizationId])
 
   useEffect(() => {
     return subscribeStaffProfiles(() => {
@@ -104,15 +114,35 @@ export function LoginScreen({
     setShowSecret(false)
   }
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!selected) return
+    if (!selected || verifying) return
     if (lockRemainingSec > 0) {
       setError(`Trop d’essais. Réessayez dans ${lockRemainingSec}s.`)
       return
     }
     const s = secret.trim()
-    if (!profileSecretMatches(selected, s)) {
+    let matched = profileSecretMatches(selected, s)
+    let authMethod: StaffAuthMethod =
+      selected.password !== undefined && s === selected.password
+        ? 'password'
+        : 'pin'
+    if (!matched) {
+      setVerifying(true)
+      try {
+        const remoteOk = await verifyRemoteStaffPin(selected.id, s)
+        if (remoteOk) {
+          matched = true
+          authMethod = /^\d{4,8}$/.test(s) ? 'pin' : 'password'
+          rememberStaffSecret(selected.id, s)
+        }
+      } catch {
+        /* hors ligne : on reste sur la vérif locale */
+      } finally {
+        setVerifying(false)
+      }
+    }
+    if (!matched) {
       const nextFails = failedAttempts + 1
       setFailedAttempts(nextFails)
       if (nextFails >= MAX_FAILED_ATTEMPTS) {
@@ -128,10 +158,6 @@ export function LoginScreen({
     }
     setFailedAttempts(0)
     setLockedUntil(0)
-    const authMethod: StaffAuthMethod =
-      selected.password !== undefined && s === selected.password
-        ? 'password'
-        : 'pin'
     onSuccess(selected, authMethod)
   }
 
@@ -206,7 +232,9 @@ export function LoginScreen({
             <p className="mt-1 text-[13px] text-zinc-500">
               {selected
                 ? `Saisissez votre PIN${selected.password ? ' ou mot de passe' : ''}.`
-                : 'Sélectionnez votre profil pour continuer.'}
+                : staffSyncing
+                  ? 'Chargement des utilisateurs du magasin…'
+                  : 'Sélectionnez votre profil pour continuer.'}
             </p>
             {bootstrappedOwner && !selected ? (
               <p className="mt-2 rounded-lg bg-amber-50 px-3 py-2 text-[12px] text-amber-900">
@@ -320,11 +348,13 @@ export function LoginScreen({
                 variant="primary"
                 fullWidth
                 size="lg"
-                disabled={lockRemainingSec > 0}
+                disabled={lockRemainingSec > 0 || verifying}
               >
                 {lockRemainingSec > 0
                   ? `Réessayer dans ${lockRemainingSec}s`
-                  : 'Ouvrir l’espace gestion'}
+                  : verifying
+                    ? 'Vérification…'
+                    : 'Ouvrir l’espace gestion'}
               </Button>
             </form>
           )}

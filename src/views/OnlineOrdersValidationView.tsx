@@ -175,7 +175,7 @@ export function OnlineOrdersValidationView({
       .catch(() => {
         /* inbox optionnel si API indisponible */
       })
-  }, [online, subscription?.licenseKey, toast])
+  }, [online, subscription?.licenseKey])
 
   const scopedOrders = useMemo(() => {
     const list = orders ?? []

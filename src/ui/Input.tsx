@@ -13,10 +13,32 @@ type InputProps = InputHTMLAttributes<HTMLInputElement> & {
   invalid?: boolean
 }
 
+function defaultAutoComplete(
+  type: InputHTMLAttributes<HTMLInputElement>['type'],
+  autoComplete: InputHTMLAttributes<HTMLInputElement>['autoComplete'],
+): string {
+  if (autoComplete) return autoComplete
+  switch (type) {
+    case 'password':
+      return 'current-password'
+    case 'email':
+      return 'email'
+    case 'tel':
+      return 'tel'
+    case 'url':
+      return 'url'
+    case 'search':
+      return 'off'
+    default:
+      return 'off'
+  }
+}
+
 export const Input = forwardRef<HTMLInputElement, InputProps>(function Input(
-  { className, iconLeft, iconRight, invalid, ...rest },
+  { className, iconLeft, iconRight, invalid, autoComplete, type, ...rest },
   ref,
 ) {
+  const resolvedAutoComplete = defaultAutoComplete(type, autoComplete)
   if (iconLeft || iconRight) {
     return (
       <div className="relative">
@@ -27,6 +49,8 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(function Input(
         ) : null}
         <input
           ref={ref}
+          type={type}
+          autoComplete={resolvedAutoComplete}
           className={cn(
             'ui-input',
             iconLeft ? 'ui-input--icon-left' : null,
@@ -47,6 +71,8 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(function Input(
   return (
     <input
       ref={ref}
+      type={type}
+      autoComplete={resolvedAutoComplete}
       className={cn(
         'ui-input',
         invalid && 'border-rose-400 focus:border-rose-500',

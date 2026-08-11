@@ -41,18 +41,17 @@ type Ctx = {
 
 const ToastContext = createContext<Ctx | null>(null)
 
+const NOOP_TOAST: Ctx = {
+  show: () => undefined,
+  success: () => undefined,
+  error: () => undefined,
+  warning: () => undefined,
+  info: () => undefined,
+}
+
 export function useToast(): Ctx {
   const ctx = useContext(ToastContext)
-  if (!ctx) {
-    return {
-      show: () => undefined,
-      success: () => undefined,
-      error: () => undefined,
-      warning: () => undefined,
-      info: () => undefined,
-    }
-  }
-  return ctx
+  return ctx ?? NOOP_TOAST
 }
 
 const TONE_STYLES: Record<

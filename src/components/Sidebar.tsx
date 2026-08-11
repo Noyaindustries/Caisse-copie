@@ -148,7 +148,6 @@ function SidebarBody({
     refresh()
     const onChanged = () => {
       setOrgBranding(getCachedOrgWorkspaceBranding())
-      refresh()
     }
     window.addEventListener(ORG_BRANDING_CHANGED_EVENT, onChanged)
     return () => {

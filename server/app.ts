@@ -65,9 +65,18 @@ const apiLimiter = rateLimit({
   skip(req) {
     // Console /admin déjà protégée par secret (sauf /status public et /auth limité à part).
     const path = (req.originalUrl ?? req.url ?? '').split('?')[0] ?? ''
-    if (!path.startsWith('/api/platform-admin')) return false
-    if (path === '/api/platform-admin/auth') return false
-    return true
+    if (path.startsWith('/api/platform-admin') && path !== '/api/platform-admin/auth') {
+      return true
+    }
+    // Polling caisse authentifié : ne pas couper branding / inbox commandes.
+    if (
+      req.method === 'GET' &&
+      (path === '/api/billing/storefront/branding' ||
+        path === '/api/billing/storefront/orders/inbox')
+    ) {
+      return true
+    }
+    return false
   },
 })
 const syncLimiter = rateLimit({

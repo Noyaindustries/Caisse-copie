@@ -1,6 +1,17 @@
 import type { StaffProfile } from './types'
 import { isCloudApiConfigured } from '../lib/apiUrl'
 import { clientEnv } from '../lib/clientEnv'
+import { hasOrgAuth } from '../lib/subscription/authHeaders'
+
+/** PIN provisoire pour un profil cloud dont le secret n’est pas encore connu localement. */
+const REMOTE_PIN_PLACEHOLDER = '0000'
+
+export class StaffCloudSyncError extends Error {
+  constructor(message: string) {
+    super(message)
+    this.name = 'StaffCloudSyncError'
+  }
+}
 
 /** Profil admin créé automatiquement à l’inscription (prod) — PIN initial. */
 export const OWNER_PROFILE_ID = 'profile-owner'
@@ -191,9 +202,44 @@ function writeCloudStaffProfiles(profiles: StaffProfile[]): void {
   window.dispatchEvent(new Event(CHANGE_EVENT))
 }
 
+/** Envoie les utilisateurs créés localement qui n’existent pas encore côté serveur. */
+export async function pushPendingLocalStaffToCloud(): Promise<number> {
+  if (typeof window === 'undefined' || !isCloudApiConfigured() || !hasOrgAuth()) {
+    return 0
+  }
+  try {
+    const { fetchRemoteStaff, createRemoteStaff } = await import('../lib/staff/api')
+    const remote = await fetchRemoteStaff()
+    const remoteIds = new Set(remote.map((row) => row.id))
+    const pending = readCustomProfiles().filter(
+      (profile) => profile.active !== false && !remoteIds.has(profile.id),
+    )
+    let pushed = 0
+    for (const profile of pending) {
+      try {
+        await createRemoteStaff({
+          profileId: profile.id,
+          displayName: profile.displayName,
+          role: profile.role,
+          storeId: profile.storeId,
+          pin: profile.pin,
+          password: profile.password,
+        })
+        pushed += 1
+      } catch {
+        /* quota, doublon ou API indisponible */
+      }
+    }
+    return pushed
+  } catch {
+    return 0
+  }
+}
+
 /** Recharge la liste serveur (GET /org/staff) et la fusionne en local. */
 export async function hydrateStaffFromRemote(): Promise<number> {
   if (typeof window === 'undefined' || !isCloudApiConfigured()) return 0
+  if (!hasOrgAuth()) return 0
   try {
     const { fetchRemoteStaff } = await import('../lib/staff/api')
     const remote = await fetchRemoteStaff()
@@ -215,18 +261,28 @@ export function mergeStaffFromCloud(
   }>,
 ): number {
   const localCustom = readCustomProfiles()
-  const localPins = new Map(localCustom.map((p) => [p.id, p.pin]))
-  const merged: StaffProfile[] = remote.map((row) => ({
-    id: row.id,
-    displayName: row.displayName,
-    initials: row.initials,
-    role: row.role,
-    active: row.active,
-    ...(row.storeId ? { storeId: row.storeId } : {}),
-    pin:
-      localPins.get(row.id) ??
-      (row.id === OWNER_PROFILE_ID ? DEFAULT_OWNER_PIN : '0000'),
-  }))
+  const existingCloud = readCloudStaffProfiles()
+  const localById = new Map(
+    [...existingCloud, ...localCustom].map((p) => [p.id, p] as const),
+  )
+  const merged: StaffProfile[] = remote.map((row) => {
+    const local = localById.get(row.id)
+    return {
+      id: row.id,
+      displayName: row.displayName,
+      initials: row.initials,
+      role: row.role,
+      active: row.active,
+      ...(row.storeId ? { storeId: row.storeId } : {}),
+      pin:
+        local?.pin && local.pin !== REMOTE_PIN_PLACEHOLDER
+          ? local.pin
+          : row.id === OWNER_PROFILE_ID
+            ? DEFAULT_OWNER_PIN
+            : REMOTE_PIN_PLACEHOLDER,
+      ...(local?.password ? { password: local.password } : {}),
+    }
+  })
   writeCloudStaffProfiles(merged)
   return merged.length
 }
@@ -254,7 +310,7 @@ export function ensureOwnerAdminProfile(orgName: string): StaffProfile | null {
   const custom = readCustomProfiles().filter((p) => p.id !== OWNER_PROFILE_ID)
   custom.push(created)
   writeCustomProfiles(custom)
-  void pushStaffToServer('create', {
+  swallowStaffCloudSync('create', {
     profileId: created.id,
     displayName: created.displayName,
     role: created.role,
@@ -267,21 +323,32 @@ async function pushStaffToServer(
   action: 'create' | 'update' | 'delete',
   payload: Record<string, unknown>,
 ): Promise<void> {
-  if (!isCloudApiConfigured()) return
-  try {
-    const { createRemoteStaff, updateRemoteStaff, deleteRemoteStaff } = await import(
-      '../lib/staff/api'
+  if (!isCloudApiConfigured()) {
+    throw new StaffCloudSyncError(
+      'API cloud non configurée : l’utilisateur restera sur cet appareil.',
     )
-    if (action === 'create') {
-      await createRemoteStaff(payload as Parameters<typeof createRemoteStaff>[0])
-    } else if (action === 'update') {
-      await updateRemoteStaff(String(payload.profileId), payload.patch as never)
-    } else {
-      await deleteRemoteStaff(String(payload.profileId))
-    }
-  } catch {
-    /* offline ou API indisponible */
   }
+  if (!hasOrgAuth()) {
+    throw new StaffCloudSyncError(
+      'Session entreprise absente : reconnectez le magasin pour synchroniser le personnel.',
+    )
+  }
+  const { createRemoteStaff, updateRemoteStaff, deleteRemoteStaff } = await import(
+    '../lib/staff/api'
+  )
+  if (action === 'create') {
+    await createRemoteStaff(payload as Parameters<typeof createRemoteStaff>[0])
+  } else if (action === 'update') {
+    await updateRemoteStaff(String(payload.profileId), payload.patch as never)
+  } else {
+    await deleteRemoteStaff(String(payload.profileId))
+  }
+}
+
+function swallowStaffCloudSync(action: 'create' | 'update' | 'delete', payload: Record<string, unknown>): void {
+  void pushStaffToServer(action, payload).catch(() => {
+    /* hors ligne ou API indisponible */
+  })
 }
 
 /** Profils autorisés à se connecter (actifs uniquement). */
@@ -318,7 +385,7 @@ function computeInitials(displayName: string): string {
   return `${chunks[0][0] ?? ''}${chunks[1][0] ?? ''}`.toUpperCase()
 }
 
-export function createStaffProfile(input: {
+export async function createStaffProfile(input: {
   displayName: string
   role: StaffProfile['role']
   storeId?: string
@@ -326,7 +393,7 @@ export function createStaffProfile(input: {
   password?: string
   /** Plafond utilisateurs du plan (actifs). Si omis, pas de contrôle. */
   maxStaff?: number
-}): StaffProfile {
+}): Promise<StaffProfile> {
   const displayName = input.displayName.trim()
   const storeId = input.storeId?.trim() || undefined
   const pin = input.pin.trim()
@@ -363,15 +430,50 @@ export function createStaffProfile(input: {
   const custom = readCustomProfiles()
   custom.push(created)
   writeCustomProfiles(custom)
-  void pushStaffToServer('create', {
-    profileId: created.id,
-    displayName: created.displayName,
-    role: created.role,
-    storeId: created.storeId,
-    pin: created.pin,
-    password: created.password,
-  })
+  const cloud = readCloudStaffProfiles().filter((p) => p.id !== created.id)
+  cloud.push(created)
+  writeCloudStaffProfiles(cloud)
+  try {
+    await pushStaffToServer('create', {
+      profileId: created.id,
+      displayName: created.displayName,
+      role: created.role,
+      storeId: created.storeId,
+      pin: created.pin,
+      password: created.password,
+    })
+  } catch (error) {
+    const detail =
+      error instanceof Error ? error.message : 'Synchronisation cloud impossible.'
+    throw new StaffCloudSyncError(
+      `${detail} L’utilisateur est enregistré ici, mais n’apparaîtra pas sur les autres caisses tant que le serveur n’est pas joignable.`,
+    )
+  }
   return created
+}
+
+/** Mémorise un PIN / mot de passe validé par le serveur (autre appareil). */
+export function rememberStaffSecret(profileId: string, secret: string): void {
+  const value = secret.trim()
+  if (!value) return
+  const apply = (profile: StaffProfile): StaffProfile => {
+    const next = { ...profile }
+    if (/^\d{4,8}$/.test(value)) next.pin = value
+    else next.password = value
+    return next
+  }
+  const custom = readCustomProfiles()
+  const customIdx = custom.findIndex((p) => p.id === profileId)
+  if (customIdx >= 0) {
+    custom[customIdx] = apply(custom[customIdx]!)
+    writeCustomProfiles(custom)
+  }
+  const cloud = readCloudStaffProfiles()
+  const cloudIdx = cloud.findIndex((p) => p.id === profileId)
+  if (cloudIdx >= 0) {
+    cloud[cloudIdx] = apply(cloud[cloudIdx]!)
+    writeCloudStaffProfiles(cloud)
+  }
 }
 
 export function updateStaffProfile(
@@ -449,7 +551,7 @@ export function updateStaffProfile(
     }
     writeCloudStaffProfiles(cloud)
   }
-  void pushStaffToServer('update', {
+  swallowStaffCloudSync('update', {
     profileId,
     patch: {
       displayName: next.displayName,
@@ -495,7 +597,7 @@ export function deleteStaffProfile(profileId: string): void {
     delete overrides[profileId]
     writePasswordOverrides(overrides)
   }
-  void pushStaffToServer('delete', { profileId })
+  swallowStaffCloudSync('delete', { profileId })
 }
 
 export function changeStaffPassword(input: {

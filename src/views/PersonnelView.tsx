@@ -9,6 +9,8 @@ import {
   isCustomStaffProfile,
   hydrateStaffFromRemote,
   listStaffProfiles,
+  pushPendingLocalStaffToCloud,
+  StaffCloudSyncError,
   reactivateStaffProfile,
   roleLabel,
   subscribeStaffProfiles,
@@ -100,6 +102,7 @@ export function PersonnelView({ currentProfileId }: Props) {
   const [showConfirmPassword, setShowConfirmPassword] = useState(false)
   const [showCreatePin, setShowCreatePin] = useState(false)
   const [showCreatePassword, setShowCreatePassword] = useState(false)
+  const [creating, setCreating] = useState(false)
   const [editingId, setEditingId] = useState<string | null>(null)
   const [editName, setEditName] = useState('')
   const [editRole, setEditRole] = useState<UserRole>('caissier')
@@ -113,9 +116,11 @@ export function PersonnelView({ currentProfileId }: Props) {
 
   useEffect(() => {
     setProfiles(listStaffProfiles())
-    void hydrateStaffFromRemote().then((count) => {
-      if (count > 0) setProfiles(listStaffProfiles())
-    })
+    void (async () => {
+      await pushPendingLocalStaffToCloud()
+      await hydrateStaffFromRemote()
+      setProfiles(listStaffProfiles())
+    })()
     return subscribeStaffProfiles(() => {
       setProfiles(listStaffProfiles())
     })
@@ -136,10 +141,12 @@ export function PersonnelView({ currentProfileId }: Props) {
   )
   const atStaffLimit = maxStaff > 0 && activeCount >= maxStaff
 
-  const handleCreate = (e: React.FormEvent) => {
+  const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault()
+    if (creating) return
+    setCreating(true)
     try {
-      const created = createStaffProfile({
+      const created = await createStaffProfile({
         displayName,
         role,
         storeId: createStoreId || undefined,
@@ -149,7 +156,7 @@ export function PersonnelView({ currentProfileId }: Props) {
       })
       toast.success(
         'Utilisateur créé',
-        `${created.displayName} · ${roleLabel(created.role)}`,
+        `${created.displayName} · ${roleLabel(created.role)} — visible sur toutes les caisses.`,
       )
       setDisplayName('')
       setRole('caissier')
@@ -157,10 +164,16 @@ export function PersonnelView({ currentProfileId }: Props) {
       setPin('')
       setPassword('')
     } catch (error) {
-      toast.error(
-        'Création impossible',
-        error instanceof Error ? error.message : String(error),
-      )
+      if (error instanceof StaffCloudSyncError) {
+        toast.error('Non synchronisé', error.message)
+      } else {
+        toast.error(
+          'Création impossible',
+          error instanceof Error ? error.message : String(error),
+        )
+      }
+    } finally {
+      setCreating(false)
     }
   }
 
@@ -509,8 +522,8 @@ export function PersonnelView({ currentProfileId }: Props) {
               </div>
             </Field>
             <div className="md:col-span-2 lg:col-span-5">
-              <Button type="submit" variant="accent" fullWidth className="sm:w-auto" disabled={atStaffLimit}>
-                Créer l’utilisateur
+              <Button type="submit" variant="accent" fullWidth className="sm:w-auto" disabled={atStaffLimit || creating}>
+                {creating ? 'Enregistrement…' : 'Créer l’utilisateur'}
               </Button>
             </div>
           </form>

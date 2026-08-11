@@ -47,8 +47,14 @@ export function cacheOrgWorkspaceBranding(input: {
   logoUrl?: string | null
   displayName?: string | null
 }): void {
+  const prev = getCachedOrgWorkspaceBranding()
   if ('logoUrl' in input) setCachedReceiptLogoUrl(input.logoUrl)
   if ('displayName' in input) setCachedOrgDisplayName(input.displayName)
+  const next = getCachedOrgWorkspaceBranding()
+  const unchanged =
+    (next.logoUrl ?? '') === (prev.logoUrl ?? '') &&
+    (next.displayName ?? '') === (prev.displayName ?? '')
+  if (unchanged) return
   if (typeof window !== 'undefined') {
     window.dispatchEvent(new Event(ORG_BRANDING_CHANGED_EVENT))
   }
