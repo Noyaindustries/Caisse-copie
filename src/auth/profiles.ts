@@ -297,8 +297,12 @@ export async function syncStaffWithCloud(): Promise<StaffCloudSyncResult> {
     let remote = await fetchRemoteStaff()
     const remoteIds = new Set(remote.map((row) => row.id))
     const knownCloudIds = new Set(readCloudStaffProfiles().map((p) => p.id))
-    const deletedIds = readDeletedStaffIds()
-    const vanished = [...knownCloudIds].filter((id) => !remoteIds.has(id))
+    const customIds = new Set(readCustomProfiles().map((p) => p.id))
+    // Un compte créé ici (custom) n’est pas « disparu » : il doit être poussé,
+    // pas effacé, si le POST cloud a échoué au tour précédent.
+    const vanished = [...knownCloudIds].filter(
+      (id) => !remoteIds.has(id) && !customIds.has(id),
+    )
     if (vanished.length > 0) {
       for (const id of vanished) rememberDeletedStaffId(id)
       pruneLocalStaffIds(vanished)
@@ -309,8 +313,6 @@ export async function syncStaffWithCloud(): Promise<StaffCloudSyncResult> {
       if (
         profile.active === false ||
         remoteIds.has(profile.id) ||
-        knownCloudIds.has(profile.id) ||
-        deletedIds.has(profile.id) ||
         profile.id === OWNER_PROFILE_ID
       ) {
         continue
@@ -388,9 +390,10 @@ export function mergeStaffFromCloud(
 ): number {
   const existingCloud = readCloudStaffProfiles()
   const remoteIds = new Set(remote.map((row) => row.id))
+  const customIds = new Set(readCustomProfiles().map((p) => p.id))
   const vanished = existingCloud
     .map((profile) => profile.id)
-    .filter((id) => !remoteIds.has(id))
+    .filter((id) => !remoteIds.has(id) && !customIds.has(id))
   if (vanished.length > 0) {
     for (const id of vanished) rememberDeletedStaffId(id)
     pruneLocalStaffIds(vanished)
@@ -565,9 +568,6 @@ export async function createStaffProfile(input: {
   const custom = readCustomProfiles()
   custom.push(created)
   writeCustomProfiles(custom)
-  const cloud = readCloudStaffProfiles().filter((p) => p.id !== created.id)
-  cloud.push(created)
-  writeCloudStaffProfiles(cloud)
   try {
     await pushStaffToServer('create', {
       profileId: created.id,
@@ -577,6 +577,10 @@ export async function createStaffProfile(input: {
       pin: created.pin,
       password: created.password,
     })
+    const cloud = readCloudStaffProfiles().filter((p) => p.id !== created.id)
+    cloud.push(created)
+    writeCloudStaffProfiles(cloud)
+    forgetDeletedStaffId(created.id)
   } catch (error) {
     console.error('[staff-create] cloud push failed', error)
     const detail =
