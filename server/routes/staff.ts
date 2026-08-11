@@ -40,27 +40,34 @@ function serializeStaff(row: {
 }
 
 staffRouter.get('/org/staff', async (req, res) => {
-  const org = await requireOrg(req, res)
-  if (!org) return
+  try {
+    const org = await requireOrg(req, res)
+    if (!org) return
 
-  let rows = await prisma.staffMember.findMany({
-    where: { organizationId: org.id, revokedAt: null },
-    orderBy: { displayName: 'asc' },
-  })
-
-  if (rows.length === 0) {
-    const { ensureOwnerStaffMember } = await import('../lib/ensureOwnerStaff.js')
-    await ensureOwnerStaffMember(org)
-    rows = await prisma.staffMember.findMany({
+    let rows = await prisma.staffMember.findMany({
       where: { organizationId: org.id, revokedAt: null },
       orderBy: { displayName: 'asc' },
     })
-  }
 
-  res.json({
-    staff: rows.map(serializeStaff),
-    maxStaff: (await import('../lib/quotaEnforcement.js')).planLimits(org).maxStaff,
-  })
+    if (rows.length === 0) {
+      const { ensureOwnerStaffMember } = await import('../lib/ensureOwnerStaff.js')
+      await ensureOwnerStaffMember(org)
+      rows = await prisma.staffMember.findMany({
+        where: { organizationId: org.id, revokedAt: null },
+        orderBy: { displayName: 'asc' },
+      })
+    }
+
+    res.json({
+      staff: rows.map(serializeStaff),
+      maxStaff: (await import('../lib/quotaEnforcement.js')).planLimits(org).maxStaff,
+    })
+  } catch (err) {
+    console.error('[staff/list]', err)
+    if (!res.headersSent) {
+      res.status(500).json({ error: 'Impossible de charger le personnel.' })
+    }
+  }
 })
 
 staffRouter.post('/org/staff', async (req, res) => {

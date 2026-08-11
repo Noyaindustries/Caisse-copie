@@ -529,15 +529,15 @@ export function OrganizationSetup({
   const displayPlans = plans.length > 0 ? plans : DEFAULT_PLANS
 
   return (
-    <div className="flex h-svh max-h-svh overflow-hidden bg-surface-muted">
-      {/* Panneau marque — desktop (fixe, hors scroll) */}
-      <div className="hidden h-full w-[42%] max-w-xl shrink-0 lg:block">
+    <div className="flex min-h-svh bg-surface-muted">
+      {/* Panneau marque — desktop */}
+      <div className="sticky top-0 hidden h-svh w-[42%] max-w-xl shrink-0 lg:block">
         <BrandPanel trialDays={trialDays} />
       </div>
 
-      {/* Formulaire — seule colonne scrollable */}
-      <div className="flex min-h-0 flex-1 flex-col overflow-y-auto overscroll-y-contain">
-        <div className="mx-auto flex min-h-full w-full max-w-2xl flex-col justify-center px-4 py-8 sm:px-8 lg:px-12">
+      {/* Formulaire : la page défile si le contenu dépasse (zoom 100 %). */}
+      <div className="flex min-h-svh flex-1 flex-col">
+        <div className="m-auto w-full max-w-2xl px-4 py-8 sm:px-8 lg:px-12">
         <button
           type="button"
           onClick={() => onNavigate(ROUTES.home)}

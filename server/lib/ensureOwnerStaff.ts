@@ -22,27 +22,47 @@ export async function ensureOwnerStaffMember(
   org: Pick<Organization, 'id' | 'name'>,
   options?: { ownerPassword?: string },
 ): Promise<void> {
-  const existing = await prisma.staffMember.findFirst({
+  const existingOwner = await prisma.staffMember.findFirst({
+    where: { organizationId: org.id, profileId: OWNER_PROFILE_ID },
+  })
+  if (existingOwner) {
+    if (existingOwner.revokedAt || existingOwner.active === false) {
+      await prisma.staffMember.update({
+        where: { id: existingOwner.id },
+        data: { active: true, revokedAt: null },
+      })
+    }
+    return
+  }
+
+  const anyActive = await prisma.staffMember.findFirst({
     where: { organizationId: org.id, revokedAt: null },
     select: { id: true },
   })
-  if (existing) return
+  if (anyActive) return
 
   const displayName =
     org.name.trim().length >= 3 ? org.name.trim().slice(0, 80) : 'Administrateur'
 
-  await prisma.staffMember.create({
-    data: {
-      organizationId: org.id,
-      profileId: OWNER_PROFILE_ID,
-      displayName,
-      initials: ownerInitials(displayName),
-      role: 'admin',
-      pinHash: hashStaffPin(DEFAULT_OWNER_PIN),
-      passwordHash: options?.ownerPassword?.trim()
-        ? hashStaffPassword(options.ownerPassword.trim())
-        : null,
-      active: true,
-    },
-  })
+  try {
+    await prisma.staffMember.create({
+      data: {
+        organizationId: org.id,
+        profileId: OWNER_PROFILE_ID,
+        displayName,
+        initials: ownerInitials(displayName),
+        role: 'admin',
+        pinHash: hashStaffPin(DEFAULT_OWNER_PIN),
+        passwordHash: options?.ownerPassword?.trim()
+          ? hashStaffPassword(options.ownerPassword.trim())
+          : null,
+        active: true,
+      },
+    })
+  } catch (err) {
+    const code = (err as { code?: string }).code
+    // Course : un autre GET a créé le même owner.
+    if (code === 'P2002') return
+    throw err
+  }
 }

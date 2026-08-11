@@ -1059,23 +1059,19 @@ export function LuxuryStorefrontView({
         <div
           className={
             bannerUrl
-              ? 'storefront-hero-content mx-auto w-full max-w-6xl px-4 py-5 sm:px-5 sm:py-7'
+              ? 'storefront-hero-content mx-auto w-full max-w-6xl px-4 py-4 sm:px-5 sm:py-5'
               : 'storefront-hero-content mx-auto flex min-h-[inherit] max-w-6xl flex-col justify-end px-4 pb-10 pt-20 sm:px-5 sm:pb-14'
           }
         >
-          <h1
-            className={
-              bannerUrl
-                ? 'max-w-2xl font-display text-2xl font-bold tracking-tight text-balance text-stone-900 sm:text-4xl lg:text-5xl'
-                : 'max-w-2xl font-display text-4xl font-bold tracking-tight text-balance text-stone-900 sm:text-5xl lg:text-6xl'
-            }
-          >
-            {shopTitle}
-          </h1>
+          {bannerUrl ? null : (
+            <h1 className="max-w-2xl font-display text-4xl font-bold tracking-tight text-balance text-stone-900 sm:text-5xl lg:text-6xl">
+              {shopTitle}
+            </h1>
+          )}
           <p
             className={
               bannerUrl
-                ? 'mt-2 max-w-xl text-sm leading-relaxed text-stone-600 sm:text-base'
+                ? 'max-w-xl text-sm leading-relaxed text-stone-600 sm:text-base'
                 : 'mt-3 max-w-xl text-base leading-relaxed text-stone-700 sm:text-lg'
             }
           >

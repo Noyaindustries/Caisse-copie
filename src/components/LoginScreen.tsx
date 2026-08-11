@@ -164,8 +164,8 @@ export function LoginScreen({
   }
 
   return (
-    <div className="grid h-svh max-h-svh max-w-[100vw] grid-cols-1 overflow-hidden lg:grid-cols-2">
-      <div className="relative hidden overflow-hidden bg-zinc-900 lg:block">
+    <div className="grid min-h-svh max-w-[100vw] grid-cols-1 lg:grid-cols-2">
+      <div className="relative hidden min-h-svh overflow-hidden bg-zinc-900 lg:block">
         <div className="absolute inset-0 opacity-[0.06]">
           <div className="absolute -left-1/4 top-1/4 h-[600px] w-[600px] rounded-full bg-emerald-400 blur-3xl" />
           <div className="absolute -right-1/4 bottom-1/4 h-[600px] w-[600px] rounded-full bg-violet-400 blur-3xl" />
@@ -195,8 +195,8 @@ export function LoginScreen({
         </div>
       </div>
 
-      <div className="flex min-h-0 flex-col overflow-y-auto overscroll-y-contain bg-zinc-50">
-      <div className="mx-auto my-auto w-full max-w-md p-6">
+      <div className="flex min-h-svh flex-col bg-zinc-50">
+      <div className="m-auto w-full max-w-md p-6">
         <div className="w-full">
           {onBackToStorefront || onOpenSubscription ? (
             <div className="mb-5 flex flex-wrap items-center gap-2">
