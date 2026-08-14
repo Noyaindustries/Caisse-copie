@@ -1,5 +1,6 @@
 import { db } from '../../db/db'
 import type { ProductWithStock, Promotion } from '../../db/types'
+import { DEFAULT_STORE_ID } from '../../db/seedStores'
 import { productIsActive } from '../productFilters'
 import { getOrganizationCredentials } from '../subscription/store'
 import { publishStorefrontMenu } from './api'
@@ -164,4 +165,28 @@ export async function publishActiveStorefrontMenu(options: {
     publishedAt: result.publishedAt,
     skipped: false,
   }
+}
+
+/** Republie le menu boutique (après photo de catégorie, etc.). */
+export function scheduleStorefrontRepublish(delayMs = 400): void {
+  if (typeof window === 'undefined') return
+  window.setTimeout(() => {
+    void (async () => {
+      const credentials = getOrganizationCredentials()
+      if (!credentials?.licenseKey) return
+      if (typeof navigator !== 'undefined' && !navigator.onLine) return
+      let storeId = DEFAULT_STORE_ID
+      try {
+        const stored = localStorage.getItem('caisseci-active-store-id')
+        if (stored) storeId = stored
+      } catch {
+        /* ignore */
+      }
+      await publishActiveStorefrontMenu({
+        licenseKey: credentials.licenseKey,
+        storeId,
+        force: true,
+      })
+    })().catch(() => undefined)
+  }, delayMs)
 }

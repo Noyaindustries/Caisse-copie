@@ -648,6 +648,9 @@ function scheduleCategoryCloudPush(): void {
   void import('../lib/workspaceCatalogCloud')
     .then((m) => m.scheduleWorkspaceCatalogPush())
     .catch(() => undefined)
+  void import('../lib/storefront/autoPublish')
+    .then((m) => m.scheduleStorefrontRepublish())
+    .catch(() => undefined)
 }
 
 /** Renomme une catégorie et met à jour les produits rattachés. */

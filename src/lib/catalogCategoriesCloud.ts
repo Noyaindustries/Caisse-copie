@@ -22,12 +22,19 @@ export async function pushCatalogCategoriesToCloud(): Promise<boolean> {
   if (typeof navigator !== 'undefined' && !navigator.onLine) return false
   try {
     const rows = await db.productCategories.orderBy('sortOrder').toArray()
-    const categories: CatalogCategoryCloud[] = rows.map((r) => ({
-      id: r.id,
-      name: r.name,
-      sortOrder: r.sortOrder,
-      ...(r.imageUrl?.trim() ? { imageUrl: r.imageUrl.trim() } : {}),
-    }))
+    const categories: CatalogCategoryCloud[] = rows.map((r) => {
+      // Le schéma cloud limite imageUrl à 2000 caractères (https / Blob).
+      // Les data URL restent locales et partent via la publication boutique.
+      const imageUrl = r.imageUrl?.trim()
+      const usableUrl =
+        imageUrl && imageUrl.length <= 2000 ? imageUrl : undefined
+      return {
+        id: r.id,
+        name: r.name,
+        sortOrder: r.sortOrder,
+        ...(usableUrl ? { imageUrl: usableUrl } : {}),
+      }
+    })
     const res = await fetch(apiUrl('/org/catalog-categories'), {
       method: 'PUT',
       headers: buildOrgAuthHeaders({

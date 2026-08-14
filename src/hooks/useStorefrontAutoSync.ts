@@ -33,16 +33,18 @@ export function useStorefrontAutoSync(): {
 
   const productsRevision =
     useLiveQuery(async () => {
-      const [products, stocks, promotions] = await Promise.all([
+      const [products, stocks, promotions, categories] = await Promise.all([
         db.products.toArray(),
         db.storeStocks.where('storeId').equals(activeStoreId).toArray(),
         db.promotions.toArray(),
+        db.productCategories.toArray(),
       ])
       return [
         activeStoreId,
         products.length,
         stocks.length,
         promotions.length,
+        categories.length,
         products.reduce(
           (acc, p) =>
             acc +
@@ -65,6 +67,16 @@ export function useStorefrontAutoSync(): {
             (p.active ? 1 : 0) +
             p.updatedAt +
             p.usageCount,
+          0,
+        ),
+        categories.reduce(
+          (acc, c) =>
+            acc +
+            c.id.length +
+            c.name.length +
+            c.sortOrder +
+            (c.imageUrl?.length ?? 0) +
+            (c.imageDataUrl?.length ?? 0),
           0,
         ),
       ].join('|')

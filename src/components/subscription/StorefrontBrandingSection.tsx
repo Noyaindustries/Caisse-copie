@@ -23,6 +23,7 @@ import { Button } from '../../ui/Button'
 import { Field, Input, Textarea } from '../../ui/Input'
 import { useToast } from '../../ui/Toast'
 import { cn } from '../../ui/cn'
+import { StorefrontCategoryImages } from './StorefrontCategoryImages'
 
 function normalizeHexColor(raw: string): string | undefined {
   const trimmed = raw.trim()
@@ -454,6 +455,7 @@ export function StorefrontBrandingSection({
               </div>
             </div>
           </Field>
+          <StorefrontCategoryImages online={online} usable={usable} />
           <div className="sm:col-span-2">
             <Field label="Message d’accueil">
               <Textarea
