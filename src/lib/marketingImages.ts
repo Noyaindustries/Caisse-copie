@@ -2,7 +2,6 @@
 export const MARKETING_IMAGES = {
   hero: '/marketing/hero-caisseci.png',
   mobileMoney: '/marketing/mobile-money-banner.png',
-  testimonials: '/marketing/testimonials-team.png',
   sectors: {
     restaurant: '/marketing/sector-restaurant.png',
     boutique: '/marketing/sector-boutique.png',

@@ -618,6 +618,8 @@ export function Shell({ staff, online, onLogout }: Props) {
     (product: ProductWithStock, originEl?: HTMLElement | null) => {
       const target = pickFlyCartTargetEl()
       if (!originEl || !target) return
+      const src = productImageSrc(product)
+      if (!src) return
       const from = originEl.getBoundingClientRect()
       const to = target.getBoundingClientRect()
       const fromX = from.left + from.width / 2
@@ -628,7 +630,7 @@ export function Shell({ staff, online, onLogout }: Props) {
       const animId = Date.now()
       setFlyToCart({
         id: animId,
-        src: productImageSrc(product),
+        src,
         x: fromX,
         y: fromY,
         dx: toX - fromX,

@@ -295,6 +295,20 @@ export async function syncStaffWithCloud(): Promise<StaffCloudSyncResult> {
 
   try {
     let remote = await fetchRemoteStaff()
+    const deletedIds = readDeletedStaffIds()
+    const stillPresent = remote.filter((row) => deletedIds.has(row.id))
+    for (const row of stillPresent) {
+      try {
+        await deleteRemoteStaff(row.id)
+      } catch (error) {
+        if (/dernier administrateur/i.test(error instanceof Error ? error.message : '')) {
+          forgetDeletedStaffId(row.id)
+        }
+      }
+    }
+    if (stillPresent.length > 0) {
+      remote = await fetchRemoteStaff()
+    }
     const remoteIds = new Set(remote.map((row) => row.id))
     const knownCloudIds = new Set(readCloudStaffProfiles().map((p) => p.id))
     const customIds = new Set(readCustomProfiles().map((p) => p.id))
@@ -309,11 +323,12 @@ export async function syncStaffWithCloud(): Promise<StaffCloudSyncResult> {
     }
     let pushed = 0
     let lastPushError: string | undefined
+    const skipIds = readDeletedStaffIds()
     for (const profile of readCustomProfiles()) {
       if (
         profile.active === false ||
         remoteIds.has(profile.id) ||
-        profile.id === OWNER_PROFILE_ID
+        skipIds.has(profile.id)
       ) {
         continue
       }
@@ -342,6 +357,11 @@ export async function syncStaffWithCloud(): Promise<StaffCloudSyncResult> {
         if (/déjà|already|existe/i.test(message)) {
           remoteIds.add(profile.id)
           continue
+        }
+        if (/limite d[’']utilisateurs|quota/i.test(message)) {
+          pruneLocalStaffIds([profile.id])
+          lastPushError = message
+          break
         }
         lastPushError = message
         console.error('[staff-sync] push failed', profile.id, error)
@@ -388,8 +408,14 @@ export function mergeStaffFromCloud(
     active: boolean
   }>,
 ): number {
+  const deletedIds = readDeletedStaffIds()
+  const visibleRemote = remote.filter((row) => !deletedIds.has(row.id))
+  const remoteIds = new Set(visibleRemote.map((row) => row.id))
+  const staleLocal = [...readCustomProfiles(), ...readCloudStaffProfiles()]
+    .map((profile) => profile.id)
+    .filter((id) => deletedIds.has(id))
+  if (staleLocal.length > 0) pruneLocalStaffIds(staleLocal)
   const existingCloud = readCloudStaffProfiles()
-  const remoteIds = new Set(remote.map((row) => row.id))
   const customIds = new Set(readCustomProfiles().map((p) => p.id))
   const vanished = existingCloud
     .map((profile) => profile.id)
@@ -398,15 +424,12 @@ export function mergeStaffFromCloud(
     for (const id of vanished) rememberDeletedStaffId(id)
     pruneLocalStaffIds(vanished)
   }
-  for (const row of remote) {
-    forgetDeletedStaffId(row.id)
-  }
   const localById = new Map(
     [...readCloudStaffProfiles(), ...readCustomProfiles()].map(
       (profile) => [profile.id, profile] as const,
     ),
   )
-  const merged: StaffProfile[] = remote.map((row) => {
+  const merged: StaffProfile[] = visibleRemote.map((row) => {
     const local = localById.get(row.id)
     return {
       id: row.id,
@@ -435,6 +458,9 @@ export function mergeStaffFromCloud(
 export function ensureOwnerAdminProfile(orgName: string): StaffProfile | null {
   if (typeof window === 'undefined') return null
   if (listActiveStaffProfiles().length > 0) return null
+  if (readDeletedStaffIds().has(OWNER_PROFILE_ID)) return null
+  // Magasin connecté : le serveur est source de vérité (ne pas recréer un owner supprimé).
+  if (hasOrgAuth()) return null
 
   const rawName = orgName.trim()
   const displayName =
@@ -565,8 +591,8 @@ export async function createStaffProfile(input: {
     pin,
     ...(password ? { password } : {}),
   }
-  const custom = readCustomProfiles()
-  custom.push(created)
+  const previousCustom = readCustomProfiles()
+  const custom = [...previousCustom, created]
   writeCustomProfiles(custom)
   try {
     await pushStaffToServer('create', {
@@ -585,6 +611,11 @@ export async function createStaffProfile(input: {
     console.error('[staff-create] cloud push failed', error)
     const detail =
       error instanceof Error ? error.message : 'Synchronisation cloud impossible.'
+    const quotaBlocked = /limite d[’']utilisateurs|quota/i.test(detail)
+    if (quotaBlocked || isRemoteStaffGoneError(error)) {
+      writeCustomProfiles(previousCustom)
+      throw new StaffCloudSyncError(detail)
+    }
     throw new StaffCloudSyncError(
       `${detail} L’utilisateur est enregistré ici, mais n’apparaîtra pas sur les autres caisses tant que le serveur n’est pas joignable.`,
     )
@@ -638,6 +669,13 @@ export function updateStaffProfile(
   const cloudIdx = cloud.findIndex((p) => p.id === profileId)
   const current = (idx >= 0 ? custom[idx] : null) ?? (cloudIdx >= 0 ? cloud[cloudIdx] : null)
   if (!current) throw new Error('Profil introuvable.')
+  if (
+    current.role === 'admin' &&
+    current.active !== false &&
+    (patch.active === false || (patch.role !== undefined && patch.role !== 'admin'))
+  ) {
+    assertNotLastActiveAdmin(profileId)
+  }
   const next: StaffProfile = { ...current }
 
   if (patch.displayName !== undefined) {
@@ -705,8 +743,21 @@ export function updateStaffProfile(
   return profileById(profileId) ?? next
 }
 
+const LAST_ADMIN_ERROR =
+  'Impossible de supprimer ou désactiver le dernier administrateur. Créez-en un autre d’abord.'
+
+function assertNotLastActiveAdmin(profileId: string): void {
+  const profile = profileById(profileId)
+  if (profile?.role !== 'admin' || profile.active === false) return
+  const activeAdmins = listActiveStaffProfiles().filter((p) => p.role === 'admin')
+  if (activeAdmins.length <= 1) {
+    throw new Error(LAST_ADMIN_ERROR)
+  }
+}
+
 /** Soft-delete : désactive un profil personnalisé (conservé pour l’historique). */
 export function deactivateStaffProfile(profileId: string): void {
+  assertNotLastActiveAdmin(profileId)
   updateStaffProfile(profileId, { active: false })
 }
 
@@ -728,6 +779,7 @@ export async function deleteStaffProfile(profileId: string): Promise<void> {
   if (isBuiltinProfileId(profileId)) {
     throw new Error('Les profils de démonstration ne peuvent pas être supprimés.')
   }
+  assertNotLastActiveAdmin(profileId)
   const previousCustom = readCustomProfiles()
   const previousCloud = readCloudStaffProfiles()
   const previousDeleted = readDeletedStaffIds()

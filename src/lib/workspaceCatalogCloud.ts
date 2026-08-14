@@ -172,15 +172,16 @@ function cloudProductToLocal(
   if (remote.purchasePriceTTC !== undefined) {
     next.purchasePriceTTC = remote.purchasePriceTTC
   }
-  if (remote.imageUrl) next.imageUrl = remote.imageUrl
-  if (remote.description) next.description = remote.description
-  if (remote.highlights?.length) next.highlights = remote.highlights
-  // Conserver l’aperçu local si le cloud n’a que l’URL distante absente.
-  if (local?.imageDataUrl && !next.imageUrl) {
-    next.imageDataUrl = local.imageDataUrl
-  } else if (local?.imageDataUrl && next.imageUrl === local.imageUrl) {
+  if (remote.imageUrl) {
+    next.imageUrl = remote.imageUrl
+  } else if (
+    local?.imageDataUrl &&
+    (local.updatedAt ?? 0) > (remote.updatedAt ?? 0)
+  ) {
     next.imageDataUrl = local.imageDataUrl
   }
+  if (remote.description) next.description = remote.description
+  if (remote.highlights?.length) next.highlights = remote.highlights
   return next
 }
 

@@ -7,7 +7,6 @@ import { MarketingIntegrationsStrip } from '../components/marketing/MarketingInt
 import { MarketingModulesSection } from '../components/MarketingModulesSection'
 import { MarketingPricingSection } from '../components/marketing/MarketingPricingSection'
 import { MarketingScrollProgress } from '../components/marketing/MarketingScrollProgress'
-import { MarketingSocialProof } from '../components/marketing/MarketingSocialProof'
 import { MarketingStepsSection } from '../components/marketing/MarketingStepsSection'
 import { MarketingStickyCta } from '../components/marketing/MarketingStickyCta'
 import { MarketingTrustBar } from '../components/marketing/MarketingTrustBar'
@@ -191,7 +190,6 @@ export function MarketingSiteView({
         <MarketingUseCases />
       </div>
       <MarketingIntegrationsStrip />
-      <MarketingSocialProof />
       <MarketingStepsSection />
       <MarketingPricingSection
         scrollToPricing={scrollToPricing}

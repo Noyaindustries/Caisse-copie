@@ -1,4 +1,4 @@
-import { Router } from 'express'
+import { Router, type Response } from 'express'
 import { ZodError, z } from 'zod'
 import { prisma } from '../lib/prisma.js'
 import { requireActiveOrg, requireOrg } from '../lib/orgAuth.js'
@@ -15,9 +15,14 @@ import {
 } from '../lib/staffCredentials.js'
 import { logEvent } from '../lib/structuredLog.js'
 import {
+  countActiveAdmins,
   findOrgStaffByProfile,
   findOrgStaffMembers,
+  findOrgStaffRecord,
 } from '../lib/staffQuery.js'
+
+const LAST_ADMIN_ERROR =
+  'Impossible de supprimer ou désactiver le dernier administrateur. Créez-en un autre d’abord.'
 
 export const staffRouter = Router()
 
@@ -51,9 +56,17 @@ staffRouter.get('/org/staff', async (req, res) => {
     let rows = await findOrgStaffMembers(org.id)
 
     if (rows.length === 0) {
-      const { ensureOwnerStaffMember } = await import('../lib/ensureOwnerStaff.js')
-      await ensureOwnerStaffMember(org)
-      rows = await findOrgStaffMembers(org.id)
+      const anyStaff = await prisma.staffMember.findFirst({
+        where: { organizationId: org.id },
+        select: { id: true },
+      })
+      // Ne recréer l’admin initial que si l’org n’a jamais eu de personnel.
+      // Un owner supprimé (revokedAt) ne doit pas réapparaître.
+      if (!anyStaff) {
+        const { ensureOwnerStaffMember } = await import('../lib/ensureOwnerStaff.js')
+        await ensureOwnerStaffMember(org)
+        rows = await findOrgStaffMembers(org.id)
+      }
     }
 
     res.setHeader('Cache-Control', 'no-store')
@@ -92,9 +105,7 @@ staffRouter.post('/org/staff', async (req, res) => {
     }
 
     const profileId = body.profileId ?? `profile-${crypto.randomUUID()}`
-    const existing = await prisma.staffMember.findFirst({
-      where: { organizationId: org.id, profileId },
-    })
+    const existing = await findOrgStaffRecord(org.id, profileId)
     if (existing) {
       // Une autre caisse ne doit pas recréer un compte déjà supprimé.
       if (existing.revokedAt) {
@@ -175,9 +186,7 @@ staffRouter.post('/org/staff', async (req, res) => {
       const profileId =
         typeof req.body?.profileId === 'string' ? req.body.profileId : null
       if (org && profileId) {
-        const row = await prisma.staffMember.findFirst({
-          where: { organizationId: org.id, profileId },
-        })
+        const row = await findOrgStaffRecord(org.id, profileId)
         if (row) {
           if (row.revokedAt) {
             res.status(410).json({
@@ -204,8 +213,8 @@ staffRouter.patch('/org/staff/:profileId', async (req, res) => {
     if (!org) return
 
     const profileId = req.params.profileId
-    const existing = await findOrgStaffByProfile(org.id, profileId)
-    if (!existing) {
+    const existing = await findOrgStaffRecord(org.id, profileId)
+    if (!existing || existing.revokedAt) {
       res.status(404).json({ error: 'Utilisateur introuvable.' })
       return
     }
@@ -220,6 +229,18 @@ staffRouter.patch('/org/staff/:profileId', async (req, res) => {
         active: z.boolean().optional(),
       })
       .parse(req.body)
+
+    if (
+      (body.active === false || (body.role && body.role !== 'admin')) &&
+      existing.role === 'admin' &&
+      existing.active !== false
+    ) {
+      const adminCount = await countActiveAdmins(org.id)
+      if (adminCount <= 1) {
+        res.status(409).json({ error: LAST_ADMIN_ERROR })
+        return
+      }
+    }
 
     if (body.active === true && !existing.active) {
       const quotaError = await assertStaffQuota(org, 1)
@@ -265,15 +286,23 @@ staffRouter.patch('/org/staff/:profileId', async (req, res) => {
   }
 })
 
-staffRouter.delete('/org/staff/:profileId', async (req, res) => {
-  const org = await requireActiveOrg(req, res)
-  if (!org) return
-
-  const profileId = req.params.profileId
-  const existing = await findOrgStaffByProfile(org.id, profileId)
-  if (!existing) {
-    res.status(404).json({ error: 'Utilisateur introuvable.' })
+async function revokeStaffMember(
+  orgId: string,
+  profileId: string,
+  res: Response,
+): Promise<void> {
+  const existing = await findOrgStaffRecord(orgId, profileId)
+  if (!existing || existing.revokedAt) {
+    res.json({ ok: true, alreadyDeleted: true })
     return
+  }
+
+  if (existing.role === 'admin' && existing.active !== false) {
+    const adminCount = await countActiveAdmins(orgId)
+    if (adminCount <= 1) {
+      res.status(409).json({ error: LAST_ADMIN_ERROR })
+      return
+    }
   }
 
   await prisma.staffMember.update({
@@ -282,6 +311,37 @@ staffRouter.delete('/org/staff/:profileId', async (req, res) => {
   })
 
   res.json({ ok: true })
+}
+
+staffRouter.post('/org/staff/delete', async (req, res) => {
+  try {
+    const org = await requireActiveOrg(req, res)
+    if (!org) return
+    const body = z.object({ profileId: z.string().min(3) }).parse(req.body)
+    await revokeStaffMember(org.id, body.profileId, res)
+  } catch (err) {
+    if (err instanceof ZodError) {
+      res.status(400).json({ error: 'Données invalides.' })
+      return
+    }
+    console.error('[staff/delete]', err)
+    if (!res.headersSent) {
+      res.status(500).json({ error: 'Impossible de supprimer l’utilisateur.' })
+    }
+  }
+})
+
+staffRouter.delete('/org/staff/:profileId', async (req, res) => {
+  try {
+    const org = await requireActiveOrg(req, res)
+    if (!org) return
+    await revokeStaffMember(org.id, req.params.profileId, res)
+  } catch (err) {
+    console.error('[staff/delete]', err)
+    if (!res.headersSent) {
+      res.status(500).json({ error: 'Impossible de supprimer l’utilisateur.' })
+    }
+  }
 })
 
 staffRouter.post('/org/staff/verify', async (req, res) => {

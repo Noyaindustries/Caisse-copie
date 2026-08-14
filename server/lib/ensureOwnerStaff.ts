@@ -1,6 +1,7 @@
 import type { Organization } from '@prisma/client'
 import { prisma } from './prisma.js'
 import { hashStaffPassword, hashStaffPin } from './staffCredentials.js'
+import { isStaffNotRevoked, listOrgStaffRecords } from './staffQuery.js'
 
 export const OWNER_PROFILE_ID = 'profile-owner'
 export const DEFAULT_OWNER_PIN = '1234'
@@ -16,30 +17,16 @@ function ownerInitials(name: string): string {
 }
 
 /**
- * Garantit un StaffMember admin pour l’organisation (inscription ou org sans personnel).
+ * Crée le premier admin à l’inscription.
+ * Ne réactive jamais un compte volontairement supprimé (`revokedAt`).
  */
 export async function ensureOwnerStaffMember(
   org: Pick<Organization, 'id' | 'name'>,
   options?: { ownerPassword?: string },
 ): Promise<void> {
-  const existingOwner = await prisma.staffMember.findFirst({
-    where: { organizationId: org.id, profileId: OWNER_PROFILE_ID },
-  })
-  if (existingOwner) {
-    if (existingOwner.revokedAt || existingOwner.active === false) {
-      await prisma.staffMember.update({
-        where: { id: existingOwner.id },
-        data: { active: true, revokedAt: null },
-      })
-    }
-    return
-  }
-
-  const existing = await prisma.staffMember.findMany({
-    where: { organizationId: org.id },
-    select: { revokedAt: true },
-  })
-  if (existing.some((row) => !row.revokedAt)) return
+  const existing = await listOrgStaffRecords(org.id)
+  if (existing.some((row) => row.profileId === OWNER_PROFILE_ID)) return
+  if (existing.some(isStaffNotRevoked)) return
 
   const displayName =
     org.name.trim().length >= 3 ? org.name.trim().slice(0, 80) : 'Administrateur'

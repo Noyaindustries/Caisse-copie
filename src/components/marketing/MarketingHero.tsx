@@ -26,8 +26,6 @@ const PREVIEW_TABS = [
   { id: 'kitchen', label: 'Cuisine' },
 ] as const
 
-const AVATAR_TONES = ['bg-violet-500', 'bg-sky-500', 'bg-emerald-500', 'bg-amber-500'] as const
-
 type PreviewTab = (typeof PREVIEW_TABS)[number]['id']
 
 function PreviewPanel({ tab }: { tab: PreviewTab }) {
@@ -219,20 +217,6 @@ export function MarketingHero({
             >
               Voir les tarifs
             </Button>
-          </div>
-
-          <div className="marketing-hero-animate marketing-hero-animate-delay-5 mt-8 flex items-center gap-3">
-            <div className="flex -space-x-2.5" aria-hidden>
-              {AVATAR_TONES.map((tone) => (
-                <span
-                  key={tone}
-                  className={cn('h-9 w-9 rounded-full border-2 border-[#0a1020] shadow-md', tone)}
-                />
-              ))}
-            </div>
-            <p className="text-sm text-slate-400">
-              <span className="font-semibold text-white">+500 commerces</span> nous font confiance en CI
-            </p>
           </div>
 
           {mobileMoney ? (

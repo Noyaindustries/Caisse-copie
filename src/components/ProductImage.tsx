@@ -1,8 +1,7 @@
 import { useEffect, useMemo, useState, type ImgHTMLAttributes } from 'react'
-import {
-  productImageFallbackSvg,
-  productImageRemoteUrl,
-} from '../lib/productImage'
+import { productImageSrc } from '../lib/productImage'
+import { cn } from '../ui/cn'
+import { IconCatalogue } from '../ui/icons'
 
 type ProductImageLike = {
   id?: string
@@ -17,47 +16,52 @@ type Props = Omit<ImgHTMLAttributes<HTMLImageElement>, 'src' | 'alt'> & {
   alt?: string
 }
 
-/**
- * Rend une image produit avec **fallback automatique** :
- * 1. photo cloud (`imageUrl`) ou locale (`imageDataUrl`) si fournie
- * 2. photo distante (Unsplash)
- * 3. vignette SVG locale en cas d'erreur réseau / hors ligne
- */
-export function ProductImage({ product, alt, ...rest }: Props) {
-  const fallback = useMemo(
-    () =>
-      productImageFallbackSvg(
-        product.name,
-        product.category,
-        product.id ?? `${product.name}::${product.category ?? ''}`,
-      ),
-    [product.id, product.name, product.category],
+function Placeholder({
+  className,
+  title,
+}: {
+  className?: string
+  title?: string
+}) {
+  return (
+    <span
+      className={cn(
+        'inline-flex items-center justify-center bg-zinc-100 text-zinc-400',
+        className,
+      )}
+      title={title}
+      aria-hidden
+    >
+      <IconCatalogue className="h-[45%] w-[45%] max-h-7 max-w-7" />
+    </span>
   )
+}
 
-  const initialSrc = useMemo((): string => {
-    if (product.imageUrl) return product.imageUrl
-    if (product.imageDataUrl) return product.imageDataUrl
-    if (typeof navigator !== 'undefined' && !navigator.onLine) return fallback
-    const remote = productImageRemoteUrl(product)
-    return remote ?? fallback
-  }, [product, fallback])
-
-  const [src, setSrc] = useState(initialSrc)
+/**
+ * Affiche la photo du produit si elle a été ajoutée.
+ * Sans photo : pastille neutre (pas de visuel généré).
+ */
+export function ProductImage({ product, alt, className, ...rest }: Props) {
+  const realSrc = useMemo(() => productImageSrc(product), [product])
+  const [failed, setFailed] = useState(false)
 
   useEffect(() => {
-    setSrc(initialSrc)
-  }, [initialSrc])
+    setFailed(false)
+  }, [realSrc])
+
+  if (!realSrc || failed) {
+    return <Placeholder className={className} title={alt ?? product.name} />
+  }
 
   return (
     <img
       {...rest}
       alt={alt ?? product.name}
-      src={src}
+      src={realSrc}
+      className={className}
       loading="lazy"
       decoding="async"
-      onError={() => {
-        if (src !== fallback) setSrc(fallback)
-      }}
+      onError={() => setFailed(true)}
     />
   )
 }

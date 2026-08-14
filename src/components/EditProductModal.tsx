@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import type { Product, ProductCategory } from '../db/types'
 import { db } from '../db/db'
@@ -79,6 +79,7 @@ export function EditProductModal({
   )
   const [busy, setBusy] = useState(false)
   const [err, setErr] = useState<string | null>(null)
+  const fileInputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
     setName(product.name)
@@ -88,13 +89,17 @@ export function EditProductModal({
     )
     setBarcode(product.barcode)
     setCategory(product.category)
-    setStock(String(stockAtActiveStore))
     setLowTh(String(product.lowStockThreshold))
     setVatRatePct(String(product.vatRatePct ?? DEFAULT_VAT_RATE_PCT))
     setImagePreview(product.imageDataUrl ?? product.imageUrl)
     setDescription(product.description ?? '')
     setHighlightsText((product.highlights ?? []).join('\n'))
-  }, [product, stockAtActiveStore])
+    if (fileInputRef.current) fileInputRef.current.value = ''
+  }, [product.id])
+
+  useEffect(() => {
+    setStock(String(stockAtActiveStore))
+  }, [stockAtActiveStore])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -147,8 +152,10 @@ export function EditProductModal({
     }
     setBusy(true)
     try {
-      let imageFields: ProductImageFields = {}
+      delete next.imageDataUrl
+      delete next.imageUrl
       if (imagePreview) {
+        let imageFields: ProductImageFields = {}
         if (imagePreview.startsWith('data:')) {
           imageFields = await resolveProductImageFields(product.id, imagePreview)
         } else if (imagePreview === product.imageUrl && product.imageUrl) {
@@ -158,10 +165,8 @@ export function EditProductModal({
         } else {
           imageFields = { imageUrl: imagePreview }
         }
+        Object.assign(next, imageFields)
       }
-      delete next.imageDataUrl
-      delete next.imageUrl
-      Object.assign(next, imageFields)
       await onSave(next, st)
       onClose()
     } catch (e2) {
@@ -305,8 +310,12 @@ export function EditProductModal({
             placeholder={'Portion généreuse\nGrillé au charbon\nSauce maison'}
           />
         </Field>
-        <Field label="Photo" hint="Max 500 Ko · Vercel Blob si configuré">
+        <Field
+          label="Photo"
+          hint="Optionnel · max 500 Ko · enregistrez après suppression"
+        >
           <input
+            ref={fileInputRef}
             type="file"
             accept="image/*"
             className="block w-full text-[12px] text-zinc-600 file:mr-2 file:rounded-md file:border file:border-zinc-200 file:bg-zinc-50 file:px-3 file:py-1.5 file:text-[12px] file:font-semibold file:text-zinc-700"
@@ -336,14 +345,22 @@ export function EditProductModal({
                 className="h-14 w-14 rounded-lg border border-zinc-200 object-cover"
               />
               <Button
+                type="button"
                 size="sm"
-                variant="ghost"
-                onClick={() => setImagePreview(undefined)}
+                variant="danger"
+                iconLeft={<IconTrash />}
+                onClick={() => {
+                  setImagePreview(undefined)
+                  setErr(null)
+                  if (fileInputRef.current) fileInputRef.current.value = ''
+                }}
               >
-                Retirer
+                Supprimer la photo
               </Button>
             </div>
-          ) : null}
+          ) : (
+            <p className="mt-1.5 text-[11px] text-zinc-500">Aucune photo.</p>
+          )}
         </Field>
         <div className="grid grid-cols-2 gap-3">
           <Field label="Stock (ce magasin)" required>

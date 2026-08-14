@@ -40,6 +40,8 @@ const allowedOrigins = new Set(
     ...vercelOrigins.map((host) => `https://${host}`),
     'http://localhost:3000',
     'http://127.0.0.1:3000',
+    'http://localhost:3010',
+    'http://127.0.0.1:3010',
   ].filter((value): value is string => Boolean(value)),
 )
 

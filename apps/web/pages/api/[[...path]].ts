@@ -16,5 +16,12 @@ export const config = {
 }
 
 export default function handler(req: NextApiRequest, res: NextApiResponse) {
+  const segments = req.query.path
+  if (segments) {
+    const joined = Array.isArray(segments) ? segments.join('/') : String(segments)
+    const searchIndex = req.url?.indexOf('?') ?? -1
+    const search = searchIndex >= 0 ? req.url!.slice(searchIndex) : ''
+    req.url = `/api/${joined}${search}`
+  }
   return app(req, res)
 }

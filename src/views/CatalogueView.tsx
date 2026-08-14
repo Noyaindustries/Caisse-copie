@@ -397,6 +397,10 @@ export function CatalogueView({
     const previousQty = prevRow?.stock ?? 0
     const previousThreshold = prevRow?.lowStockThreshold ?? p.lowStockThreshold
     const stamped: Product = { ...p, updatedAt: Date.now() }
+    if (!stamped.imageUrl && !stamped.imageDataUrl) {
+      delete stamped.imageUrl
+      delete stamped.imageDataUrl
+    }
     await db.products.put(stamped)
     await db.storeStocks.put({
       id: storeStockRowId(activeStoreId, stamped.id),
@@ -668,7 +672,10 @@ export function CatalogueView({
           }
           activeStoreLabel={activeStore?.name ?? 'Magasin'}
           onClose={() => setEditing(null)}
-          onSave={handleSaveEdit}
+          onSave={async (p, stockAtStore) => {
+            await handleSaveEdit(p, stockAtStore)
+            setEditing(p)
+          }}
           onDelete={() => void handleDelete(editing)}
         />
       ) : null}

@@ -820,8 +820,13 @@ export async function syncProductCategoriesFromProducts(): Promise<void> {
 }
 
 async function ensureStores(): Promise<void> {
-  if ((await db.stores.count()) === 0) {
-    await db.stores.bulkAdd(SEED_STORES)
+  // `put` est idempotent : évite ConstraintError si deux ensureSeed
+  // concurrents (ex. React Strict Mode) voient encore une table vide.
+  for (const store of SEED_STORES) {
+    const existing = await db.stores.get(store.id)
+    if (!existing) {
+      await db.stores.put(store)
+    }
   }
 }
 

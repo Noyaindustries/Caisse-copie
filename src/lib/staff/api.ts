@@ -57,9 +57,10 @@ export async function updateRemoteStaff(
 }
 
 export async function deleteRemoteStaff(profileId: string): Promise<void> {
-  const res = await fetch(apiUrl(`/org/staff/${encodeURIComponent(profileId)}`), {
-    method: 'DELETE',
-    headers: buildOrgAuthHeaders(),
+  const res = await fetch(apiUrl('/org/staff/delete'), {
+    method: 'POST',
+    headers: buildOrgAuthHeaders({ 'Content-Type': 'application/json' }),
+    body: JSON.stringify({ profileId }),
   })
   await parseApiResponse(res)
 }

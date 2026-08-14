@@ -345,11 +345,24 @@ export function PersonnelView({ currentProfileId }: Props) {
           <form
             onSubmit={handlePasswordChange}
             className="mt-3 grid gap-3 md:grid-cols-3"
+            autoComplete="on"
           >
+            <input
+              type="text"
+              name="username"
+              autoComplete="username"
+              value={currentProfile?.displayName ?? ''}
+              readOnly
+              tabIndex={-1}
+              aria-hidden="true"
+              className="sr-only"
+            />
             <Field label="Secret actuel (PIN ou mot de passe)" required>
               <div className="flex items-center gap-2">
                 <Input
                   type={showCurrentSecret ? 'text' : 'password'}
+                  name="current-password"
+                  autoComplete="current-password"
                   value={currentSecret}
                   onChange={(e) => setCurrentSecret(e.target.value)}
                   required
@@ -371,6 +384,8 @@ export function PersonnelView({ currentProfileId }: Props) {
               <div className="flex items-center gap-2">
                 <Input
                   type={showNewPassword ? 'text' : 'password'}
+                  name="new-password"
+                  autoComplete="new-password"
                   value={newPassword}
                   onChange={(e) => setNewPassword(e.target.value)}
                   required
@@ -395,6 +410,8 @@ export function PersonnelView({ currentProfileId }: Props) {
               <div className="flex items-center gap-2">
                 <Input
                   type={showConfirmPassword ? 'text' : 'password'}
+                  name="confirm-password"
+                  autoComplete="new-password"
                   value={confirmPassword}
                   onChange={(e) => setConfirmPassword(e.target.value)}
                   required
@@ -447,6 +464,8 @@ export function PersonnelView({ currentProfileId }: Props) {
           >
             <Field label="Nom complet" required className="lg:col-span-2">
               <Input
+                name="username"
+                autoComplete="username"
                 value={displayName}
                 onChange={(e) => setDisplayName(e.target.value)}
                 placeholder="Ex: Mariam Traoré"
@@ -484,6 +503,8 @@ export function PersonnelView({ currentProfileId }: Props) {
               <div className="flex items-center gap-2">
                 <Input
                   type={showCreatePin ? 'text' : 'password'}
+                  name="new-password"
+                  autoComplete="new-password"
                   value={pin}
                   onChange={(e) => setPin(e.target.value)}
                   inputMode="numeric"
@@ -507,6 +528,7 @@ export function PersonnelView({ currentProfileId }: Props) {
               <div className="flex items-center gap-2">
                 <Input
                   type={showCreatePassword ? 'text' : 'password'}
+                  autoComplete="new-password"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   placeholder="Mot de passe"

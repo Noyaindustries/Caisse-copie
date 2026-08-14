@@ -430,6 +430,8 @@ export function LuxuryStorefrontView({
   const triggerFlyToCart = useCallback(
     (product: ProductWithStock, originEl?: HTMLElement | null) => {
       if (!originEl || !cartBadgeRef.current) return
+      const src = productImageSrc(product)
+      if (!src) return
       const from = originEl.getBoundingClientRect()
       const to = cartBadgeRef.current.getBoundingClientRect()
       const fromX = from.left + from.width / 2
@@ -440,7 +442,7 @@ export function LuxuryStorefrontView({
       const animId = Date.now()
       setFlyToCart({
         id: animId,
-        src: productImageSrc(product),
+        src,
         x: fromX,
         y: fromY,
         dx: toX - fromX,
@@ -2137,7 +2139,7 @@ export function LuxuryStorefrontView({
           </button>
         </div>
       ) : null}
-      {flyToCart ? (
+      {flyToCart?.src ? (
         <img
           src={flyToCart.src}
           alt=""
